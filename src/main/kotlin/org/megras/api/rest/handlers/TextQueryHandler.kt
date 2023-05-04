@@ -5,22 +5,21 @@ import io.javalin.http.Context
 import io.javalin.openapi.*
 import org.megras.api.rest.PostRequestHandler
 import org.megras.api.rest.RestErrorStatus
-import org.megras.api.rest.data.ApiBasicQuery
-import org.megras.api.rest.data.ApiQueryResult
 import org.megras.api.rest.data.ApiQuad
-import org.megras.data.graph.QuadValue
+import org.megras.api.rest.data.ApiQueryResult
+import org.megras.api.rest.data.ApiTextQuery
 import org.megras.graphstore.QuadSet
 
 
-class BasicQueryHandler(private val quads: QuadSet) : PostRequestHandler {
+class TextQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
     @OpenApi(
         summary = "Queries the Graph.",
-        path = "/query",
-        tags = ["Query"],
+        path = "/textquery",
+        tags = ["TextQuery"],
         operationId = OpenApiOperation.AUTO_GENERATE,
         methods = [HttpMethod.POST],
-        requestBody = OpenApiRequestBody([OpenApiContent(ApiBasicQuery::class)]),
+        requestBody = OpenApiRequestBody([OpenApiContent(ApiTextQuery::class)]),
         responses = [
             OpenApiResponse("200", [OpenApiContent(ApiQueryResult::class)]),
             OpenApiResponse("400", [OpenApiContent(RestErrorStatus::class)]),
@@ -30,15 +29,17 @@ class BasicQueryHandler(private val quads: QuadSet) : PostRequestHandler {
     override fun post(ctx: Context) {
 
         val query = try {
-            ctx.bodyAsClass(ApiBasicQuery::class.java)
+            ctx.bodyAsClass(ApiTextQuery::class.java)
         } catch (e: BadRequestResponse) {
             throw RestErrorStatus(400, "invalid query")
         }
 
-        val results = quads.filter(
-            query.s?.mapNotNull { if (it != null) QuadValue.of(it) else null },
-            query.p?.mapNotNull { if (it != null) QuadValue.of(it) else null },
-            query.o?.mapNotNull { if (it != null) QuadValue.of(it) else null },
+        if (query.filterText == null) {
+            throw RestErrorStatus(400, "invalid query")
+        }
+
+        val results = quads.textFilter(
+            query.filterText//.mapNotNull { if (it != null) String(it) else null },
         ).map { ApiQuad(it) }
 
         ctx.json(ApiQueryResult(results))

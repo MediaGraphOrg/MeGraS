@@ -30,6 +30,7 @@ object RestApi {
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val basicQueryHandler = BasicQueryHandler(quadSet)
+        val textQueryHandler = TextQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
@@ -73,6 +74,7 @@ object RestApi {
             get("/{objectId}/segment/{segmentation}/<segmentDefinition>", canonicalSegmentRequestHandler::get)
             post("/add/file", addFileRequestHandler::post)
             post("/query", basicQueryHandler::post)
+            post("/textquery", textQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

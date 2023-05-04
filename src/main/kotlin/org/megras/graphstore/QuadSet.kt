@@ -40,6 +40,6 @@ interface QuadSet : Set<Quad> {
 
     fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet
 
-    fun textFilter(filterText: String): QuadSet
+    fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet
 
 }

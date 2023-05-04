@@ -85,7 +85,7 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
         return ret
     }
 
-    override fun textFilter(filterText: String): QuadSet = BasicQuadSet(quads.filter { it.`object` is StringValue && it.`object`.value.contains(filterText) }.toSet())
+    override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = BasicQuadSet(quads.filter { it.predicate == predicate && it.`object` is StringValue && it.`object`.value.contains(objectFilterText) }.toSet())
 
 
 }

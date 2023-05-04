@@ -16,7 +16,7 @@ class BasicQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
     @OpenApi(
         summary = "Queries the Graph.",
-        path = "/query",
+        path = "/query/quads",
         tags = ["Query"],
         operationId = OpenApiOperation.AUTO_GENERATE,
         methods = [HttpMethod.POST],

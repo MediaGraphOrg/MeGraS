@@ -73,8 +73,8 @@ object RestApi {
             get("/{objectId}/c/{segmentId}", cachedSegmentRequestHandler::get)
             get("/{objectId}/segment/{segmentation}/<segmentDefinition>", canonicalSegmentRequestHandler::get)
             post("/add/file", addFileRequestHandler::post)
-            post("/query", basicQueryHandler::post)
-            post("/textquery", textQueryHandler::post)
+            post("/query/quads", basicQueryHandler::post)
+            post("/query/text", textQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

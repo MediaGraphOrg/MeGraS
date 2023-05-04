@@ -1516,12 +1516,40 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return ret
     }
 
-    override fun textFilter(filterText: String): QuadSet {
+    override fun textFilter(predicate: QuadValue, filterText: String): QuadSet {
+
+        val predicatePair = getQuadValueId(predicate)
+
+        if (predicatePair.first == null || predicatePair.second == null) { //unknown predicate, can't have matching quads
+            return BasicQuadSet()
+        }
+
+        val candidateResult = client.query(
+            Query("megras.quads")
+                .select("o")
+                .where(
+                    And(
+                        predicateFilterExpression(predicatePair.first!!, predicatePair.second!!),
+                        Expression("o_type", "=", STRING_LITERAL_TYPE)
+                    )
+                )
+        )
+
+        if (!candidateResult.hasNext()) {
+            return BasicQuadSet()
+        }
+
+        val candidateIds = mutableSetOf<Long>()
+
+        while (candidateResult.hasNext()) {
+            candidateIds.add(candidateResult.next().asLong("o")!!)
+        }
 
         val ids = client.query(
             Query("megras.literal_string")
                 .select("id")
                 .fulltext("value", filterText, "score")
+                .where(Expression("id", "in", candidateIds))
         )
 
         val idList = mutableListOf<Long>()
@@ -1535,7 +1563,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         val result = client.query(
             Query("megras.quads")
                 .select("*")
-                .where(objectFilterExpression(STRING_LITERAL_TYPE, idList))
+                .where(
+                    And(
+                        objectFilterExpression(STRING_LITERAL_TYPE, idList),
+                        predicateFilterExpression(predicatePair.first!!, predicatePair.second!!)
+                    )
+                )
         )
 
         while (result.hasNext()) {
@@ -1554,7 +1587,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
     }
 
     override val size: Int
-        get() = TODO("Not yet implemented")
+        get() = 0 //TODO
 
     private fun getQuadId(quad: Quad): Long? {
         val s = getQuadValueId(quad.subject)

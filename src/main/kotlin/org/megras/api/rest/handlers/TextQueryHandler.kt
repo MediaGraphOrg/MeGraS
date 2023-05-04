@@ -8,15 +8,16 @@ import org.megras.api.rest.RestErrorStatus
 import org.megras.api.rest.data.ApiQuad
 import org.megras.api.rest.data.ApiQueryResult
 import org.megras.api.rest.data.ApiTextQuery
+import org.megras.data.graph.QuadValue
 import org.megras.graphstore.QuadSet
 
 
 class TextQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
     @OpenApi(
-        summary = "Queries the Graph.",
-        path = "/textquery",
-        tags = ["TextQuery"],
+        summary = "Queries the Graph for quads with a specific predicate and an object string that matches a specified filter text.",
+        path = "/query/text",
+        tags = ["Query"],
         operationId = OpenApiOperation.AUTO_GENERATE,
         methods = [HttpMethod.POST],
         requestBody = OpenApiRequestBody([OpenApiContent(ApiTextQuery::class)]),
@@ -34,12 +35,9 @@ class TextQueryHandler(private val quads: QuadSet) : PostRequestHandler {
             throw RestErrorStatus(400, "invalid query")
         }
 
-        if (query.filterText == null) {
-            throw RestErrorStatus(400, "invalid query")
-        }
-
         val results = quads.textFilter(
-            query.filterText//.mapNotNull { if (it != null) String(it) else null },
+            QuadValue.of(query.predicate),
+            query.filterText
         ).map { ApiQuad(it) }
 
         ctx.json(ApiQueryResult(results))

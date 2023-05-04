@@ -10,11 +10,11 @@
     "version" : "0.01"
   },
   "paths" : {
-    "/query" : {
+    "/query/quads" : {
       "post" : {
         "tags" : [ "Query" ],
         "summary" : "Queries the Graph.",
-        "operationId" : "postQuery",
+        "operationId" : "postQueryQuads",
         "parameters" : [ ],
         "requestBody" : {
           "content" : {
@@ -32,7 +32,59 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ApiBasicQueryResult"
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/query/text" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads with a specific predicate and an object string that matches a specified filter text.",
+        "operationId" : "postQueryText",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiTextQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
                 }
               }
             }
@@ -186,19 +238,6 @@
           }
         }
       },
-      "ApiBasicQueryResult" : {
-        "type" : "object",
-        "additionalProperties" : false,
-        "properties" : {
-          "results" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ApiQuad"
-            }
-          }
-        },
-        "required" : [ "results" ]
-      },
       "ApiQuad" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -217,6 +256,32 @@
           }
         },
         "required" : [ "id", "s", "p", "o" ]
+      },
+      "ApiQueryResult" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ApiQuad"
+            }
+          }
+        },
+        "required" : [ "results" ]
+      },
+      "ApiTextQuery" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "predicate" : {
+            "type" : "string"
+          },
+          "filterText" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "predicate", "filterText" ]
       }
     },
     "securitySchemes" : { }

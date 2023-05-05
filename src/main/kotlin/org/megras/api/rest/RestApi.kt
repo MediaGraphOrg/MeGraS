@@ -38,6 +38,9 @@ object RestApi {
                 cors.add { corsPluginConfig ->
                     corsPluginConfig.anyHost()
                 }
+                cors.add {corsPluginConfig ->
+                    corsPluginConfig.reflectClientOrigin = true
+                }
             }
             it.showJavalinBanner = false
 
@@ -80,9 +83,7 @@ object RestApi {
             ctx.result(e.message)
         }.exception(Exception::class.java) { e, ctx ->
             e.printStackTrace()
-        }
-
-            .start(config.httpPort)
+        }.start(config.httpPort)
     }
 
     fun stop() {

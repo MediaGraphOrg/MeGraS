@@ -35,10 +35,14 @@ class BasicQueryHandler(private val quads: QuadSet) : PostRequestHandler {
             throw RestErrorStatus(400, "invalid query")
         }
 
+        val s = query.s?.mapNotNull { if (it != null) QuadValue.of(it) else null }
+        val p = query.p?.mapNotNull { if (it != null) QuadValue.of(it) else null }
+        val o = query.o?.mapNotNull { if (it != null) QuadValue.of(it) else null }
+
         val results = quads.filter(
-            query.s?.mapNotNull { if (it != null) QuadValue.of(it) else null },
-            query.p?.mapNotNull { if (it != null) QuadValue.of(it) else null },
-            query.o?.mapNotNull { if (it != null) QuadValue.of(it) else null },
+            if (s?.isNotEmpty() == true) s else null,
+            if (p?.isNotEmpty() == true) p else null,
+            if (o?.isNotEmpty() == true) o else null
         ).map { ApiQuad(it) }
 
         ctx.json(ApiQueryResult(results))

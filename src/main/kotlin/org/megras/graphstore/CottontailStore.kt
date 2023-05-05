@@ -510,7 +510,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
                                     VectorValue.Type.Long -> (it as LongVectorValue).vector
                                 }
                             )
-                        ) {"could not add value to batch, try reducing batch size"}
+                        ) { "could not add value to batch, try reducing batch size" }
 
                     }
                     client.insert(insert)
@@ -566,6 +566,190 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             type < VECTOR_ID_OFFSET -> getVectorQuadValue(type, id)
             else -> getUriValue(type, id)
         }
+
+    }
+
+    private fun getQuadValues(pairs: Collection<Pair<Int, Long>>): Map<Pair<Int, Long>, QuadValue> {
+
+        val returnMap = mutableMapOf<Pair<Int, Long>, QuadValue>()
+
+        pairs.groupBy { it.first }.forEach { (type, groupedPairs) ->
+
+            when {
+                type == DOUBLE_LITERAL_TYPE -> {
+                    val pairSet = groupedPairs.toMutableSet()
+                    pairSet.removeIf {
+                        val cached = doubleLiteralValueCache.getIfPresent(it.second)
+                        if (cached != null) {
+                            returnMap[it] = DoubleValue(cached)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    if (pairSet.isNotEmpty()) {
+
+                        val result = client.query(
+                            Query("megras.literal_double")
+                                .select("*")
+                                .where(Expression("id", "in", pairSet.map { it.second }))
+                        )
+
+                        while (result.hasNext()) {
+                            val tuple = result.next()
+                            val value = tuple.asDouble("value") ?: continue
+                            val id = tuple.asLong("id") ?: continue
+
+                            doubleLiteralIdCache.put(value, id)
+                            doubleLiteralValueCache.put(id, value)
+                            returnMap[DOUBLE_LITERAL_TYPE to id] = DoubleValue(value)
+                        }
+                    }
+                }
+
+                type == LONG_LITERAL_TYPE -> {
+                    returnMap.putAll(groupedPairs.associateWith { LongValue(it.second) })
+                }
+
+                type == STRING_LITERAL_TYPE -> {
+                    val pairSet = groupedPairs.toMutableSet()
+                    pairSet.removeIf {
+                        val cached = stringLiteralValueCache.getIfPresent(it.second)
+                        if (cached != null) {
+                            returnMap[it] = StringValue(cached)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    if (pairSet.isNotEmpty()) {
+                        val result = client.query(
+                            Query("megras.literal_string")
+                                .select("*")
+                                .where(Expression("id", "in", pairSet.map { it.second }))
+                        )
+                        while (result.hasNext()) {
+                            val tuple = result.next()
+                            val value = tuple.asString("value") ?: continue
+                            val id = tuple.asLong("id") ?: continue
+
+                            stringLiteralValueCache.put(id, value)
+                            stringLiteralIdCache.put(value, id)
+                            returnMap[STRING_LITERAL_TYPE to id] = StringValue(value)
+                        }
+
+                    }
+
+                }
+
+                type < VECTOR_ID_OFFSET -> {
+                    val pairSet = groupedPairs.toMutableSet()
+                    //TODO batch
+
+                    pairSet.forEach {
+                        val value = getVectorQuadValue(it.first, it.second)
+                        if (value != null) {
+                            returnMap[it] = value
+                        }
+                    }
+
+                }
+
+                type == LOCAL_URI_TYPE -> {
+
+                    val suffixIdSet = groupedPairs.map { it.second }.toMutableSet()
+
+                    suffixIdSet.removeIf {
+                        val cached = suffixValueCache.getIfPresent(it)
+                        if (cached != null) {
+                            returnMap[type to it] = LocalQuadValue(cached)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    if (suffixIdSet.isNotEmpty()) {
+                        val result = client.query(
+                            Query("megras.entity").select("*").where(
+                                Expression("id", "in", suffixIdSet)
+                            )
+                        )
+
+                        while (result.hasNext()) {
+                            val tuple = result.next()
+                            val value = tuple.asString("value") ?: continue
+                            val id = tuple.asLong("id") ?: continue
+                            suffixIdCache.put(value, id)
+                            suffixValueCache.put(id, value)
+                            returnMap[type to id] = LocalQuadValue(value)
+                        }
+                    }
+
+                }
+
+                else -> { //URI Values
+
+                    var prefix = prefixValueCache.getIfPresent(type)
+                    if (prefix == null) {
+                        val result = client.query(
+                            Query("megras.entity_prefix").select("prefix").where(
+                                Expression("id", "=", type)
+                            )
+                        )
+
+                        if (result.hasNext()) {
+                            val tuple = result.next()
+                            val p = tuple.asString("prefix")
+                            if (p != null) {
+                                prefixValueCache.put(type, p)
+                                prefixIdCache.put(p, type)
+                            }
+                            prefix = p
+                        }
+
+                    }
+
+                    if (prefix == null) {
+                        return@forEach
+                    }
+
+                    val suffixIdSet = groupedPairs.map { it.second }.toMutableSet()
+
+                    suffixIdSet.removeIf {
+                        val cached = suffixValueCache.getIfPresent(it)
+                        if (cached != null) {
+                            returnMap[type to it] = URIValue(prefix, cached)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    if (suffixIdSet.isNotEmpty()) {
+                        val result = client.query(
+                            Query("megras.entity").select("*").where(
+                                Expression("id", "in", suffixIdSet)
+                            )
+                        )
+
+                        while (result.hasNext()) {
+                            val tuple = result.next()
+                            val value = tuple.asString("value") ?: continue
+                            val id = tuple.asLong("id") ?: continue
+                            suffixIdCache.put(value, id)
+                            suffixValueCache.put(id, value)
+                            returnMap[type to id] = URIValue(prefix, value)
+                        }
+                    }
+                }
+            }
+
+        }
+
+
+        return returnMap
 
     }
 
@@ -1246,7 +1430,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return Quad(id, s, p, o)
     }
 
-    fun getIds(ids: Collection<Long>): List<Quad> {
+    private fun getIds(ids: Collection<Long>): BasicQuadSet {
 
         val result = client.query(
             Query("megras.quads")
@@ -1255,24 +1439,41 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         )
 
         if (!result.hasNext()) {
-            return emptyList()
+            return BasicQuadSet()
         }
 
-        val quads = mutableListOf<Quad>()
+        val quads = mutableSetOf<Quad>()
+
+        val valueIds = mutableSetOf<Pair<Int, Long>>()
+        val quadIds = mutableListOf<Pair<Long, Triple<Pair<Int, Long>, Pair<Int, Long>, Pair<Int, Long>>>>() //TODO introduce nicer datatype
 
         while (result.hasNext()) {
             val tuple = result.next()
 
             val id = tuple.asLong("id")!!
 
-            val s = getQuadValue(tuple.asInt("s_type")!!, tuple.asLong("s")!!) ?: continue
-            val p = getQuadValue(tuple.asInt("p_type")!!, tuple.asLong("p")!!) ?: continue
-            val o = getQuadValue(tuple.asInt("o_type")!!, tuple.asLong("o")!!) ?: continue
+            val s = (tuple.asInt("s_type")?: continue) to (tuple.asLong("s")?: continue)
+            val p = (tuple.asInt("p_type")?: continue) to (tuple.asLong("p")?: continue)
+            val o = (tuple.asInt("o_type")?: continue) to (tuple.asLong("o")?: continue)
 
-            quads.add(Quad(id, s, p, o))
+            valueIds.add(s)
+            valueIds.add(p)
+            valueIds.add(o)
+
+            quadIds.add(id to Triple(s, p, o))
         }
 
-        return quads
+        val values = getQuadValues(valueIds)
+
+        quadIds.forEach {
+            val s = values[it.second.first] ?: return@forEach
+            val p = values[it.second.second] ?: return@forEach
+            val o = values[it.second.third] ?: return@forEach
+
+            quads.add(Quad(it.first, s, p, o))
+        }
+
+        return BasicQuadSet(quads)
 
     }
 
@@ -1420,7 +1621,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             )
         )
 
-        return BasicMutableQuadSet(getIds(ids).toMutableSet())
+        return getIds(ids).toMutable()
     }
 
     override fun toMutable(): MutableQuadSet = this
@@ -1516,7 +1717,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return ret
     }
 
-    override fun textFilter(predicate: QuadValue, filterText: String): QuadSet {
+    override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet {
 
         val predicatePair = getQuadValueId(predicate)
 
@@ -1545,6 +1746,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             candidateIds.add(candidateResult.next().asLong("o")!!)
         }
 
+        val filterText = if (objectFilterText.startsWith('"') && objectFilterText.endsWith('"')) {
+            objectFilterText
+        } else {
+            "\"${objectFilterText.replace("\"", "\\\"")}\""
+        }
+
         val ids = client.query(
             Query("megras.literal_string")
                 .select("id")
@@ -1559,10 +1766,10 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             )
         }
 
-        val resultSet = mutableSetOf<Quad>()
+        val resultIds = mutableSetOf<Long>()
         val result = client.query(
             Query("megras.quads")
-                .select("*")
+                .select("id")
                 .where(
                     And(
                         objectFilterExpression(STRING_LITERAL_TYPE, idList),
@@ -1573,17 +1780,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
         while (result.hasNext()) {
 
-            val tuple = result.next()
-
-            val s = getQuadValue(tuple.asInt("s_type")!!, tuple.asLong("s")!!) ?: continue
-            val p = getQuadValue(tuple.asInt("p_type")!!, tuple.asLong("p")!!) ?: continue
-            val o = getQuadValue(tuple.asInt("o_type")!!, tuple.asLong("o")!!) ?: continue
-
-            resultSet.add(Quad(tuple.asLong("id"), s, p, o))
+            resultIds.add(result.next().asLong("id") ?: continue)
 
         }
 
-        return BasicQuadSet(resultSet)
+        return getIds(resultIds)
     }
 
     override val size: Int

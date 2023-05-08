@@ -30,7 +30,7 @@ sealed class QuadValue {
                 URIValue(value)
             }
             value.endsWith("^^String") -> StringValue(value.substringBeforeLast("^^String"))
-            value.endsWith("^^Long") -> LongValue(value.substringAfterLast("^^Long").toLongOrNull() ?: 0L)
+            value.endsWith("^^Long") -> LongValue(value.substringBeforeLast("^^Long").toLongOrNull() ?: 0L)
             value.endsWith("^^Double") -> DoubleValue(value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN)
             value.startsWith("[") -> when { //vectors
                 value.endsWith("]") || value.endsWith("]^^DoubleVector") -> {

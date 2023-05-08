@@ -1445,16 +1445,17 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         val quads = mutableSetOf<Quad>()
 
         val valueIds = mutableSetOf<Pair<Int, Long>>()
-        val quadIds = mutableListOf<Pair<Long, Triple<Pair<Int, Long>, Pair<Int, Long>, Pair<Int, Long>>>>() //TODO introduce nicer datatype
+        val quadIds =
+            mutableListOf<Pair<Long, Triple<Pair<Int, Long>, Pair<Int, Long>, Pair<Int, Long>>>>() //TODO introduce nicer datatype
 
         while (result.hasNext()) {
             val tuple = result.next()
 
             val id = tuple.asLong("id")!!
 
-            val s = (tuple.asInt("s_type")?: continue) to (tuple.asLong("s")?: continue)
-            val p = (tuple.asInt("p_type")?: continue) to (tuple.asLong("p")?: continue)
-            val o = (tuple.asInt("o_type")?: continue) to (tuple.asLong("o")?: continue)
+            val s = (tuple.asInt("s_type") ?: continue) to (tuple.asLong("s") ?: continue)
+            val p = (tuple.asInt("p_type") ?: continue) to (tuple.asLong("p") ?: continue)
+            val o = (tuple.asInt("o_type") ?: continue) to (tuple.asLong("o") ?: continue)
 
             valueIds.add(s)
             valueIds.add(p)
@@ -1572,7 +1573,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
         val filterIds =
             ((subjects?.toSet() ?: setOf()) + (predicates?.toSet() ?: setOf()) + (objects?.toSet() ?: setOf()))
-                .map { it to getQuadValueId(it) }
+                .map { it to getQuadValueId(it) } //TODO optimize via getQuadValueIds
                 .mapNotNull { if (it.second.first == null || it.second.second == null) null else it.first to (it.second.first!! to it.second.second!!) } //remove values that were not found
                 .toMap()
 
@@ -1609,14 +1610,19 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
         }
 
+        fun predicate(column: String, ids: Collection<Pair<Int, Long>>?) = ids?.groupBy { it.first }
+            ?.map { (type, ids) ->
+            And(
+                Expression("${column}_type", "=", type),
+                Expression(column, "in", ids.map { it.second })
+            ) as Predicate
+        }?.reduce { acc, pred -> Or(acc, pred) }
+
         val ids = select(
             listOf(listOfNotNull(
-                subjectFilterIds?.map { subjectFilterExpression(it.first, it.second) as Predicate }
-                    ?.reduce { acc, predicate -> Or(acc, predicate) },
-                predicateFilterIds?.map { predicateFilterExpression(it.first, it.second) as Predicate }
-                    ?.reduce { acc, predicate -> Or(acc, predicate) },
-                objectFilterIds?.map { objectFilterExpression(it.first, it.second) as Predicate }
-                    ?.reduce { acc, predicate -> Or(acc, predicate) }
+                predicate("s", subjectFilterIds),
+                predicate("p", predicateFilterIds),
+                predicate("o", objectFilterIds)
             ).reduce { acc, predicate -> And(acc, predicate) }
             )
         )
@@ -1710,8 +1716,8 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         val quadIdMap = quadIds.toMap()
 
         relevantQuads.forEach { quad ->
-            val distance = distances[quadIdMap[quad.id!!]!!] ?: return@forEach
-            ret.add(Quad(quad.`object`, MeGraS.QUERY_DISTANCE.uri, DoubleValue(distance)))
+            val d = distances[quadIdMap[quad.id!!]!!] ?: return@forEach
+            ret.add(Quad(quad.`object`, MeGraS.QUERY_DISTANCE.uri, DoubleValue(d)))
         }
 
         return ret
@@ -1725,27 +1731,6 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             return BasicQuadSet()
         }
 
-        val candidateResult = client.query(
-            Query("megras.quads")
-                .select("o")
-                .where(
-                    And(
-                        predicateFilterExpression(predicatePair.first!!, predicatePair.second!!),
-                        Expression("o_type", "=", STRING_LITERAL_TYPE)
-                    )
-                )
-        )
-
-        if (!candidateResult.hasNext()) {
-            return BasicQuadSet()
-        }
-
-        val candidateIds = mutableSetOf<Long>()
-
-        while (candidateResult.hasNext()) {
-            candidateIds.add(candidateResult.next().asLong("o")!!)
-        }
-
         val filterText = if (objectFilterText.startsWith('"') && objectFilterText.endsWith('"')) {
             objectFilterText
         } else {
@@ -1756,7 +1741,6 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             Query("megras.literal_string")
                 .select("id")
                 .fulltext("value", filterText, "score")
-                .where(Expression("id", "in", candidateIds))
         )
 
         val idList = mutableListOf<Long>()

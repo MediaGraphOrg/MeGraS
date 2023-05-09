@@ -10,6 +10,58 @@
     "version" : "0.01"
   },
   "paths" : {
+    "/query/knn" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads within a kNN-cluster.",
+        "operationId" : "postQueryKnn",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiKnnQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/query/object" : {
       "post" : {
         "tags" : [ "Query" ],
@@ -394,6 +446,26 @@
           }
         }
       },
+      "ApiKnnQuery" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "predicate" : {
+            "type" : "string"
+          },
+          "object" : {
+            "$ref" : "#/components/schemas/VectorValue"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "distance" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "predicate", "object", "count", "distance" ]
+      },
       "ApiQuad" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -448,6 +520,24 @@
           }
         },
         "required" : [ "predicate", "filterText" ]
+      },
+      "VectorValue" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "type" : {
+            "$ref" : "#/components/schemas/Type"
+          },
+          "length" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "type", "length" ]
+      },
+      "Type" : {
+        "type" : "string",
+        "enum" : [ "Double", "Long" ]
       }
     },
     "securitySchemes" : { }

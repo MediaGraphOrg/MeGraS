@@ -1,6 +1,7 @@
 package org.megras.api.cli
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import org.megras.data.fs.FileSystemObjectStore
@@ -20,8 +21,10 @@ import javax.imageio.ImageIO
 
 class AddFileCommand(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : CliktCommand(name = "add") {
 
-    private val fileName: String by option("-f", "--File", help = "Path of file to be added")
+    private val fileName: String by option("-f", "--File", help = "Path of file or folder to be added")
         .required()
+
+    private val recursive: Boolean by option("-r", "--recursive", help = "Scan provided folder recursively").flag(default = false)
 
     override fun run() {
 
@@ -32,9 +35,27 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
             return
         }
 
-        val id = AddFileUtil.addFile(objectStore, quads, PseudoFile(file)).uri
+        if (file.isFile) {
+            val id = AddFileUtil.addFile(objectStore, quads, PseudoFile(file)).uri
 
-        println("Added file '${file.absolutePath}' with id '${id}'")
+            println("Added file '${file.absolutePath}' with id '${id}'")
+        } else if (file.isDirectory) {
+
+            if (!recursive) {
+                System.err.println("'${file.absolutePath}' is a directory but recursive scan flag was not provided, aborting.")
+                return
+            }
+
+            file.walkTopDown().forEach{
+
+                if (it.isFile && it.canRead()) {
+                    val id = AddFileUtil.addFile(objectStore, quads, PseudoFile(it)).uri
+                    println("Added file '${it.absolutePath}' with id '${id}'")
+                }
+            }
+        }
+
+
 
     }
 

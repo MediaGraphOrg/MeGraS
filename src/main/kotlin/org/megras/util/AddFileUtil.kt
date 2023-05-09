@@ -23,14 +23,18 @@ object AddFileUtil {
         val descriptor = objectStore.store(file)
         val oid = IdUtil.generateId(file)
 
-        quads.add(Quad(oid, MeGraS.RAW_ID.uri, StringValue(descriptor.id.id)))
-        quads.add(Quad(oid, MeGraS.MIME_TYPE.uri, StringValue(descriptor.mimeType.mimeString)))
-        quads.add(Quad(oid, MeGraS.MEDIA_TYPE.uri, StringValue(MediaType.mimeTypeMap[descriptor.mimeType]!!.name)))
-        quads.add(Quad(oid, MeGraS.FILE_NAME.uri, StringValue(file.name)))
-
         //generate and store canonical
         val canonical = generateCanonicalRepresentation(objectStore, descriptor)
-        quads.add(Quad(oid, MeGraS.CANONICAL_ID.uri, StringValue(canonical.id.id)))
+
+        quads.addAll(
+            listOf(
+                Quad(oid, MeGraS.RAW_ID.uri, StringValue(descriptor.id.id)),
+                Quad(oid, MeGraS.MIME_TYPE.uri, StringValue(descriptor.mimeType.mimeString)),
+                Quad(oid, MeGraS.MEDIA_TYPE.uri, StringValue(MediaType.mimeTypeMap[descriptor.mimeType]!!.name)),
+                Quad(oid, MeGraS.FILE_NAME.uri, StringValue(file.name)),
+                Quad(oid, MeGraS.CANONICAL_ID.uri, StringValue(canonical.id.id))
+            )
+        )
 
         return oid
     }

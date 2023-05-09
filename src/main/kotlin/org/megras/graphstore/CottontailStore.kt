@@ -348,8 +348,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
             //combine entries
             uriValues.forEach {
-                returnMap[it] =
-                    (if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]!!) to suffixIdMap[it.suffix()]!!
+                val s = if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]
+                val p = suffixIdMap[it.suffix()]
+                if (s != null && p != null) {
+                    returnMap[it] = s to p
+                }
             }
         }
 

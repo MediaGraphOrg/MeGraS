@@ -34,6 +34,7 @@ object RestApi {
         val subjectQueryHandler = SubjectQueryHandler(quadSet)
         val predicateQueryHandler = PredicateQueryHandler(quadSet)
         val objectQueryHandler = ObjectQueryHandler(quadSet)
+        val knnQueryHandler = KnnQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
@@ -84,6 +85,7 @@ object RestApi {
             post("/query/subject", subjectQueryHandler::post)
             post("/query/predicate", predicateQueryHandler::post)
             post("/query/object", objectQueryHandler::post)
+            post("/query/knn", knnQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

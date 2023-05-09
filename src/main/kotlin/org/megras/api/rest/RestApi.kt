@@ -31,6 +31,7 @@ object RestApi {
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
+        val subjectQueryHandler = SubjectQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
@@ -78,6 +79,7 @@ object RestApi {
             post("/add/file", addFileRequestHandler::post)
             post("/query/quads", basicQueryHandler::post)
             post("/query/text", textQueryHandler::post)
+            post("/query/subject", subjectQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

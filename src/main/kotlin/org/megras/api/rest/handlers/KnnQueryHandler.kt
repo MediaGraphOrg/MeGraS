@@ -39,7 +39,7 @@ class KnnQueryHandler(private val quads: QuadSet) : PostRequestHandler {
         val `object` = query.`object`
         val count = query.count
         if (count < 1) {
-            throw RestErrorStatus(400, "invalid query")
+            throw RestErrorStatus(400, "invalid query: count smaller than one")
         }
         val distance = try {
             Distance.valueOf(query.distance)

@@ -31,10 +31,13 @@ class IndexedMutableQuadSet : MutableQuadSet {
         val sCount = if (subjects?.isEmpty() == true) Int.MAX_VALUE else subjects?.size ?: Int.MAX_VALUE
         val oCount = if (objects?.isEmpty() == true) Int.MAX_VALUE else objects?.size ?: Int.MAX_VALUE
 
+        val sSet = subjects?.toSet()
+        val pSet = predicates?.toSet()
+        val oSet = objects?.toSet()
 
-        val sFilter : (Quad) -> Boolean = if (!subjects.isNullOrEmpty()) {{it.subject in subjects }} else {{true}}
-        val pFilter : (Quad) -> Boolean = if (!predicates.isNullOrEmpty()) {{it.predicate in predicates }} else {{true}}
-        val oFilter : (Quad) -> Boolean = if (!objects.isNullOrEmpty()) {{it.`object` in objects }} else {{true}}
+        val sFilter : (Quad) -> Boolean = if (!sSet.isNullOrEmpty()) {{it.subject in sSet }} else {{true}}
+        val pFilter : (Quad) -> Boolean = if (!pSet.isNullOrEmpty()) {{it.predicate in pSet }} else {{true}}
+        val oFilter : (Quad) -> Boolean = if (!oSet.isNullOrEmpty()) {{it.`object` in oSet }} else {{true}}
 
 
         val minCount = min(sCount, oCount)

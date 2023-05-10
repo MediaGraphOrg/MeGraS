@@ -19,6 +19,18 @@ object AddFileUtil {
 
     fun addFile(objectStore: FileSystemObjectStore, quads: MutableQuadSet, file: PseudoFile): ObjectId {
 
+        val existing = objectStore.exists(file)
+
+        if (existing != null) {
+
+            val id = quads.filter(null, listOf(MeGraS.RAW_ID.uri), listOf(StringValue(existing.id.id))).firstOrNull()?.subject as? ObjectId
+
+            if (id != null) {
+                return id
+            }
+
+        }
+
         //store raw
         val descriptor = objectStore.store(file)
         val oid = IdUtil.generateId(file)

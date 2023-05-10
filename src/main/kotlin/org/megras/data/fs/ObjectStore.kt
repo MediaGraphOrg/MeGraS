@@ -15,6 +15,8 @@ interface ObjectStore {
 
     fun store(file: PseudoFile): StoredObjectDescriptor
 
+    fun exists(file: PseudoFile): StoredObjectDescriptor?
+
     fun store(stream: InputStream, descriptor: StoredObjectDescriptor)
 
     fun get(id: StoredObjectId): ObjectStoreResult?

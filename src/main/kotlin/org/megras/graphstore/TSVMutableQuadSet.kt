@@ -7,13 +7,13 @@ import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
 import java.io.File
 
-class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
+class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet, PersistableQuadSet {
 
-    private val cache = BasicMutableQuadSet()
+    private val cache = IndexedMutableQuadSet()
+    private var lastStoreTime = 0L
 
     private val tsvReader = csvReader {
         delimiter = '\t'
-        escapeChar = '\\'
         skipEmptyLine = true
     }
 
@@ -25,34 +25,42 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         load()
     }
 
-    private fun load() {
-        cache.toSet().clear()
+    override fun load() {
+        print("loading quads from tsv...")
+        cache.clear()
 
         if (!tsvFile.exists() || tsvFile.length() == 0L){
             return
         }
 
-        tsvReader.readAllWithHeader(tsvFile).map {
-            cache.add(
-                Quad(
-                    QuadValue.of(it["subject"]!!),
-                    QuadValue.of(it["predicate"]!!),
-                    QuadValue.of(it["object"]!!)
+        tsvReader.open(tsvFile) {
+            readAllWithHeaderAsSequence().forEach {
+                cache.add(
+                    Quad(
+                        QuadValue.of(it["subject"]!!),
+                        QuadValue.of(it["predicate"]!!),
+                        QuadValue.of(it["object"]!!)
+                    )
                 )
-            )
+            }
         }
+
+        print("...done")
+        lastStoreTime = System.currentTimeMillis()
 
     }
 
-    private var lastStoreTime = 0L
+
 
     @Synchronized
-    fun store(force: Boolean = false) {
+    private fun hintStore(force: Boolean = false) {
 
         //rate limit writes
-        if (!force && (System.currentTimeMillis() - lastStoreTime) < 60_000) {
+        if (!force && (System.currentTimeMillis() - lastStoreTime) < 600_000) {
             return
         }
+
+        print("writing quads to tsv...")
 
         tsvWriter.open(tsvFile) {
             writeRow("subject", "predicate", "object")
@@ -62,7 +70,12 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         }
 
         lastStoreTime = System.currentTimeMillis()
+        println("...done")
 
+    }
+
+    override fun store() {
+        hintStore(true)
     }
 
     override fun getId(id: Long): Quad? = cache.getId(id)
@@ -88,7 +101,7 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
     override fun plus(other: QuadSet): QuadSet = cache.plus(other)
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = this.cache.nearestNeighbor(predicate, `object`, count, distance)
 
-    override fun textFilter(predicate: QuadValue, filterText: String): QuadSet = this.cache.textFilter(predicate, filterText)
+    override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = this.cache.textFilter(predicate, objectFilterText)
 
     override val size: Int
         get() = cache.size
@@ -105,7 +118,7 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         val result = cache.add(element)
 
         if (result) {
-            store()
+            hintStore()
         }
 
         return result
@@ -116,7 +129,7 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         val result = cache.addAll(elements)
 
         if (result) {
-            store()
+            hintStore()
         }
 
         return result
@@ -131,7 +144,7 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         val result = cache.remove(element)
 
         if (result) {
-            store()
+            hintStore()
         }
 
         return result
@@ -141,7 +154,7 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         val result = cache.removeAll(elements.toSet())
 
         if (result) {
-            store()
+            hintStore()
         }
 
         return result
@@ -151,7 +164,7 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet {
         val result = cache.retainAll(elements.toSet())
 
         if (result) {
-            store()
+            hintStore()
         }
 
         return result

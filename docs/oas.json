@@ -10,6 +10,58 @@
     "version" : "0.01"
   },
   "paths" : {
+    "/query/path" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries a path along a set of predicates starting from a set of subjects.",
+        "operationId" : "postQueryPath",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiPathQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/query/quads" : {
       "post" : {
         "tags" : [ "Query" ],
@@ -237,6 +289,29 @@
             }
           }
         }
+      },
+      "ApiPathQuery" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "seeds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "predicates" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "maxDepth" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "maxDepth" ]
       },
       "ApiQuad" : {
         "type" : "object",

@@ -31,9 +31,13 @@ object RestApi {
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
+        val pathQueryHandler = PathQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
+
+            it.http.maxRequestSize = 10 * 1024L * 1024L //10MB
+
             it.plugins.enableCors { cors ->
                 cors.add { corsPluginConfig ->
                     corsPluginConfig.anyHost()
@@ -78,6 +82,7 @@ object RestApi {
             post("/add/file", addFileRequestHandler::post)
             post("/query/quads", basicQueryHandler::post)
             post("/query/text", textQueryHandler::post)
+            post("/query/path", pathQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

@@ -155,7 +155,7 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
 
 }
 
-open class VectorValue(val type: Type, val length: Int) : QuadValue() {
+abstract class VectorValue(val type: Type, val length: Int) : QuadValue() {
 
     enum class Type(val byte: Byte) {
         Double(0) {
@@ -217,7 +217,7 @@ class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vect
     }
 
     override fun toString(): String {
-        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^DoubleVector", limit = 5)
+        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^DoubleVector")
     }
 }
 
@@ -260,6 +260,6 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
     }
 
     override fun toString(): String {
-        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^LongVector", limit = 5)
+        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^LongVector")
     }
 }

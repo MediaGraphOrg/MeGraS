@@ -1,9 +1,10 @@
 package org.megras.graphstore
 
 import org.megras.data.graph.Quad
+import java.io.Serializable
 import java.util.concurrent.ConcurrentHashMap
 
-class BasicMutableQuadSet private constructor(private val quads: MutableSet<Quad>) : BasicQuadSet(quads), MutableQuadSet, MutableSet<Quad> by quads {
+class BasicMutableQuadSet private constructor(private val quads: MutableSet<Quad>) : BasicQuadSet(quads), MutableQuadSet, MutableSet<Quad> by quads, Serializable {
 
     constructor(quads: Collection<Quad>) : this() {
         this.quads.addAll(quads)

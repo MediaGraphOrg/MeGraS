@@ -2,12 +2,16 @@ package org.megras.graphstore
 
 import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
 import com.github.doyaaaaaken.kotlincsv.dsl.csvWriter
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
-class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet, PersistableQuadSet {
+class TSVMutableQuadSet(private val tsvFileName : String, private val useCompression: Boolean = false) : MutableQuadSet, PersistableQuadSet {
 
     private val cache = IndexedMutableQuadSet()
     private var lastStoreTime = 0L
@@ -29,23 +33,44 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet, Persistabl
         print("loading quads from tsv...")
         cache.clear()
 
+        val tsvFile = File(tsvFileName)
+
         if (!tsvFile.exists() || tsvFile.length() == 0L){
             return
         }
 
-        tsvReader.open(tsvFile) {
+        val inputStream = if (useCompression) {
+            BZip2CompressorInputStream(FileInputStream(tsvFile), true)
+        } else {
+            FileInputStream(tsvFile)
+        }
+
+        var i = 0
+
+        tsvReader.open(inputStream) {
+
+            val buffer = ArrayList<Quad>(1000)
+
             readAllWithHeaderAsSequence().forEach {
-                cache.add(
+                buffer.add(
                     Quad(
                         QuadValue.of(it["subject"]!!),
                         QuadValue.of(it["predicate"]!!),
                         QuadValue.of(it["object"]!!)
                     )
                 )
+                if (buffer.size >= 1000) {
+                    cache.addAll(buffer)
+                    buffer.clear()
+                }
+                if (++i % 1_000_000 == 0) {
+                    print('.')
+                }
             }
+            cache.addAll(buffer)
         }
 
-        print("...done")
+        print("done")
         lastStoreTime = System.currentTimeMillis()
 
     }
@@ -62,15 +87,33 @@ class TSVMutableQuadSet(private val tsvFile : File) : MutableQuadSet, Persistabl
 
         print("writing quads to tsv...")
 
-        tsvWriter.open(tsvFile) {
+        val tmpFile = File("$tsvFileName.tmp")
+
+        val outputStream = if(useCompression) {
+            BZip2CompressorOutputStream(FileOutputStream(tmpFile), 3)
+        } else {
+            FileOutputStream(tmpFile)
+        }
+
+        var i = 0
+        tsvWriter.open(outputStream) {
             writeRow("subject", "predicate", "object")
             cache.forEach {
                 writeRow(it.subject, it.predicate, it.`object`)
+                if (++i % 1000000 == 0) {
+                    print('.')
+                }
             }
         }
 
+        val tsvFile = File(tsvFileName)
+        if (tsvFile.exists()) {
+            tsvFile.delete()
+        }
+        tmpFile.renameTo(tsvFile)
+
         lastStoreTime = System.currentTimeMillis()
-        println("...done")
+        println("done")
 
     }
 

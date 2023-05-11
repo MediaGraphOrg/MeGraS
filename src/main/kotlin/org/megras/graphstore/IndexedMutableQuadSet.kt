@@ -1,18 +1,23 @@
 package org.megras.graphstore
 
+import com.google.common.collect.HashMultimap
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
+import org.megras.data.graph.URIValue
 import org.megras.data.graph.VectorValue
-import java.util.concurrent.ConcurrentHashMap
+import java.io.Serializable
 import kotlin.math.min
 
-class IndexedMutableQuadSet : MutableQuadSet {
+
+class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
     private val quads = BasicMutableQuadSet()
 
-    private val sIndex = ConcurrentHashMap<QuadValue, MutableSet<Quad>>()
-    private val pIndex = ConcurrentHashMap<QuadValue, MutableSet<Quad>>()
-    private val oIndex = ConcurrentHashMap<QuadValue, MutableSet<Quad>>()
+    private val sIndex = HashMultimap.create<QuadValue, Quad>()
+    private val pIndex = HashMultimap.create<QuadValue, Quad>()
+    private val oIndex = HashMultimap.create<QuadValue, Quad>()
+
+
 
     override fun getId(id: Long): Quad? = quads.getId(id)
 
@@ -57,12 +62,12 @@ class IndexedMutableQuadSet : MutableQuadSet {
 
         return if (sCount < oCount) {
             (subjects ?: emptyList()).flatMapTo(set){ quads ->
-                sIndex[quads]?.filter { oFilter(it) && pFilter(it) } ?: emptyList()
+                sIndex[quads].filter { oFilter(it) && pFilter(it) }
             }
             BasicQuadSet(set)
         } else {
             (objects ?: emptyList()).flatMapTo(set){ quads ->
-                sIndex[quads]?.filter { sFilter(it) && pFilter(it) } ?: emptyList()
+                sIndex[quads].filter { sFilter(it) && pFilter(it) }
             }
             BasicQuadSet(set)
         }
@@ -93,23 +98,11 @@ class IndexedMutableQuadSet : MutableQuadSet {
     override fun add(element: Quad): Boolean {
 
         if(quads.add(element)) {
-            if (sIndex.containsKey(element.subject)) {
-                sIndex[element.subject]!!.add(element)
-            } else {
-                sIndex[element.subject] = mutableSetOf(element)
-            }
 
-            if (pIndex.containsKey(element.predicate)) {
-                pIndex[element.predicate]!!.add(element)
-            } else {
-                pIndex[element.predicate] = mutableSetOf(element)
-            }
+            sIndex.put(element.subject, element)
+            pIndex.put(element.predicate, element)
+            oIndex.put(element.`object`, element)
 
-            if (oIndex.containsKey(element.`object`)) {
-                oIndex[element.`object`]!!.add(element)
-            } else {
-                oIndex[element.`object`] = mutableSetOf(element)
-            }
             return true
         }
         return false
@@ -117,11 +110,15 @@ class IndexedMutableQuadSet : MutableQuadSet {
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {
-        var changed = false
-        for(q in elements) {
-            changed = this.add(q) || changed
+        if (quads.addAll(elements)) {
+            elements.groupBy { it.subject }.forEach { (qv, q) -> if(qv is URIValue) sIndex.putAll(qv, q) }
+            elements.groupBy { it.predicate }.forEach { (qv, q) -> if(qv is URIValue) pIndex.putAll(qv, q) }
+            elements.groupBy { it.`object` }.forEach { (qv, q) -> if(qv is URIValue) oIndex.putAll(qv, q) }
+            System.gc()
+            return true
         }
-        return changed
+        return false
+
     }
 
     override fun clear() {

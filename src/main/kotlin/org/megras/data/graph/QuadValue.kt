@@ -1,10 +1,11 @@
 package org.megras.data.graph
 
 import org.vitrivr.cottontail.client.language.basics.Type
+import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
 
-sealed class QuadValue {
+sealed class QuadValue : Serializable {
 
     companion object {
 
@@ -55,7 +56,7 @@ sealed class QuadValue {
 
 }
 
-data class StringValue(val value: String): QuadValue() {
+data class StringValue(val value: String): QuadValue(), Serializable {
     override fun toString(): String = "$value^^String"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -70,7 +71,7 @@ data class StringValue(val value: String): QuadValue() {
         return value.hashCode()
     }
 }
-data class LongValue(val value: Long): QuadValue() {
+data class LongValue(val value: Long): QuadValue(), Serializable {
     override fun toString(): String = "$value^^Long"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -85,7 +86,7 @@ data class LongValue(val value: Long): QuadValue() {
         return value.hashCode()
     }
 }
-data class DoubleValue(val value: Double): QuadValue() {
+data class DoubleValue(val value: Double): QuadValue(), Serializable {
     override fun toString(): String = "$value^^Double"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -101,7 +102,7 @@ data class DoubleValue(val value: Double): QuadValue() {
     }
 }
 
-open class URIValue(private val prefix: String?, protected open val uri: String) : QuadValue() {
+open class URIValue(private val prefix: String?, protected open val uri: String) : QuadValue(), Serializable {
 
     companion object {
         private fun estimatePrefix(uri: String): Pair<String, String> {
@@ -155,7 +156,7 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
 
 }
 
-abstract class VectorValue(val type: Type, val length: Int) : QuadValue() {
+abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Serializable {
 
     enum class Type(val byte: Byte) {
         Double(0) {
@@ -178,7 +179,7 @@ abstract class VectorValue(val type: Type, val length: Int) : QuadValue() {
 
 }
 
-class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vector.size) {
+class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vector.size), Serializable {
 
     companion object {
         fun parse(string: String): DoubleVectorValue {
@@ -212,16 +213,15 @@ class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vect
         return vector.contentEquals(other.vector)
     }
 
-    override fun hashCode(): Int {
-        return vector.contentHashCode()
-    }
+    private val hashCode = vector.contentHashCode()
+    override fun hashCode(): Int = hashCode
 
     override fun toString(): String {
         return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^DoubleVector")
     }
 }
 
-class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.size) {
+class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.size), Serializable {
 
     companion object {
         fun parse(string: String): LongVectorValue {
@@ -255,9 +255,8 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
         return vector.contentEquals(other.vector)
     }
 
-    override fun hashCode(): Int {
-        return vector.contentHashCode()
-    }
+    private val hashCode = vector.contentHashCode()
+    override fun hashCode(): Int = hashCode
 
     override fun toString(): String {
         return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^LongVector")

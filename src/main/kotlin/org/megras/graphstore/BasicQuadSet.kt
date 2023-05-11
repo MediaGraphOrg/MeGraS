@@ -4,8 +4,9 @@ import org.megras.data.graph.*
 import org.megras.data.schema.MeGraS
 import org.megras.util.knn.DistancePairComparator
 import org.megras.util.knn.FixedSizePriorityQueue
+import java.io.Serializable
 
-open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by quads {
+open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by quads, Serializable {
 
     constructor() : this(setOf())
 

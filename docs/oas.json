@@ -465,7 +465,7 @@
             "format" : "int32"
           },
           "distance" : {
-            "type" : "string"
+            "$ref" : "#/components/schemas/Distance"
           }
         },
         "required" : [ "predicate", "object", "count", "distance" ]
@@ -524,6 +524,10 @@
           }
         },
         "required" : [ "predicate", "filterText" ]
+      },
+      "Distance" : {
+        "type" : "string",
+        "enum" : [ "COSINE" ]
       }
     },
     "securitySchemes" : { }

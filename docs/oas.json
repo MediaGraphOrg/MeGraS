@@ -454,7 +454,11 @@
             "type" : "string"
           },
           "object" : {
-            "$ref" : "#/components/schemas/VectorValue"
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "double"
+            }
           },
           "count" : {
             "type" : "integer",
@@ -520,24 +524,6 @@
           }
         },
         "required" : [ "predicate", "filterText" ]
-      },
-      "VectorValue" : {
-        "type" : "object",
-        "additionalProperties" : false,
-        "properties" : {
-          "type" : {
-            "$ref" : "#/components/schemas/Type"
-          },
-          "length" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        },
-        "required" : [ "type", "length" ]
-      },
-      "Type" : {
-        "type" : "string",
-        "enum" : [ "Double", "Long" ]
       }
     },
     "securitySchemes" : { }

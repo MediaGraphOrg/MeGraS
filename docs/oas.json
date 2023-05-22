@@ -10,6 +10,110 @@
     "version" : "0.01"
   },
   "paths" : {
+    "/query/knn" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads within a kNN-cluster.",
+        "operationId" : "postQueryKnn",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiKnnQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/query/object" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads with a specific object.",
+        "operationId" : "postQueryObject",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiQuadValueQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/query/path" : {
       "post" : {
         "tags" : [ "Query" ],
@@ -62,6 +166,58 @@
         "security" : [ ]
       }
     },
+    "/query/predicate" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads with a specific predicate.",
+        "operationId" : "postQueryPredicate",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiQuadValueQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/query/quads" : {
       "post" : {
         "tags" : [ "Query" ],
@@ -73,6 +229,58 @@
             "application/json" : {
               "schema" : {
                 "$ref" : "#/components/schemas/ApiBasicQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/query/subject" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads with a specific subject.",
+        "operationId" : "postQuerySubject",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiQuadValueQuery"
               }
             }
           },
@@ -290,6 +498,30 @@
           }
         }
       },
+      "ApiKnnQuery" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "predicate" : {
+            "type" : "string"
+          },
+          "object" : {
+            "type" : "array",
+            "items" : {
+              "type" : "number",
+              "format" : "double"
+            }
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "distance" : {
+            "$ref" : "#/components/schemas/Distance"
+          }
+        },
+        "required" : [ "predicate", "object", "count", "distance" ]
+      },
       "ApiPathQuery" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -332,6 +564,16 @@
         },
         "required" : [ "id", "s", "p", "o" ]
       },
+      "ApiQuadValueQuery" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "quadValue" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "quadValue" ]
+      },
       "ApiQueryResult" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -357,6 +599,10 @@
           }
         },
         "required" : [ "predicate", "filterText" ]
+      },
+      "Distance" : {
+        "type" : "string",
+        "enum" : [ "COSINE" ]
       }
     },
     "securitySchemes" : { }

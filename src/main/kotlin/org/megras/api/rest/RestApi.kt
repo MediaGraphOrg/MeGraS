@@ -31,6 +31,10 @@ object RestApi {
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
+        val subjectQueryHandler = SubjectQueryHandler(quadSet)
+        val predicateQueryHandler = PredicateQueryHandler(quadSet)
+        val objectQueryHandler = ObjectQueryHandler(quadSet)
+        val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
 
 
@@ -82,6 +86,10 @@ object RestApi {
             post("/add/file", addFileRequestHandler::post)
             post("/query/quads", basicQueryHandler::post)
             post("/query/text", textQueryHandler::post)
+            post("/query/subject", subjectQueryHandler::post)
+            post("/query/predicate", predicateQueryHandler::post)
+            post("/query/object", objectQueryHandler::post)
+            post("/query/knn", knnQueryHandler::post)
             post("/query/path", pathQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)

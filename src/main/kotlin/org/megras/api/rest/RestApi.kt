@@ -35,9 +35,13 @@ object RestApi {
         val predicateQueryHandler = PredicateQueryHandler(quadSet)
         val objectQueryHandler = ObjectQueryHandler(quadSet)
         val knnQueryHandler = KnnQueryHandler(quadSet)
+        val pathQueryHandler = PathQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
+
+            it.http.maxRequestSize = 10 * 1024L * 1024L //10MB
+
             it.plugins.enableCors { cors ->
                 cors.add { corsPluginConfig ->
                     corsPluginConfig.anyHost()
@@ -86,6 +90,7 @@ object RestApi {
             post("/query/predicate", predicateQueryHandler::post)
             post("/query/object", objectQueryHandler::post)
             post("/query/knn", knnQueryHandler::post)
+            post("/query/path", pathQueryHandler::post)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

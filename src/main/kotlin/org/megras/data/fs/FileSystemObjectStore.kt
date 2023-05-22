@@ -53,6 +53,15 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
         return descriptor
     }
 
+    override fun exists(file: PseudoFile) : StoredObjectDescriptor? {
+        val id = idFromStream(file.inputStream())
+        val target = storageFile(id)
+        if(target.exists()) {
+            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length())
+        }
+        return null
+    }
+
     override fun store(stream: InputStream, descriptor: StoredObjectDescriptor) {
 
         val target = storageFile(descriptor.id)

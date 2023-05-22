@@ -41,11 +41,7 @@ class KnnQueryHandler(private val quads: QuadSet) : PostRequestHandler {
         if (count < 1) {
             throw RestErrorStatus(400, "invalid query: count smaller than one")
         }
-        val distance = try {
-            Distance.valueOf(query.distance)
-        } catch (e: IllegalArgumentException) {
-            throw RestErrorStatus(400, "invalid query: unknown distance")
-        }
+        val distance = Distance.valueOf(query.distance.toString())
 
         val results = quads.nearestNeighbor(
             predicate,

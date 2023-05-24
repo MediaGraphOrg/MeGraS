@@ -1,6 +1,5 @@
 package org.megras.graphstore.db
 
-import com.google.common.cache.CacheBuilder
 import io.grpc.ManagedChannelBuilder
 import io.grpc.StatusRuntimeException
 import org.megras.data.graph.*
@@ -133,214 +132,155 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
     }
 
-
-    private fun getQuadValueIds(quadValues: Collection<QuadValue>): Map<QuadValue, QuadValueId> {
-
-        if (quadValues.isEmpty()) {
+    override fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
+        if (doubleValues.isEmpty()) {
             return emptyMap()
         }
 
-        val returnMap = mutableMapOf<QuadValue, QuadValueId>()
-
-        val doubleValues = mutableSetOf<DoubleValue>()
-        val stringValues = mutableSetOf<StringValue>()
-        val uriValues = mutableSetOf<URIValue>()
-        val vectorValues = mutableSetOf<VectorValue>()
-
-        //sort by type
-        quadValues.forEach {
-            when (it) {
-                is DoubleValue -> doubleValues.add(it)
-                is LongValue -> returnMap[it] = LONG_LITERAL_TYPE to it.value
-                is StringValue -> stringValues.add(it)
-                is URIValue -> uriValues.add(it)
-                is VectorValue -> vectorValues.add(it)
-            }
-        }
-
-        //cache lookup
-        doubleValues.removeIf {
-            val cached = doubleLiteralIdCache.getIfPresent(it) ?: return@removeIf false
-            returnMap[it] = DOUBLE_LITERAL_TYPE to cached
-            true
-        }
-
-        stringValues.removeIf {
-            val cached = stringLiteralIdCache.getIfPresent(it) ?: return@removeIf false
-            returnMap[it] = STRING_LITERAL_TYPE to cached
-            true
-        }
-
-        uriValues.removeIf {
-            val cached = uriValueValueCache.getIfPresent(it) ?: return@removeIf false
-            returnMap[it] = cached
-            true
-        }
-
-        vectorValues.removeIf {
-            val cached = vectorValueValueCache.getIfPresent(it) ?: return@removeIf false
-            returnMap[it] = cached
-            true
-        }
-
-
-        //database lookup
-
-        if (doubleValues.isNotEmpty()) {
-            val result = client.query(
-                Query("megras.literal_double").select("*").where(
-                    Expression("value", "in", doubleValues.map { it.value })
-                )
+        val result = client.query(
+            Query("megras.literal_double").select("*").where(
+                Expression("value", "in", doubleValues.map { it.value })
             )
+        )
 
-            while (result.hasNext()) {
-                val tuple = result.next()
-                val id = tuple.asLong("id") ?: continue
-                val value = tuple.asDouble("value") ?: continue
-                doubleLiteralValueCache.put(id, value)
-                doubleLiteralIdCache.put(value, id)
-                val v = DoubleValue(value)
-                returnMap[v] = DOUBLE_LITERAL_TYPE to id
-                doubleValues.remove(v)
-            }
+        val returnMap = HashMap<DoubleValue, QuadValueId>(doubleValues.size)
 
-        }
-
-        if (stringValues.isNotEmpty()) {
-
-            val result = client.query(
-                Query("megras.literal_string")
-                    .select("*")
-                    .where(Expression("value", "in", stringValues.map { it.value }))
-            )
-
-            while (result.hasNext()) {
-                val tuple = result.next()
-                val id = tuple.asLong("id") ?: continue
-                val value = tuple.asString("value") ?: continue
-                stringLiteralValueCache.put(id, value)
-                stringLiteralIdCache.put(value, id)
-                val v = StringValue(value)
-                returnMap[v] = STRING_LITERAL_TYPE to id
-                stringValues.remove(v)
-            }
-
-        }
-
-        if (uriValues.isNotEmpty()) {
-
-            val prefixValues =
-                uriValues.asSequence().filter { it !is LocalQuadValue }.map { it.prefix() }.toMutableSet()
-            val suffixValues = uriValues.map { it.suffix() }.toMutableSet()
-
-            val prefixIdMap = mutableMapOf<String, Int>()
-            val suffixIdMap = mutableMapOf<String, Long>()
-
-            prefixValues.removeIf {
-                val cached = prefixIdCache.getIfPresent(it) ?: return@removeIf false
-                prefixIdMap[it] = cached
-                true
-            }
-
-            suffixValues.removeIf {
-                val cached = suffixIdCache.getIfPresent(it) ?: return@removeIf false
-                suffixIdMap[it] = cached
-                true
-            }
-
-            if (prefixValues.isNotEmpty()) {
-                val result = client.query(
-                    Query("megras.entity_prefix").select("*").where(
-                        Expression("prefix", "in", prefixValues)
-                    )
-                )
-
-                while (result.hasNext()) {
-                    val tuple = result.next()
-                    val id = tuple.asInt("id") ?: continue
-                    val value = tuple.asString("prefix") ?: continue
-                    prefixValueCache.put(id, value)
-                    prefixIdCache.put(value, id)
-                    prefixIdMap[value] = id
-                    prefixValues.remove(value)
-                }
-            }
-
-            if (suffixValues.isNotEmpty()) {
-
-                val result = client.query(
-                    Query("megras.entity").select("*").where(
-                        Expression("value", "in", suffixValues)
-                    )
-                )
-
-                while (result.hasNext()) {
-                    val tuple = result.next()
-                    val id = tuple.asLong("id") ?: continue
-                    val value = tuple.asString("value") ?: continue
-                    suffixIdCache.put(value, id)
-                    suffixValueCache.put(id, value)
-                    suffixIdMap[value] = id
-                    suffixValues.remove(value)
-                }
-            }
-
-            //combine entries
-            uriValues.forEach {
-                val s = if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]
-                val p = suffixIdMap[it.suffix()]
-                if (s != null && p != null) {
-                    returnMap[it] = s to p
-                }
-            }
-        }
-
-        if (vectorValues.isNotEmpty()) {
-
-            vectorValues.groupBy { it.type to it.length }.forEach { (properties, v) ->
-
-                val vectors = v.toMutableSet()
-
-                val entityId = getOrCreateVectorEntity(properties.first, properties.second)
-                val name = "megras.vector_values_${entityId}"
-
-
-                val result = when (properties.first) {
-                    VectorValue.Type.Double -> {
-                        val v = vectors.map { (it as DoubleVectorValue).vector }
-                        client.query(
-                            Query(name).select("*").where(Expression("value", "in", v))
-                        )
-                    }
-
-                    VectorValue.Type.Long -> {
-                        val v = vectors.map { (it as LongVectorValue).vector }
-                        client.query(
-                            Query(name).select("*").where(Expression("value", "in", v))
-                        )
-                    }
-                }
-
-                while (result.hasNext()) {
-                    val tuple = result.next()
-                    val id = tuple.asLong("id")!!
-                    val value = when (properties.first) {
-                        VectorValue.Type.Double -> DoubleVectorValue(tuple.asDoubleVector("value")!!)
-                        VectorValue.Type.Long -> LongVectorValue(tuple.asLongVector("value")!!)
-                    }
-                    val pair = (-entityId + VECTOR_ID_OFFSET) to id
-                    vectorValueValueCache.put(value, pair)
-                    vectorValueIdCache.put(pair, value)
-                    returnMap[value] = pair
-                    vectors.remove(value)
-                }
-            }
-
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val id = tuple.asLong("id") ?: continue
+            val value = tuple.asDouble("value") ?: continue
+            val v = DoubleValue(value)
+            returnMap[v] = DOUBLE_LITERAL_TYPE to id
         }
 
         return returnMap
 
     }
+
+    override fun lookUpStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> {
+
+        if (stringValues.isEmpty()) {
+            return emptyMap()
+        }
+
+        val result = client.query(
+            Query("megras.literal_string")
+                .select("*")
+                .where(Expression("value", "in", stringValues.map { it.value }))
+        )
+
+        val returnMap = HashMap<StringValue, QuadValueId>(stringValues.size)
+
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val id = tuple.asLong("id") ?: continue
+            val value = tuple.asString("value") ?: continue
+            val v = StringValue(value)
+            returnMap[v] = STRING_LITERAL_TYPE to id
+        }
+
+        return returnMap
+    }
+
+    override fun lookUpPrefixIds(prefixValues: Set<String>): Map<String, Int> {
+
+        if (prefixValues.isEmpty()) {
+            return emptyMap()
+        }
+
+        val result = client.query(
+            Query("megras.entity_prefix").select("*").where(
+                Expression("prefix", "in", prefixValues)
+            )
+        )
+
+        val prefixIdMap = HashMap<String, Int>(prefixValues.size)
+
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val id = tuple.asInt("id") ?: continue
+            val value = tuple.asString("prefix") ?: continue
+            prefixIdMap[value] = id
+        }
+
+        return prefixIdMap
+
+    }
+
+    override fun lookUpSuffixIds(suffixValues: Set<String>): Map<String, Long> {
+
+        if (suffixValues.isEmpty()) {
+            return emptyMap()
+        }
+
+        val result = client.query(
+            Query("megras.entity").select("*").where(
+                Expression("value", "in", suffixValues)
+            )
+        )
+
+        val suffixIdMap = HashMap<String, Long>(suffixValues.size)
+
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val id = tuple.asLong("id") ?: continue
+            val value = tuple.asString("value") ?: continue
+            suffixIdMap[value] = id
+        }
+
+        return suffixIdMap
+
+    }
+
+    override fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
+
+        if (vectorValues.isEmpty()) {
+            return emptyMap()
+        }
+
+        val returnMap = HashMap<VectorValue, QuadValueId>(vectorValues.size)
+
+        vectorValues.groupBy { it.type to it.length }.forEach { (properties, vectorList) ->
+
+            val vectors = vectorList.toSet()
+
+            val entityId = getOrCreateVectorEntity(properties.first, properties.second)
+            val name = "megras.vector_values_${entityId}"
+
+
+            val result = when (properties.first) {
+                VectorValue.Type.Double -> {
+                    val v = vectors.map { (it as DoubleVectorValue).vector }
+                    client.query(
+                        Query(name).select("*").where(Expression("value", "in", v))
+                    )
+                }
+
+                VectorValue.Type.Long -> {
+                    val v = vectors.map { (it as LongVectorValue).vector }
+                    client.query(
+                        Query(name).select("*").where(Expression("value", "in", v))
+                    )
+                }
+            }
+
+            while (result.hasNext()) {
+                val tuple = result.next()
+                val id = tuple.asLong("id")!!
+                val value = when (properties.first) {
+                    VectorValue.Type.Double -> DoubleVectorValue(tuple.asDoubleVector("value")!!)
+                    VectorValue.Type.Long -> LongVectorValue(tuple.asLongVector("value")!!)
+                }
+                val pair = (-entityId + VECTOR_ID_OFFSET) to id
+                returnMap[value] = pair
+            }
+        }
+
+        return returnMap
+
+    }
+
+
 
     private fun getOrAddQuadValueIds(quadValues: Collection<QuadValue>): Map<QuadValue, QuadValueId> {
 

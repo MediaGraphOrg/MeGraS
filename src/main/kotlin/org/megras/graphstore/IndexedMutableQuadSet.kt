@@ -121,11 +121,22 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
     }
 
+    fun addAllUnindexed(elements: Collection<Quad>): Boolean = this.quads.addAll(elements)
+
     override fun clear() {
         quads.clear()
         sIndex.clear()
         pIndex.clear()
         oIndex.clear()
+    }
+
+    fun rebuildIndex() {
+        sIndex.clear()
+        pIndex.clear()
+        oIndex.clear()
+        quads.groupBy { it.subject }.forEach { (qv, q) -> if(qv is URIValue) sIndex.putAll(qv, q) }
+        quads.groupBy { it.predicate }.forEach { (qv, q) -> if(qv is URIValue) pIndex.putAll(qv, q) }
+        quads.groupBy { it.`object` }.forEach { (qv, q) -> if(qv is URIValue) oIndex.putAll(qv, q) }
     }
 
     override fun remove(element: Quad): Boolean {

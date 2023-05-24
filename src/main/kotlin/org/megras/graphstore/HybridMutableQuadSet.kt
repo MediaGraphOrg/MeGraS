@@ -43,11 +43,13 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
     override fun iterator(): MutableIterator<Quad> = base.iterator()
 
     override fun add(element: Quad): Boolean {
-        return base.add(element) or knn.add(element)
+        return base.add(element) or if(element.subject is VectorValue || element.`object` is VectorValue) {
+            knn.add(element)
+        } else false
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {
-        return base.addAll(elements) or knn.addAll(elements)
+        return base.addAll(elements) or knn.addAll(elements.filter { it.subject is VectorValue || it.`object` is VectorValue })
     }
 
     override fun clear() {

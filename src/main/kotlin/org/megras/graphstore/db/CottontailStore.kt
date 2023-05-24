@@ -1,10 +1,11 @@
-package org.megras.graphstore
+package org.megras.graphstore.db
 
 import com.google.common.cache.CacheBuilder
 import io.grpc.ManagedChannelBuilder
 import io.grpc.StatusRuntimeException
 import org.megras.data.graph.*
 import org.megras.data.schema.MeGraS
+import org.megras.graphstore.*
 import org.megras.util.extensions.toBase64
 import org.vitrivr.cottontail.client.SimpleClient
 import org.vitrivr.cottontail.client.language.basics.Direction
@@ -23,28 +24,16 @@ import org.vitrivr.cottontail.client.language.dql.Query
 import org.vitrivr.cottontail.grpc.CottontailGrpc
 import java.nio.ByteBuffer
 
-
 typealias QuadValueId = Pair<Int, Long>
 
-class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQuadSet {
+class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDbStore() {
 
     private val channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build()
 
     private val client = SimpleClient(channel)
 
 
-    private companion object {
-        const val QUAD_TYPE = 0
-        const val LOCAL_URI_TYPE = -1
-        const val LONG_LITERAL_TYPE = -2
-        const val DOUBLE_LITERAL_TYPE = -3
-        const val STRING_LITERAL_TYPE = -4
-
-        const val BINARY_DATA_TYPE = -9
-        const val VECTOR_ID_OFFSET = -10
-    }
-
-    fun setup() {
+    override fun setup() {
 
         fun catchExists(lambda: () -> Unit) {
             try {
@@ -73,11 +62,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         }
 
         catchExists { client.create(CreateIndex("megras.quads", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-        catchExists { client.create(CreateIndex("megras.quads", "s_type", CottontailGrpc.IndexType.BTREE)) }
+//        catchExists { client.create(CreateIndex("megras.quads", "s_type", CottontailGrpc.IndexType.BTREE)) }
         catchExists { client.create(CreateIndex("megras.quads", "s", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.quads", "p_type", CottontailGrpc.IndexType.BTREE)) }
+//        catchExists { client.create(CreateIndex("megras.quads", "p_type", CottontailGrpc.IndexType.BTREE)) }
         catchExists { client.create(CreateIndex("megras.quads", "p", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.quads", "o_type", CottontailGrpc.IndexType.BTREE)) }
+//        catchExists { client.create(CreateIndex("megras.quads", "o_type", CottontailGrpc.IndexType.BTREE)) }
         catchExists { client.create(CreateIndex("megras.quads", "o", CottontailGrpc.IndexType.BTREE)) }
         catchExists { client.create(CreateIndex("megras.quads", "hash", CottontailGrpc.IndexType.BTREE_UQ)) }
 
@@ -144,56 +133,6 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private val cacheSize = 10000L
-
-    private val stringLiteralIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Long>()
-    private val stringLiteralValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, String>()
-
-    private val doubleLiteralIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Double, Long>()
-    private val doubleLiteralValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, Double>()
-
-    private val prefixValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Int, String>()
-    private val prefixIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Int>()
-
-    private val suffixValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, String>()
-    private val suffixIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Long>()
-
-    private val uriValueIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<QuadValueId, URIValue>()
-    private val uriValueValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<URIValue, QuadValueId>()
-
-    private val vectorEntityCache =
-        CacheBuilder.newBuilder().maximumSize(cacheSize).build<Pair<Int, VectorValue.Type>, Int>()
-    private val vectorPropertyCache =
-        CacheBuilder.newBuilder().maximumSize(cacheSize).build<Int, Pair<Int, VectorValue.Type>>()
-
-    private val vectorValueIdCache =
-        CacheBuilder.newBuilder().maximumSize(cacheSize).build<QuadValueId, VectorValue>()
-    private val vectorValueValueCache =
-        CacheBuilder.newBuilder().maximumSize(cacheSize).build<VectorValue, QuadValueId>()
-
-    private fun getQuadValueId(quadValue: QuadValue): Pair<Int?, Long?> {
-
-        return when (quadValue) {
-            is DoubleValue -> DOUBLE_LITERAL_TYPE to getDoubleLiteralId(quadValue.value)
-            is LongValue -> LONG_LITERAL_TYPE to quadValue.value //no indirection needed
-            is StringValue -> STRING_LITERAL_TYPE to getStringLiteralId(quadValue.value)
-            is URIValue -> getUriValueId(quadValue)
-            is VectorValue -> getVectorQuadValueId(quadValue)
-        }
-
-    }
-
-    private fun getOrAddQuadValueId(quadValue: QuadValue): QuadValueId {
-
-        return when (quadValue) {
-            is DoubleValue -> DOUBLE_LITERAL_TYPE to getOrAddDoubleLiteralId(quadValue.value)
-            is LongValue -> LONG_LITERAL_TYPE to quadValue.value //no indirection needed
-            is StringValue -> STRING_LITERAL_TYPE to getOrAddStringLiteralId(quadValue.value)
-            is URIValue -> getOrAddUriValueId(quadValue)
-            is VectorValue -> getOrAddVectorQuadValueId(quadValue)
-        }
-
-    }
 
     private fun getQuadValueIds(quadValues: Collection<QuadValue>): Map<QuadValue, QuadValueId> {
 
@@ -767,17 +706,6 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private fun getQuadValue(type: Int, id: Long): QuadValue? {
-
-        return when {
-            type == DOUBLE_LITERAL_TYPE -> getDoubleValue(id)
-            type == LONG_LITERAL_TYPE -> LongValue(id)
-            type == STRING_LITERAL_TYPE -> getStringValue(id)
-            type < VECTOR_ID_OFFSET -> getVectorQuadValue(type, id)
-            else -> getUriValue(type, id)
-        }
-
-    }
 
     private fun getQuadValues(ids: Collection<QuadValueId>): Map<QuadValueId, QuadValue> {
 
@@ -963,7 +891,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private fun getDoubleValue(id: Long): DoubleValue? {
+    override fun getDoubleValue(id: Long): DoubleValue? {
 
         val cached = doubleLiteralValueCache.getIfPresent(id)
 
@@ -989,7 +917,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return null
     }
 
-    private fun getStringValue(id: Long): StringValue? {
+    override fun getStringValue(id: Long): StringValue? {
 
         val cached = stringLiteralValueCache.getIfPresent(id)
 
@@ -1015,7 +943,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return null
     }
 
-    private fun getUriValue(type: Int, id: Long): URIValue? {
+    override fun getUriValue(type: Int, id: Long): URIValue? {
 
         fun prefix(id: Int): String? {
 
@@ -1094,7 +1022,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return value
     }
 
-    private fun getVectorQuadValue(type: Int, id: Long): VectorValue? {
+    override fun getVectorQuadValue(type: Int, id: Long): VectorValue? {
 
         val pair = type to id
 
@@ -1125,7 +1053,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return null
     }
 
-    private fun getDoubleLiteralId(value: Double): Long? {
+    override fun getDoubleLiteralId(value: Double): Long? {
 
         val cached = doubleLiteralIdCache.getIfPresent(value)
 
@@ -1155,7 +1083,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
     /**
      * Retrieves id of existing double literal or creates new one
      */
-    private fun getOrAddDoubleLiteralId(value: Double): Long {
+    override fun getOrAddDoubleLiteralId(value: Double): Long {
 
         val id = getDoubleLiteralId(value)
 
@@ -1181,7 +1109,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private fun getStringLiteralId(value: String): Long? {
+    override fun getStringLiteralId(value: String): Long? {
 
         val cached = stringLiteralIdCache.getIfPresent(value)
 
@@ -1259,6 +1187,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             val pair = tuple.asInt("length")!! to VectorValue.Type.fromByte(tuple.asByte("type")!!)
             vectorEntityCache.put(pair, type)
             vectorPropertyCache.put(type, pair)
+            return pair
         }
 
         return null
@@ -1300,7 +1229,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private fun getVectorQuadValueId(value: VectorValue): Pair<Int?, Long?> {
+    override fun getVectorQuadValueId(value: VectorValue): Pair<Int?, Long?> {
 
         val entityId = getVectorEntity(value.type, value.length) ?: return null to null
 
@@ -1330,7 +1259,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
         return (-entityId + VECTOR_ID_OFFSET) to id
     }
 
-    private fun getOrAddVectorQuadValueId(value: VectorValue): QuadValueId {
+    override fun getOrAddVectorQuadValueId(value: VectorValue): QuadValueId {
 
         val present = getVectorQuadValueId(value)
 
@@ -1387,7 +1316,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
     /**
      * Retrieves id of existing string literal or creates new one
      */
-    private fun getOrAddStringLiteralId(value: String): Long {
+    override fun getOrAddStringLiteralId(value: String): Long {
 
         val id = getStringLiteralId(value)
 
@@ -1411,7 +1340,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private fun getUriValueId(value: URIValue): Pair<Int?, Long?> {
+    override fun getUriValueId(value: URIValue): Pair<Int?, Long?> {
 
         fun prefix(value: String): Int? {
 
@@ -1490,7 +1419,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
     }
 
-    private fun getOrAddUriValueId(value: URIValue): QuadValueId {
+    override fun getOrAddUriValueId(value: URIValue): QuadValueId {
 
         var (prefix, suffix) = getUriValueId(value)
 
@@ -1781,7 +1710,9 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             return BasicQuadSet()
         }
 
-        val filterIds = getQuadValueIds((subjects?.toSet() ?: setOf()) + (predicates?.toSet() ?: setOf()) + (objects?.toSet() ?: setOf()))
+        val filterIds = getQuadValueIds(
+            (subjects?.toSet() ?: setOf()) + (predicates?.toSet() ?: setOf()) + (objects?.toSet() ?: setOf())
+        )
 
         val subjectFilterIds = subjects?.mapNotNull { filterIds[it] }
         val predicateFilterIds = predicates?.mapNotNull { filterIds[it] }
@@ -1856,38 +1787,39 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
 
         val vectorEntity = getVectorEntity(`object`.type, `object`.length) ?: return BasicQuadSet()
         val vectorId = -vectorEntity + VECTOR_ID_OFFSET
-
-        val result = client.query(
-            Query("megras.quads")
-                .select("*")
-                .where(
-                    And(
-                        predicateFilterExpression(predId.first!!, predId.second!!),
-                        Expression("o_type", "=", vectorId)
-                    )
-                )
-        )
-
-        if (!result.hasNext()) {
-            return BasicQuadSet()
-        }
-
-        val objectIds = mutableSetOf<Long>()
+//
+//        val result = client.query(
+//            Query("megras.quads")
+//                .select("id")
+//                .select("o")
+//                .where(
+//                    And(
+//                        predicateFilterExpression(predId.first!!, predId.second!!),
+//                        Expression("o_type", "=", vectorId)
+//                    )
+//                )
+//        )
+//
+//        if (!result.hasNext()) {
+//            return BasicQuadSet()
+//        }
+//
+//        val objectIds = mutableSetOf<Long>()
 
         val quadIds = mutableListOf<Pair<Long, Long>>() //quad id to object id
 
-        while (result.hasNext()) {
-            val tuple = result.next()
-            val o = tuple.asLong("o")!!
-            objectIds.add(o)
-            quadIds.add(tuple.asLong("id")!! to o)
-        }
+//        while (result.hasNext()) {
+//            val tuple = result.next()
+//            val o = tuple.asLong("o")!!
+//            objectIds.add(o)
+//            quadIds.add(tuple.asLong("id")!! to o)
+//        }
 
 
         val knnResult = client.query(
             Query("megras.vector_values_${vectorEntity}")
-                .select("*")
-                .where(Expression("id", "in", objectIds))
+                .select("id")
+//                .where(Expression("id", "in", objectIds))
                 .distance(
                     "value",
                     when (`object`) {
@@ -1912,18 +1844,40 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : MutableQua
             distances[tuple.asLong("id")!!] = tuple.asDouble("distance")!!
         }
 
+
+        val result = client.query(
+            Query("megras.quads")
+                .select("id")
+                .select("o")
+                .where(
+                    And(
+                        And(
+                            predicateFilterExpression(predId.first!!, predId.second!!),
+                            Expression("o_type", "=", vectorId)
+                        ),
+                        Expression("o", "in", distances.keys)
+                    )
+                )
+        )
+
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val o = tuple.asLong("o")!!
+            quadIds.add(tuple.asLong("id")!! to o)
+        }
+
         val relevantQuadIds =
             distances.keys.flatMap { oid -> quadIds.filter { it.second == oid } }.map { it.first }.toSet()
         val relevantQuads = getIds(relevantQuadIds)
 
         val ret = BasicMutableQuadSet()
-        ret.addAll(relevantQuads)
+        //ret.addAll(relevantQuads)
 
         val quadIdMap = quadIds.toMap()
 
         relevantQuads.forEach { quad ->
             val d = distances[quadIdMap[quad.id!!]!!] ?: return@forEach
-            ret.add(Quad(quad.`object`, MeGraS.QUERY_DISTANCE.uri, DoubleValue(d)))
+            ret.add(Quad(quad.subject, MeGraS.QUERY_DISTANCE.uri, DoubleValue(d)))
         }
 
         return ret

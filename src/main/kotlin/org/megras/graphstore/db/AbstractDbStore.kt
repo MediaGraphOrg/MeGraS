@@ -15,99 +15,438 @@ abstract class AbstractDbStore : MutableQuadSet {
 
         const val BINARY_DATA_TYPE = -9
         const val VECTOR_ID_OFFSET = -10
+
+        const val cacheSize = 10000L
     }
 
-    private val cacheSize = 10000L
 
-    val stringLiteralIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Long>()
-    val stringLiteralValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, String>()
+    private val stringLiteralIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Long>()
+    private val stringLiteralValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, String>()
 
-    val doubleLiteralIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Double, Long>()
-    val doubleLiteralValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, Double>()
+    private val doubleLiteralIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Double, Long>()
+    private val doubleLiteralValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, Double>()
 
-    val prefixValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Int, String>()
-    val prefixIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Int>()
+    private val prefixValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Int, String>()
+    private val prefixIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Int>()
 
-    val suffixValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, String>()
-    val suffixIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Long>()
+    private val suffixValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, String>()
+    private val suffixIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<String, Long>()
 
-    val uriValueIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<QuadValueId, URIValue>()
-    val uriValueValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<URIValue, QuadValueId>()
+    private val uriValueIdCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<QuadValueId, URIValue>()
+    private val uriValueValueCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<URIValue, QuadValueId>()
 
-    val vectorEntityCache =
-        CacheBuilder.newBuilder().maximumSize(cacheSize).build<Pair<Int, VectorValue.Type>, Int>()
-    val vectorPropertyCache =
-        CacheBuilder.newBuilder().maximumSize(cacheSize).build<Int, Pair<Int, VectorValue.Type>>()
 
-    val vectorValueIdCache =
+    private val vectorValueIdCache =
         CacheBuilder.newBuilder().maximumSize(cacheSize).build<QuadValueId, VectorValue>()
-    val vectorValueValueCache =
+    private val vectorValueValueCache =
         CacheBuilder.newBuilder().maximumSize(cacheSize).build<VectorValue, QuadValueId>()
 
 
     abstract fun setup()
 
+    protected abstract fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId>
+    protected abstract fun lookUpStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId>
+    protected abstract fun lookUpPrefixIds(prefixValues: Set<String>): Map<String, Int>
+    protected abstract fun lookUpSuffixIds(suffixValues: Set<String>): Map<String, Long>
+    protected abstract fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId>
+
+
+    protected abstract fun insertDoubleValues(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId>
+    protected abstract fun insertStringValues(stringValues: Set<StringValue>): Map<StringValue, QuadValueId>
+    protected abstract fun insertPrefixValues(prefixValues: Set<String>): Map<String, Int>
+    protected abstract fun insertSuffixValues(suffixValues: Set<String>): Map<String, Long>
+    protected abstract fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId>
+
     fun getQuadValueId(quadValue: QuadValue): Pair<Int?, Long?> {
 
         return when (quadValue) {
-            is DoubleValue -> DOUBLE_LITERAL_TYPE to getDoubleLiteralId(quadValue.value)
+            is DoubleValue -> {
+                val cached = doubleLiteralIdCache.getIfPresent(quadValue.value)
+                if (cached != null) {
+                    DOUBLE_LITERAL_TYPE to cached
+                } else {
+                    val lookup = lookUpDoubleValueIds(setOf(quadValue))[quadValue]?.second
+                    if (lookup != null) {
+                        doubleLiteralIdCache.put(quadValue.value, lookup)
+                        doubleLiteralValueCache.put(lookup, quadValue.value)
+                    }
+                    DOUBLE_LITERAL_TYPE to lookup
+                }
+
+            }
             is LongValue -> LONG_LITERAL_TYPE to quadValue.value //no indirection needed
-            is StringValue -> STRING_LITERAL_TYPE to getStringLiteralId(quadValue.value)
-            is URIValue -> getUriValueId(quadValue)
-            is VectorValue -> getVectorQuadValueId(quadValue)
+            is StringValue -> {
+                val cached = stringLiteralIdCache.getIfPresent(quadValue.value)
+                if (cached != null) {
+                    STRING_LITERAL_TYPE to cached
+                } else {
+                    val lookup = lookUpStringValueIds(setOf(quadValue))[quadValue]?.second
+                    if (lookup != null) {
+                        stringLiteralIdCache.put(quadValue.value, lookup)
+                        stringLiteralValueCache.put(lookup, quadValue.value)
+                    }
+                    STRING_LITERAL_TYPE to lookup
+                }
+
+            }
+            is URIValue -> {
+
+                val cachedType = if (quadValue is LocalQuadValue) LOCAL_URI_TYPE else prefixIdCache.getIfPresent(quadValue.prefix())
+                val cachedSuffix = suffixIdCache.getIfPresent(quadValue.suffix())
+
+                if (cachedType != null && cachedSuffix != null) {
+                    return cachedType to cachedSuffix
+                }
+
+                val type = cachedType ?: lookUpPrefixIds(setOf(quadValue.prefix()))[quadValue.prefix()]
+                val suffix = cachedSuffix ?: lookUpSuffixIds(setOf(quadValue.suffix()))[quadValue.suffix()]
+
+                if (quadValue !is LocalQuadValue && type != null) {
+                    prefixIdCache.put(quadValue.prefix(), type)
+                    prefixValueCache.put(type, quadValue.prefix())
+                }
+
+                if (suffix != null) {
+                    suffixIdCache.put(quadValue.suffix(), suffix)
+                    suffixValueCache.put(suffix, quadValue.suffix())
+                }
+
+                type to suffix
+            }
+            is VectorValue -> {
+
+                val cached = vectorValueValueCache.getIfPresent(quadValue)
+
+                if (cached != null) {
+                    return cached
+                }
+
+                val lookup = lookUpVectorValueIds(setOf(quadValue))[quadValue]
+
+                if (lookup != null) {
+                    vectorValueValueCache.put(quadValue, lookup)
+                    vectorValueIdCache.put(lookup, quadValue)
+                }
+
+                lookup?.first to lookup?.second
+            }
         }
 
     }
 
-    abstract fun getVectorQuadValueId(quadValue: VectorValue): Pair<Int?, Long?>
-
-    abstract fun getUriValueId(quadValue: URIValue): Pair<Int?, Long?>
-
-    abstract fun getStringLiteralId(value: String): Long?
-
-    abstract fun getDoubleLiteralId(value: Double): Long?
 
     fun getOrAddQuadValueId(quadValue: QuadValue): QuadValueId {
 
         return when (quadValue) {
-            is DoubleValue -> DOUBLE_LITERAL_TYPE to getOrAddDoubleLiteralId(quadValue.value)
+            is DoubleValue -> {
+                val cached = doubleLiteralIdCache.getIfPresent(quadValue.value)
+                if (cached != null) {
+                    DOUBLE_LITERAL_TYPE to cached
+                } else {
+                    val set = setOf(quadValue)
+                    val lookup = lookUpDoubleValueIds(set)[quadValue]?.second
+                    if (lookup != null) {
+                        doubleLiteralIdCache.put(quadValue.value, lookup)
+                        DOUBLE_LITERAL_TYPE to lookup
+                    } else {
+                        val id = insertDoubleValues(set)[quadValue]!!
+                        doubleLiteralValueCache.put(id.second, quadValue.value)
+                        doubleLiteralIdCache.put(quadValue.value, id.second)
+                        id
+                    }
+                }
+            }
             is LongValue -> LONG_LITERAL_TYPE to quadValue.value //no indirection needed
-            is StringValue -> STRING_LITERAL_TYPE to getOrAddStringLiteralId(quadValue.value)
-            is URIValue -> getOrAddUriValueId(quadValue)
-            is VectorValue -> getOrAddVectorQuadValueId(quadValue)
+            is StringValue -> {
+                val cached = stringLiteralIdCache.getIfPresent(quadValue.value)
+                if (cached != null) {
+                    STRING_LITERAL_TYPE to cached
+                } else {
+                    val set = setOf(quadValue)
+                    val lookup = lookUpStringValueIds(set)[quadValue]?.second
+                    if (lookup != null) {
+                        stringLiteralIdCache.put(quadValue.value, lookup)
+                        stringLiteralValueCache.put(lookup, quadValue.value)
+                        STRING_LITERAL_TYPE to lookup
+                    } else {
+                        val id = insertStringValues(set)[quadValue]!!
+                        stringLiteralIdCache.put(quadValue.value, id.second)
+                        stringLiteralValueCache.put(id.second, quadValue.value)
+                        STRING_LITERAL_TYPE to id.second
+                    }
+                }
+            }
+            is URIValue -> {
+
+                val type = if (quadValue is LocalQuadValue) {
+                    LOCAL_URI_TYPE
+                } else {
+                    val cachedType = prefixIdCache.getIfPresent(quadValue.prefix())
+                    if (cachedType != null) {
+                        cachedType
+                    } else {
+                        val set = setOf(quadValue.prefix())
+                        val lookupType = lookUpPrefixIds(set)[quadValue.prefix()]
+                        if (lookupType != null) {
+                            prefixIdCache.put(quadValue.prefix(), lookupType)
+                            prefixValueCache.put(lookupType, quadValue.prefix())
+                            lookupType
+                        } else {
+                            val insertType = insertPrefixValues(set)[quadValue.prefix()]!!
+                            prefixIdCache.put(quadValue.prefix(), insertType)
+                            prefixValueCache.put(insertType, quadValue.prefix())
+                            insertType
+                        }
+                    }
+                }
+
+                val cachedSuffix = suffixIdCache.getIfPresent(quadValue.suffix())
+
+                val suffix = if (cachedSuffix != null) {
+                    cachedSuffix
+                } else {
+                    val set = setOf(quadValue.suffix())
+                    val lookup = lookUpSuffixIds(set)[quadValue.suffix()]
+                    if (lookup != null) {
+                        suffixIdCache.put(quadValue.suffix(), lookup)
+                        suffixValueCache.put(lookup, quadValue.suffix())
+                        lookup
+                    } else {
+                        val insert = insertSuffixValues(set)[quadValue.suffix()]!!
+                        suffixIdCache.put(quadValue.suffix(), insert)
+                        suffixValueCache.put(insert, quadValue.suffix())
+                        insert
+                    }
+                }
+
+                type to suffix
+
+            }
+            is VectorValue -> {
+
+                val cached = vectorValueValueCache.getIfPresent(quadValue)
+
+                if (cached != null) {
+                    return cached
+                }
+
+                val set = setOf(quadValue)
+
+                val lookup = lookUpVectorValueIds(set)[quadValue]
+
+                if (lookup != null) {
+                    vectorValueValueCache.put(quadValue, lookup)
+                    vectorValueIdCache.put(lookup, quadValue)
+                    return lookup
+                }
+
+                val insert = insertVectorValueIds(set)[quadValue]!!
+                vectorValueValueCache.put(quadValue, insert)
+                vectorValueIdCache.put(insert, quadValue)
+
+                insert
+            }
         }
 
     }
-
-    abstract fun getOrAddVectorQuadValueId(quadValue: VectorValue): Pair<Int, Long>
-
-    abstract fun getOrAddUriValueId(quadValue: URIValue): Pair<Int, Long>
-
-    abstract fun getOrAddStringLiteralId(value: String): Long
-
-    abstract fun getOrAddDoubleLiteralId(value: Double): Long
 
     fun getQuadValue(type: Int, id: Long): QuadValue? {
 
         return when {
-            type == DOUBLE_LITERAL_TYPE -> getDoubleValue(id)
-            type == LONG_LITERAL_TYPE -> LongValue(id)
-            type == STRING_LITERAL_TYPE -> getStringValue(id)
-            type < VECTOR_ID_OFFSET -> getVectorQuadValue(type, id)
-            else -> getUriValue(type, id)
+            type == DOUBLE_LITERAL_TYPE -> {
+                val cached = doubleLiteralValueCache.getIfPresent(id)
+                if (cached != null) {
+                    return DoubleValue(cached)
+                }
+                val value = lookUpDoubleValues(setOf(id))[DOUBLE_LITERAL_TYPE to id]
+                if (value != null) {
+                    doubleLiteralIdCache.put(value.value, id)
+                    doubleLiteralValueCache.put(id, value.value)
+                }
+                value
+            }
+            type == LONG_LITERAL_TYPE -> LongValue(id) //no indirection needed
+            type == STRING_LITERAL_TYPE -> {
+                val cached = stringLiteralValueCache.getIfPresent(id)
+                if (cached != null) {
+                    return StringValue(cached)
+                }
+                val value = lookUpStringValues(setOf(id))[STRING_LITERAL_TYPE to id]
+                if (value != null) {
+                    stringLiteralIdCache.put(value.value, id)
+                    stringLiteralValueCache.put(id, value.value)
+                }
+                value
+            }
+            type < VECTOR_ID_OFFSET -> {
+                val quadId = type to id
+                val cached = vectorValueIdCache.getIfPresent(quadId)
+                if (cached != null) {
+                    return cached
+                }
+
+                val value = lookUpVectorValues(setOf(quadId))[quadId]
+                if (value != null) {
+                    vectorValueValueCache.put(value, quadId)
+                    vectorValueIdCache.put(quadId, value)
+                }
+                value
+            }
+            else -> {
+                val quadId = type to id
+                val cached = uriValueIdCache.getIfPresent(quadId)
+
+                if (cached != null) {
+                    return cached
+                }
+
+                if (type == LOCAL_URI_TYPE) {
+
+                    val suffix = suffixValueCache.getIfPresent(id) ?: lookUpSuffixes(setOf(id))[id] ?: return null
+
+                    suffixValueCache.put(id, suffix)
+                    suffixIdCache.put(suffix, id)
+
+                    val value = LocalQuadValue(suffix)
+                    uriValueIdCache.put(quadId, value)
+                    value
+
+                } else {
+
+                    val prefix = prefixValueCache.getIfPresent(type) ?: lookUpPrefixes(setOf(type))[type]
+                    if (prefix != null) {
+                        prefixValueCache.put(type, prefix)
+                        prefixIdCache.put(prefix, type)
+                    } else {
+                        return null
+                    }
+
+                    val suffix = suffixValueCache.getIfPresent(id) ?: lookUpSuffixes(setOf(id))[id] ?: return null
+
+                    suffixValueCache.put(id, suffix)
+                    suffixIdCache.put(suffix, id)
+
+                    val value = URIValue(prefix, suffix)
+                    uriValueIdCache.put(quadId, value)
+                    value
+
+                }
+            }
         }
 
     }
 
-    abstract fun getUriValue(type: Int, id: Long): QuadValue?
+    fun getQuadValues(ids: Collection<QuadValueId>): Map<QuadValueId, QuadValue> {
 
-    abstract fun getVectorQuadValue(type: Int, id: Long): QuadValue?
+        val returnMap = mutableMapOf<QuadValueId, QuadValue>()
+        val uriIds = HashSet<QuadValueId>()
 
-    abstract fun getStringValue(id: Long): QuadValue?
+        ids.groupBy { it.first }.forEach { (type, groupedPairs) ->
 
-    abstract fun getDoubleValue(id: Long): QuadValue?
+            when {
+                type == DOUBLE_LITERAL_TYPE -> {
+                    val pairSet = groupedPairs.toMutableSet()
+                    pairSet.removeIf {
+                        val cached = doubleLiteralValueCache.getIfPresent(it.second)
+                        if (cached != null) {
+                            returnMap[it] = DoubleValue(cached)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    if (pairSet.isNotEmpty()) {
 
-    fun getQuadValueIds(quadValues: Collection<QuadValue>): Map<QuadValue, QuadValueId> {
+                        val map = lookUpDoubleValues(groupedPairs.map { it.second }.toSet())
+
+                        map.forEach { (id, value) ->
+                            doubleLiteralIdCache.put(value.value, id.second)
+                            doubleLiteralValueCache.put(id.second, value.value)
+                        }
+
+                        returnMap.putAll(map)
+                    }
+                }
+
+                type == LONG_LITERAL_TYPE -> {
+                    returnMap.putAll(groupedPairs.associateWith { LongValue(it.second) })
+                }
+
+                type == STRING_LITERAL_TYPE -> {
+                    val pairSet = groupedPairs.toMutableSet()
+                    pairSet.removeIf {
+                        val cached = stringLiteralValueCache.getIfPresent(it.second)
+                        if (cached != null) {
+                            returnMap[it] = StringValue(cached)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    if (pairSet.isNotEmpty()) {
+
+                        val map = lookUpStringValues(pairSet.map { it.second }.toSet())
+
+                        map.forEach { (id, value) ->
+                            stringLiteralValueCache.put(id.second, value.value)
+                            stringLiteralIdCache.put(value.value, id.second)
+                        }
+
+                        returnMap.putAll(map)
+
+                    }
+                }
+
+                type < VECTOR_ID_OFFSET -> {
+
+                    val map = lookUpVectorValues(groupedPairs.toSet())
+
+                    map.forEach { (id, value) ->
+                        vectorValueValueCache.put(value, id)
+                        vectorValueIdCache.put(id, value)
+                    }
+
+                    returnMap.putAll(map)
+
+                }
+
+                else -> uriIds.addAll(groupedPairs)
+            }
+
+        }
+
+        val prefixes = lookUpPrefixes(uriIds.map { it.first }.filter { it != LOCAL_URI_TYPE }.toSet())
+        val suffixes = lookUpSuffixes(uriIds.map { it.second }.toSet())
+
+        returnMap.putAll(
+            uriIds.mapNotNull {
+                val suffix = suffixes[it.second] ?: return@mapNotNull null
+                if (it.first == LOCAL_URI_TYPE) {
+                    it to LocalQuadValue(suffix)
+                } else {
+                    val prefix = prefixes[it.first] ?: return@mapNotNull null
+                    it to URIValue(prefix, suffix)
+                }
+            }
+        )
+
+
+        return returnMap
+
+    }
+
+    abstract fun lookUpDoubleValues(ids: Set<Long>) : Map<QuadValueId, DoubleValue>
+    abstract fun lookUpStringValues(ids: Set<Long>) : Map<QuadValueId, StringValue>
+    abstract fun lookUpVectorValues(ids: Set<QuadValueId>) : Map<QuadValueId, VectorValue>
+
+    abstract fun lookUpPrefixes(ids: Set<Int>) : Map<Int, String>
+    abstract fun lookUpSuffixes(ids: Set<Long>) : Map<Long, String>
+
+    fun getOrAddQuadValueIds(
+        quadValues: Collection<QuadValue>,
+        insertRemaining: Boolean = true
+    ): Map<QuadValue, QuadValueId> {
 
         if (quadValues.isEmpty()) {
             return emptyMap()
@@ -158,17 +497,34 @@ abstract class AbstractDbStore : MutableQuadSet {
 
 
         //database lookup
+
         if (doubleValues.isNotEmpty()) {
+
             val map = lookUpDoubleValueIds(doubleValues)
 
             map.forEach { (value, id) ->
                 doubleLiteralValueCache.put(id.second, value.value)
                 doubleLiteralIdCache.put(value.value, id.second)
+                doubleValues.remove(value)
             }
 
             returnMap.putAll(map)
 
+            if (insertRemaining) {
+
+                val inserted = insertDoubleValues(doubleValues)
+
+                inserted.forEach { (value, id) ->
+                    doubleLiteralValueCache.put(id.second, value.value)
+                    doubleLiteralIdCache.put(value.value, id.second)
+                }
+
+                returnMap.putAll(inserted)
+
+            }
+
         }
+
 
         if (stringValues.isNotEmpty()) {
 
@@ -177,9 +533,23 @@ abstract class AbstractDbStore : MutableQuadSet {
             map.forEach { (value, id) ->
                 stringLiteralValueCache.put(id.second, value.value)
                 stringLiteralIdCache.put(value.value, id.second)
+                stringValues.remove(value)
             }
 
             returnMap.putAll(map)
+
+            if (insertRemaining) {
+
+                val inserted = insertStringValues(stringValues)
+
+                inserted.forEach { (value, id) ->
+                    stringLiteralValueCache.put(id.second, value.value)
+                    stringLiteralIdCache.put(value.value, id.second)
+                }
+
+                returnMap.putAll(inserted)
+
+            }
 
         }
 
@@ -211,10 +581,23 @@ abstract class AbstractDbStore : MutableQuadSet {
                 map.forEach { (value, id) ->
                     prefixValueCache.put(id, value)
                     prefixIdCache.put(value, id)
+                    prefixValues.remove(value)
                 }
 
                 prefixIdMap.putAll(map)
 
+                if (insertRemaining) {
+
+                    val inserted = insertPrefixValues(prefixValues)
+
+                    inserted.forEach { (value, id) ->
+                        prefixValueCache.put(id, value)
+                        prefixIdCache.put(value, id)
+                    }
+
+                    prefixIdMap.putAll(inserted)
+
+                }
             }
 
             if (suffixValues.isNotEmpty()) {
@@ -224,21 +607,32 @@ abstract class AbstractDbStore : MutableQuadSet {
                 map.forEach { (value, id) ->
                     suffixIdCache.put(value, id)
                     suffixValueCache.put(id, value)
+                    suffixValues.remove(value)
                 }
 
                 suffixIdMap.putAll(map)
 
+                if (insertRemaining) {
+
+                    val inserted = insertSuffixValues(suffixValues)
+
+                    inserted.forEach { (value, id) ->
+                        suffixIdCache.put(value, id)
+                        suffixValueCache.put(id, value)
+                    }
+
+                    suffixIdMap.putAll(inserted)
+
+                }
             }
 
             //combine entries
             uriValues.forEach {
-                val s = if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]
-                val p = suffixIdMap[it.suffix()]
-                if (s != null && p != null) {
-                    returnMap[it] = s to p
-                }
+                returnMap[it] =
+                    (if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]!!) to suffixIdMap[it.suffix()]!!
             }
         }
+
 
         if (vectorValues.isNotEmpty()) {
 
@@ -247,21 +641,94 @@ abstract class AbstractDbStore : MutableQuadSet {
             map.forEach { (value, id) ->
                 vectorValueValueCache.put(value, id)
                 vectorValueIdCache.put(id, value)
+                vectorValues.remove(value)
             }
 
             returnMap.putAll(map)
 
+            if (insertRemaining) {
+
+                val inserted = insertVectorValueIds(vectorValues)
+
+                inserted.forEach { (value, id) ->
+                    vectorValueValueCache.put(value, id)
+                    vectorValueIdCache.put(id, value)
+                }
+
+                returnMap.putAll(map)
+
+            }
         }
 
         return returnMap
+    }
+
+
+    protected abstract fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId) : Long
+    abstract fun getQuadId(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long?
+
+    /**
+     * Stores a Quad if it doesn't already exist and returns its id
+     */
+    fun addQuad(quad: Quad): Long {
+
+        val s = getOrAddQuadValueId(quad.subject)
+        val p = getOrAddQuadValueId(quad.predicate)
+        val o = getOrAddQuadValueId(quad.`object`)
+
+        val existingId = getQuadId(s, p, o)
+
+        if (existingId != null) {
+            return existingId
+        }
+
+        return insert(s, p, o)
 
     }
 
-    abstract fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId>
-    abstract fun lookUpStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId>
-    abstract fun lookUpPrefixIds(prefixValues: Set<String>): Map<String, Int>
-    abstract fun lookUpSuffixIds(suffixValues: Set<String>): Map<String, Long>
-    abstract fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId>
+    protected fun getQuadId(quad: Quad): Long? {
+        val s = getQuadValueId(quad.subject)
+
+        if (s.first == null || s.second == null) {
+            return null
+        }
+
+        val p = getQuadValueId(quad.predicate)
+
+        if (p.first == null || p.second == null) {
+            return null
+        }
+
+        val o = getQuadValueId(quad.`object`)
+
+        if (o.first == null || o.second == null) {
+            return null
+        }
+
+        return getQuadId(s.first!! to s.second!!, p.first!! to p.second!!, o.first!! to o.second!!)
+    }
 
 
+    override fun contains(element: Quad): Boolean = getQuadId(element) != null
+
+    override fun containsAll(elements: Collection<Quad>): Boolean {
+        return elements.all { contains(it) }
+    }
+
+    override fun add(element: Quad): Boolean {
+
+        val s = getOrAddQuadValueId(element.subject)
+        val p = getOrAddQuadValueId(element.predicate)
+        val o = getOrAddQuadValueId(element.`object`)
+
+        val existingId = getQuadId(s, p, o)
+
+        if (existingId != null) {
+            return false
+        }
+
+        insert(s, p, o)
+
+        return true
+    }
 }

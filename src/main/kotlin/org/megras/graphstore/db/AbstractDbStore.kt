@@ -3,6 +3,8 @@ package org.megras.graphstore.db
 import com.google.common.cache.CacheBuilder
 import org.megras.data.graph.*
 import org.megras.graphstore.MutableQuadSet
+import org.megras.util.extensions.toBase64
+import java.nio.ByteBuffer
 
 abstract class AbstractDbStore : MutableQuadSet {
 
@@ -713,6 +715,18 @@ abstract class AbstractDbStore : MutableQuadSet {
 
     override fun containsAll(elements: Collection<Quad>): Boolean {
         return elements.all { contains(it) }
+    }
+
+    protected fun quadHash(sType: Int, s: Long, pType: Int, p: Long, oType: Int, o: Long): String {
+
+        val buf = ByteBuffer.wrap(ByteArray(36))
+        buf.putInt(sType)
+        buf.putLong(s)
+        buf.putInt(pType)
+        buf.putLong(p)
+        buf.putInt(oType)
+        buf.putLong(o)
+        return buf.array().toBase64()
     }
 
     override fun add(element: Quad): Boolean {

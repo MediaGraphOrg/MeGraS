@@ -34,6 +34,7 @@ dependencies {
     def cottontaildbDriverVerion='0.14.4-SNAPSHOT'
     def grpcVersion = '1.49.2'
     def protobufVersion = '3.21.7'
+    def exposedVersion = '0.40.1'
 
     /* Javalin */
     implementation group: 'io.javalin', name: 'javalin', version: javalinVersion
@@ -88,6 +89,12 @@ dependencies {
 
     /* Guava */
     implementation group: 'com.google.guava', name: 'guava', version: '31.1-jre'
+
+    /* Exposed & Postgres */
+    implementation group: 'org.jetbrains.exposed', name: 'exposed-core', version: exposedVersion
+    implementation group: 'org.jetbrains.exposed', name: 'exposed-dao', version: exposedVersion
+    implementation group: 'org.jetbrains.exposed', name: 'exposed-jdbc', version: exposedVersion
+    implementation group: 'org.postgresql', name: 'postgresql', version: '42.2.2'
 
 
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.7.22'

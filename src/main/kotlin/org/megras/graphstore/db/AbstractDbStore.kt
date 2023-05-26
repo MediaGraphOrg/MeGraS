@@ -630,8 +630,14 @@ abstract class AbstractDbStore : MutableQuadSet {
 
             //combine entries
             uriValues.forEach {
-                returnMap[it] =
-                    (if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]!!) to suffixIdMap[it.suffix()]!!
+
+                val prefix = if (it is LocalQuadValue) LOCAL_URI_TYPE else prefixIdMap[it.prefix()]
+                val suffix = suffixIdMap[it.suffix()]
+
+                if (prefix != null && suffix != null) {
+                    returnMap[it] = prefix to suffix
+                }
+
             }
         }
 

@@ -7,6 +7,7 @@ import org.megras.data.model.Config
 import org.megras.graphstore.db.CottontailStore
 import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
+import org.megras.graphstore.db.PostgresStore
 import java.io.File
 
 object MeGraS {
@@ -22,11 +23,15 @@ object MeGraS {
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 
-        val tsvSet = TSVMutableQuadSet("quads.tsv", false)
+        //val tsvSet = TSVMutableQuadSet("quads.tsv", false)
 
-        val quadSet = HybridMutableQuadSet(tsvSet, CottontailStore()) //TSVMutableQuadSet(File("quads.tsv"))
+        val postgresStore = PostgresStore()
+        val cottontailStore = CottontailStore()
 
-        //quadSet.setup()
+        val quadSet = HybridMutableQuadSet(postgresStore, cottontailStore) //TSVMutableQuadSet(File("quads.tsv"))
+
+        postgresStore.setup()
+        cottontailStore.setup()
 
         RestApi.init(config, objectStore, quadSet)
 
@@ -36,7 +41,7 @@ object MeGraS {
 
         RestApi.stop()
 
-        tsvSet.store()
+        //tsvSet.store()
 
     }
 

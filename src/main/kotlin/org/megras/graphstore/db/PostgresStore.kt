@@ -1,14 +1,17 @@
 package org.megras.graphstore.db
 
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.megras.data.graph.*
+import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 
 
-class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") : AbstractDbStore() {
+class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
+    AbstractDbStore() {
 
     object QuadsTable : Table("quads") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
@@ -33,7 +36,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
 
     object StringLiteralTable : Table("literal_string") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
-        val value: Column<String> = varchar("value", 255).uniqueIndex()
+        val value: Column<String> = text("value")
 
         override val primaryKey = PrimaryKey(QuadsTable.id)
     }
@@ -59,9 +62,11 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         override val primaryKey = PrimaryKey(QuadsTable.id)
     }
 
-    private val db : Database
+    private val db: Database
+
     init {
-        db = Database.connect("jdbc:postgresql://$host",
+        db = Database.connect(
+            "jdbc:postgresql://$host",
             driver = "org.postgresql.Driver",
             user = user, password = password
         )
@@ -72,6 +77,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
             SchemaUtils.setSchema(schema)
         }
     }
+
     override fun setup() {
         transaction {
             SchemaUtils.create(QuadsTable, StringLiteralTable, DoubleLiteralTable, EntityPrefixTable, EntityTable)
@@ -111,7 +117,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
-        TODO("Not yet implemented")
+        return emptyMap() //FIXME currently unsupported
     }
 
     override fun insertDoubleValues(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
@@ -148,7 +154,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     override fun insertSuffixValues(suffixValues: Set<String>): Map<String, Long> {
         val list = suffixValues.toList()
         val results = transaction {
-            EntityTable.batchInsert(list){
+            EntityTable.batchInsert(list) {
                 this[EntityTable.value] = it
             }.map { it[EntityTable.id] }
         }
@@ -156,7 +162,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
-        TODO("Not yet implemented")
+        return emptyMap() //FIXME currently unsupported
     }
 
     override fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue> {
@@ -176,7 +182,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue> {
-        TODO("Not yet implemented")
+        return emptyMap() //FIXME currently unsupported
     }
 
     override fun lookUpPrefixes(ids: Set<Int>): Map<Int, String> {
@@ -196,7 +202,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long {
-       return transaction {
+        return transaction {
             QuadsTable.insert {
                 it[sType] = s.first
                 it[this.s] = s.second
@@ -219,19 +225,105 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun getId(id: Long): Quad? {
-        TODO("Not yet implemented")
+
+        val quadIds = transaction {
+            QuadsTable.select { QuadsTable.id eq id }.firstOrNull()?.let {
+                listOf(
+                    it[QuadsTable.sType] to it[QuadsTable.s],
+                    it[QuadsTable.pType] to it[QuadsTable.p],
+                    it[QuadsTable.oType] to it[QuadsTable.o]
+                )
+            }
+        } ?: return null
+
+        val values = getQuadValues(quadIds)
+
+        val s = values[quadIds[0]] ?: return null
+        val p = values[quadIds[1]] ?: return null
+        val o = values[quadIds[2]] ?: return null
+
+        return Quad(id, s, p, o)
+    }
+
+    private fun getIds(ids: Collection<Long>): QuadSet { //TODO caching
+
+        if (ids.isEmpty()) {
+            return BasicQuadSet()
+        }
+
+        val quadIds = transaction {
+            QuadsTable.select { QuadsTable.id inList ids }.map {
+                it[QuadsTable.id] to Triple(
+                    (it[QuadsTable.sType] to it[QuadsTable.s]),
+                    (it[QuadsTable.pType] to it[QuadsTable.p]),
+                    (it[QuadsTable.oType] to it[QuadsTable.o]),
+                )
+            }
+        }
+
+        val quadValueIds = quadIds.flatMap { listOf(it.second.first, it.second.second, it.second.third) }.toSet()
+        val quadValues = getQuadValues(quadValueIds)
+
+        return BasicQuadSet(
+            quadIds.mapNotNull {
+                val s = quadValues[it.second.first]
+                val p = quadValues[it.second.second]
+                val o = quadValues[it.second.third]
+
+                if (s != null && p != null && o != null) {
+                    Quad(it.first, s, p, o)
+                } else {
+                    null
+                }
+            }.toSet()
+        )
+
     }
 
     override fun filterSubject(subject: QuadValue): QuadSet {
-        TODO("Not yet implemented")
+
+        val id = getQuadValueId(subject)
+
+        if (id.first == null || id.second == null) {
+            return BasicQuadSet()
+        }
+
+        val quadIds = transaction {
+            QuadsTable.select { (QuadsTable.sType eq id.first!!) and (QuadsTable.s eq id.second!!) }
+                .map { it[QuadsTable.id] }
+        }
+
+        return getIds(quadIds)
     }
 
     override fun filterPredicate(predicate: QuadValue): QuadSet {
-        TODO("Not yet implemented")
+        val id = getQuadValueId(predicate)
+
+        if (id.first == null || id.second == null) {
+            return BasicQuadSet()
+        }
+
+        val quadIds = transaction {
+            QuadsTable.select { (QuadsTable.pType eq id.first!!) and (QuadsTable.p eq id.second!!) }
+                .map { it[QuadsTable.id] }
+        }
+
+        return getIds(quadIds)
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet {
-        TODO("Not yet implemented")
+        val id = getQuadValueId(`object`)
+
+        if (id.first == null || id.second == null) {
+            return BasicQuadSet()
+        }
+
+        val quadIds = transaction {
+            QuadsTable.select { (QuadsTable.oType eq id.first!!) and (QuadsTable.o eq id.second!!) }
+                .map { it[QuadsTable.id] }
+        }
+
+        return getIds(quadIds)
     }
 
     override fun filter(
@@ -239,12 +331,48 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         predicates: Collection<QuadValue>?,
         objects: Collection<QuadValue>?
     ): QuadSet {
-        TODO("Not yet implemented")
+
+        //if all attributes are unfiltered, do not filter
+        if (subjects == null && predicates == null && objects == null) {
+            return this
+        }
+
+        //if one attribute has no matches, return empty set
+        if (subjects?.isEmpty() == true || predicates?.isEmpty() == true || objects?.isEmpty() == true) {
+            return BasicQuadSet()
+        }
+
+        val filterIds = getOrAddQuadValueIds(
+            (subjects?.toSet() ?: setOf()) + (predicates?.toSet() ?: setOf()) + (objects?.toSet() ?: setOf()),
+            false
+        )
+
+        val subjectFilterIds = subjects?.mapNotNull { filterIds[it] }
+        val predicateFilterIds = predicates?.mapNotNull { filterIds[it] }
+        val objectFilterIds = objects?.mapNotNull { filterIds[it] }
+
+        //no matching values
+        if (subjectFilterIds?.isEmpty() == true || predicateFilterIds?.isEmpty() == true || objectFilterIds?.isEmpty() == true) {
+            return BasicQuadSet()
+        }
+
+        val filter = listOfNotNull(
+            subjectFilterIds?.map { (QuadsTable.sType eq it.first) and (QuadsTable.s eq it.second) }
+                ?.reduce { acc, op -> acc or op },
+            predicateFilterIds?.map { (QuadsTable.pType eq it.first) and (QuadsTable.p eq it.second) }
+                ?.reduce { acc, op -> acc or op },
+            objectFilterIds?.map { (QuadsTable.oType eq it.first) and (QuadsTable.o eq it.second) }
+                ?.reduce { acc, op -> acc or op }
+        ).reduce { acc, op -> acc and op }
+
+        val quadIds = transaction {
+            QuadsTable.select(filter).map { it[QuadsTable.id] }
+        }
+
+        return getIds(quadIds)
     }
 
-    override fun toMutable(): MutableQuadSet {
-        TODO("Not yet implemented")
-    }
+    override fun toMutable(): MutableQuadSet = this
 
     override fun toSet(): Set<Quad> {
         TODO("Not yet implemented")
@@ -255,11 +383,28 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
-        TODO("Not yet implemented")
+        return BasicQuadSet() //FIXME currently unsupported
     }
 
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet {
-        TODO("Not yet implemented")
+
+        val predicatePair = getQuadValueId(predicate)
+
+        if (predicatePair.first == null || predicatePair.second == null) { //unknown predicate, can't have matching quads
+            return BasicQuadSet()
+        }
+
+        val textIds = transaction {
+            StringLiteralTable.select { StringLiteralTable.value like "%${objectFilterText}%" }
+                .map { it[StringLiteralTable.id] }
+        }
+
+        val quadIds = transaction {
+            QuadsTable.select { (QuadsTable.pType eq predicatePair.first!!) and (QuadsTable.p eq predicatePair.second!!) and (QuadsTable.oType eq STRING_LITERAL_TYPE) and (QuadsTable.o inList textIds) }
+                .map { it[QuadsTable.id] }
+        }
+
+        return getIds(quadIds)
     }
 
     override val size: Int

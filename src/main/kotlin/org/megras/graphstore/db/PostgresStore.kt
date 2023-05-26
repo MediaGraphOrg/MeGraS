@@ -218,7 +218,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
 
     override fun getQuadId(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long? {
         return transaction {
-            QuadsTable.select {
+            QuadsTable.slice(QuadsTable.id).select {
                 QuadsTable.hash eq quadHash(s.first, s.second, p.first, p.second, o.first, o.second)
             }.firstOrNull()?.get(QuadsTable.id)
         }
@@ -289,7 +289,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         }
 
         val quadIds = transaction {
-            QuadsTable.select { (QuadsTable.sType eq id.first!!) and (QuadsTable.s eq id.second!!) }
+            QuadsTable.slice(QuadsTable.id).select { (QuadsTable.sType eq id.first!!) and (QuadsTable.s eq id.second!!) }
                 .map { it[QuadsTable.id] }
         }
 
@@ -304,7 +304,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         }
 
         val quadIds = transaction {
-            QuadsTable.select { (QuadsTable.pType eq id.first!!) and (QuadsTable.p eq id.second!!) }
+            QuadsTable.slice(QuadsTable.id).select { (QuadsTable.pType eq id.first!!) and (QuadsTable.p eq id.second!!) }
                 .map { it[QuadsTable.id] }
         }
 
@@ -319,7 +319,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         }
 
         val quadIds = transaction {
-            QuadsTable.select { (QuadsTable.oType eq id.first!!) and (QuadsTable.o eq id.second!!) }
+            QuadsTable.slice(QuadsTable.id).select { (QuadsTable.oType eq id.first!!) and (QuadsTable.o eq id.second!!) }
                 .map { it[QuadsTable.id] }
         }
 
@@ -366,7 +366,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         ).reduce { acc, op -> acc and op }
 
         val quadIds = transaction {
-            QuadsTable.select(filter).map { it[QuadsTable.id] }
+            QuadsTable.slice(QuadsTable.id).select(filter).map { it[QuadsTable.id] }
         }
 
         return getIds(quadIds)
@@ -395,12 +395,12 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         }
 
         val textIds = transaction {
-            StringLiteralTable.select { StringLiteralTable.value like "%${objectFilterText}%" }
+            StringLiteralTable.slice(StringLiteralTable.id).select { StringLiteralTable.value like "%${objectFilterText}%" }
                 .map { it[StringLiteralTable.id] }
         }
 
         val quadIds = transaction {
-            QuadsTable.select { (QuadsTable.pType eq predicatePair.first!!) and (QuadsTable.p eq predicatePair.second!!) and (QuadsTable.oType eq STRING_LITERAL_TYPE) and (QuadsTable.o inList textIds) }
+            QuadsTable.slice(QuadsTable.id).select { (QuadsTable.pType eq predicatePair.first!!) and (QuadsTable.p eq predicatePair.second!!) and (QuadsTable.oType eq STRING_LITERAL_TYPE) and (QuadsTable.o inList textIds) }
                 .map { it[QuadsTable.id] }
         }
 
@@ -414,9 +414,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
             }
         }
 
-    override fun isEmpty(): Boolean {
-        TODO("Not yet implemented")
-    }
+    override fun isEmpty(): Boolean = this.size > 0
 
     override fun iterator(): MutableIterator<Quad> {
         TODO("Not yet implemented")
@@ -446,7 +444,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         }.toMap().toMutableMap()
 
         transaction {
-            QuadsTable.select { QuadsTable.hash inList quadIdMap.keys }.forEach {
+            QuadsTable.slice(QuadsTable.hash).select { QuadsTable.hash inList quadIdMap.keys }.forEach {
                 quadIdMap.remove(it[QuadsTable.hash])
             }
         }

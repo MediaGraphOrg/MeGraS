@@ -1,9 +1,11 @@
 package org.megras.data.graph
 
+import org.vitrivr.cottontail.client.language.basics.Type
+import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
 
-sealed class QuadValue {
+sealed class QuadValue : Serializable {
 
     companion object {
 
@@ -29,9 +31,16 @@ sealed class QuadValue {
                 URIValue(value)
             }
             value.endsWith("^^String") -> StringValue(value.substringBeforeLast("^^String"))
-            value.endsWith("^^Long") -> LongValue(value.substringAfterLast("^^Long").toLongOrNull() ?: 0L)
-            value.endsWith("^^Double") -> DoubleValue(value.substringAfterLast("^^Double").toDoubleOrNull() ?: Double.NaN)
-            //TODO parse vectors
+            value.endsWith("^^Long") -> LongValue(value.substringBeforeLast("^^Long").toLongOrNull() ?: 0L)
+            value.endsWith("^^Double") -> DoubleValue(value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN)
+            value.startsWith("[") -> when { //vectors
+                value.endsWith("]") || value.endsWith("]^^DoubleVector") -> {
+                    DoubleVectorValue.parse(value)
+                }
+                value.endsWith("]^^LongVector") -> LongVectorValue.parse(value)
+                else -> StringValue(value) //not a valid vector after all
+
+            }
             else -> StringValue(value)
         }
         fun of(value: Long) = LongValue(value)
@@ -47,7 +56,7 @@ sealed class QuadValue {
 
 }
 
-data class StringValue(val value: String): QuadValue() {
+data class StringValue(val value: String): QuadValue(), Serializable {
     override fun toString(): String = "$value^^String"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -55,16 +64,14 @@ data class StringValue(val value: String): QuadValue() {
 
         other as StringValue
 
-        if (value != other.value) return false
-
-        return true
+        return value == other.value
     }
 
     override fun hashCode(): Int {
         return value.hashCode()
     }
 }
-data class LongValue(val value: Long): QuadValue() {
+data class LongValue(val value: Long): QuadValue(), Serializable {
     override fun toString(): String = "$value^^Long"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -72,16 +79,14 @@ data class LongValue(val value: Long): QuadValue() {
 
         other as LongValue
 
-        if (value != other.value) return false
-
-        return true
+        return value == other.value
     }
 
     override fun hashCode(): Int {
         return value.hashCode()
     }
 }
-data class DoubleValue(val value: Double): QuadValue() {
+data class DoubleValue(val value: Double): QuadValue(), Serializable {
     override fun toString(): String = "$value^^Double"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -89,9 +94,7 @@ data class DoubleValue(val value: Double): QuadValue() {
 
         other as DoubleValue
 
-        if (value != other.value) return false
-
-        return true
+        return value == other.value
     }
 
     override fun hashCode(): Int {
@@ -99,21 +102,30 @@ data class DoubleValue(val value: Double): QuadValue() {
     }
 }
 
-open class URIValue(private val prefix: String?, protected open val uri: String) : QuadValue() {
+open class URIValue(private val prefix: String?, protected open val uri: String) : QuadValue(), Serializable {
 
     companion object {
         private fun estimatePrefix(uri: String): Pair<String, String> {
 
-            val cleaned = if (uri.startsWith('<') && uri.endsWith('>')) {
-                uri.substring(1).substringBeforeLast('>')
+            val trimmed = uri.trim()
+
+            val cleaned = if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+                trimmed.substring(1).substringBeforeLast('>')
             } else {
-                uri
+                trimmed
             }
 
             //best effort prefix estimator
             return try {
-                val parsedUri = URI(uri)
+
+                if (cleaned.contains('#') && !cleaned.endsWith('#')) {
+                    val suffix = cleaned.substringAfterLast('#')
+                    return cleaned.substringBeforeLast(suffix) to suffix
+                }
+
+                val parsedUri = URI(cleaned)
                 val host = parsedUri.host ?: ""
+                parsedUri.userInfo
                 val suffix = uri.substringAfter(host)
                 val prefix = uri.substringBefore(suffix)
                 prefix to suffix
@@ -144,18 +156,53 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
 
 }
 
-open class VectorValue(val type: Type, val length: Int) : QuadValue() {
+abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Serializable {
 
-    enum class Type {
-        Double, Long
+    enum class Type(val byte: Byte) {
+        Double(0) {
+            override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.DOUBLE_VECTOR
+        }, Long(1) {
+            override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.LONG_VECTOR
+        };
+
+        abstract fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type
+
+        companion object {
+            fun fromByte(byte: Byte) = when(byte) {
+                0.toByte() -> Double
+                1.toByte() -> Long
+                else -> throw IllegalArgumentException()
+            }
+        }
+
     }
 
 }
 
-class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vector.size) {
+class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vector.size), Serializable {
+
+    companion object {
+        fun parse(string: String): DoubleVectorValue {
+
+            var s = string.trim()
+            s = if (s.startsWith("[")) s.substringAfter('[') else s
+            s = if (s.endsWith("^^DoubleVector")) s.substringBefore("^^DoubleVector") else s
+            s = if (s.endsWith("]")) s.substringBefore("]") else s
+
+            val numbers = s.split(',').map { it.trim().toDoubleOrNull() }
+
+            if (numbers.any { it == null }) {
+                return DoubleVectorValue(DoubleArray(0))
+            }
+
+            return DoubleVectorValue(numbers.filterNotNull().toDoubleArray())
+
+        }
+    }
+
     constructor(values: List<Double>) : this(values.toDoubleArray())
 //    constructor(values: List<Float>) : this(DoubleArray(values.size) { i -> values[i].toDouble() })
-//    constructor(values: FloatArray) : this(DoubleArray(values.size) { i -> values[i].toDouble() })
+    constructor(values: FloatArray) : this(DoubleArray(values.size) { i -> values[i].toDouble() })
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -163,21 +210,41 @@ class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vect
 
         other as DoubleVectorValue
 
-        if (!vector.contentEquals(other.vector)) return false
-
-        return true
+        return vector.contentEquals(other.vector)
     }
 
-    override fun hashCode(): Int {
-        return vector.contentHashCode()
+    private val hashCode = vector.contentHashCode()
+    override fun hashCode(): Int = hashCode
+
+    override fun toString(): String {
+        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^DoubleVector")
     }
 }
 
-class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.size) {
+class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.size), Serializable {
+
+    companion object {
+        fun parse(string: String): LongVectorValue {
+
+            var s = string.trim()
+            s = if (s.startsWith("[")) s.substringAfter('[') else s
+            s = if (s.endsWith("^^LongVector")) s.substringBefore("^^LongVector") else s
+            s = if (s.endsWith("]")) s.substringBefore("]") else s
+
+            val numbers = s.split(',').map { it.trim().toLongOrNull() }
+
+            if (numbers.any { it == null }) {
+                return LongVectorValue(LongArray(0))
+            }
+
+            return LongVectorValue(numbers.filterNotNull().toLongArray())
+
+        }
+    }
 
     constructor(values: List<Long>) : this(values.toLongArray())
 //    constructor(values: List<Int>) : this(LongArray(values.size) { i -> values[i].toLong() })
-//    constructor(values: IntArray) : this(LongArray(values.size) { i -> values[i].toLong() })
+    constructor(values: IntArray) : this(LongArray(values.size) { i -> values[i].toLong() })
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -185,12 +252,13 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
 
         other as LongVectorValue
 
-        if (!vector.contentEquals(other.vector)) return false
-
-        return true
+        return vector.contentEquals(other.vector)
     }
 
-    override fun hashCode(): Int {
-        return vector.contentHashCode()
+    private val hashCode = vector.contentHashCode()
+    override fun hashCode(): Int = hashCode
+
+    override fun toString(): String {
+        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^LongVector")
     }
 }

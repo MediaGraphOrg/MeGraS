@@ -20,7 +20,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
 
         var relevant = quads.filter(setOf(objectId), null,null) + quads.filter(null, null, setOf(objectId))
 
-        if (quads.isEmpty()) {
+        if (relevant.isEmpty()) {
             throw RestErrorStatus.notFound
         }
 

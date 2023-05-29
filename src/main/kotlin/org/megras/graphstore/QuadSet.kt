@@ -2,6 +2,7 @@ package org.megras.graphstore
 
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
+import org.megras.data.graph.VectorValue
 
 interface QuadSet : Set<Quad> {
 
@@ -36,5 +37,9 @@ interface QuadSet : Set<Quad> {
     fun toSet(): Set<Quad>
 
     operator fun plus(other: QuadSet): QuadSet
+
+    fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet
+
+    fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet
 
 }

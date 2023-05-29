@@ -10,7 +10,7 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 
-class FileSystemObjectStore(objectStoreBase: String) {
+class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val objectStoreBaseFile = File(objectStoreBase)
@@ -26,11 +26,11 @@ class FileSystemObjectStore(objectStoreBase: String) {
         }
     }
 
-    fun idFromStream(stream: InputStream): StoredObjectId = StoredObjectId(HashUtil.hashToBase32(stream).dropLast(4)) //last four are always '='
+    override fun idFromStream(stream: InputStream): StoredObjectId = StoredObjectId(HashUtil.hashToBase32(stream).dropLast(4)) //last four are always '='
 
 
     @Throws(FileNotFoundException::class, IOException::class)
-    fun store(file: File): StoredObjectDescriptor {
+    override fun store(file: File): StoredObjectDescriptor {
 
         if (!file.exists()) {
             throw FileNotFoundException("input file '${file.absolutePath}' not found")
@@ -44,7 +44,7 @@ class FileSystemObjectStore(objectStoreBase: String) {
 
     }
 
-    fun store(file: PseudoFile): StoredObjectDescriptor {
+    override fun store(file: PseudoFile): StoredObjectDescriptor {
         val id = idFromStream(file.inputStream())
         val descriptor = StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length(), Bounds())
 
@@ -53,7 +53,16 @@ class FileSystemObjectStore(objectStoreBase: String) {
         return descriptor
     }
 
-    fun store(stream: InputStream, descriptor: StoredObjectDescriptor) {
+    override fun exists(file: PseudoFile) : StoredObjectDescriptor? {
+        val id = idFromStream(file.inputStream())
+        val target = storageFile(id)
+        if(target.exists()) {
+            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length())
+        }
+        return null
+    }
+
+    override fun store(stream: InputStream, descriptor: StoredObjectDescriptor) {
 
         val target = storageFile(descriptor.id)
         target.parentFile.mkdirs()
@@ -64,7 +73,7 @@ class FileSystemObjectStore(objectStoreBase: String) {
         storeDescriptor(descriptor)
     }
 
-    fun get(id: StoredObjectId): ObjectStoreResult? {
+    override fun get(id: StoredObjectId): ObjectStoreResult? {
         val descriptorFile = descriptorFile(id)
         val target = storageFile(id)
 
@@ -82,13 +91,13 @@ class FileSystemObjectStore(objectStoreBase: String) {
 
     }
 
-    private fun storeDescriptor(descriptor: StoredObjectDescriptor) {
+    override fun storeDescriptor(descriptor: StoredObjectDescriptor) {
         val target = descriptorFile(descriptor.id)
         target.writeText(descriptor.toJSON(), Charsets.UTF_8)
     }
 
-    private fun storageFile(id: StoredObjectId): File = File(objectStoreBaseFile, "${id.id.substring(0, 2)}/${id.id.substring(2, 4)}/$id")
+    override fun storageFile(id: StoredObjectId): File = File(objectStoreBaseFile, "${id.id.substring(0, 2)}/${id.id.substring(2, 4)}/$id")
 
-    private fun descriptorFile(id: StoredObjectId): File = File(storageFile(id).parentFile, "${id}.meta")
+    override fun descriptorFile(id: StoredObjectId): File = File(storageFile(id).parentFile, "${id}.meta")
 
 }

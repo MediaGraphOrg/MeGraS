@@ -34,7 +34,8 @@ object Cli {
 
     fun init(quads: MutableQuadSet, objectStore: FileSystemObjectStore) {
         clikt = BaseCommand().subcommands(
-            AddFileCommand(quads, objectStore)
+            AddFileCommand(quads, objectStore),
+            ImportCommand(quads)
         )
     }
 
@@ -95,7 +96,7 @@ object Cli {
                     }
                 }
             } catch (e: EndOfFileException) {
-                System.err.println("Could not read from terminal due to EOF. If you're running DRES in Docker, try running the container in interactive mode.")
+                System.err.println("Could not read from terminal due to EOF.")
                 break
             }  catch (e: UserInterruptException) {
                 break

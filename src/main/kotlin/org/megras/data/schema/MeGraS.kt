@@ -13,7 +13,9 @@ enum class MeGraS(suffix: String) {
     SEGMENT_OF("segmentOf"),
     SEGMENT_TYPE("segmentType"),
     SEGMENT_DEFINITION("segmentDefinition"),
-    SEGMENT_BOUNDS("bounds")
+    SEGMENT_BOUNDS("bounds"),
+    QUERY_DISTANCE("queryDistance"),
+    PREVIEW_ID("previewId") //raw id of object preview
     ;
 
     companion object {

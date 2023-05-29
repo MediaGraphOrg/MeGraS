@@ -2,7 +2,6 @@ package org.megras.api.rest.handlers
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.javalin.http.Context
-import org.checkerframework.common.value.qual.StringVal
 import org.megras.api.rest.PostRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
@@ -27,7 +26,7 @@ class AddFileRequestHandler(private val quads: MutableQuadSet, private val objec
         val mapper = jacksonObjectMapper()
 
         val ids = files.associate { uploadedFile ->
-            val mapentry = uploadedFile.filename() to AddFileUtil.addFile(objectStore, quads, PseudoFile(uploadedFile))
+            val mapEntry = uploadedFile.filename() to AddFileUtil.addFile(objectStore, quads, PseudoFile(uploadedFile))
 
             //check for metadata
             val meta = ctx.formParam(uploadedFile.filename())
@@ -35,11 +34,11 @@ class AddFileRequestHandler(private val quads: MutableQuadSet, private val objec
                 val metaMap = mapper.readValue(meta, Map::class.java)
                 metaMap.forEach { (key, value) ->
                     if (key != null && value != null) {
-                        quads.add(Quad(mapentry.second, StringValue(key.toString()), QuadValue.of(value)))
+                        quads.add(Quad(mapEntry.second, StringValue(key.toString()), QuadValue.of(value)))
                     }
                 }
             }
-            mapentry
+            mapEntry
         }
         ctx.json(ids)
 

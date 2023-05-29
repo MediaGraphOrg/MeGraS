@@ -18,8 +18,8 @@ class RawObjectRequestHandler(private val objectStore: FileSystemObjectStore) : 
 
     companion object{
         fun streamObject(id: StoredObjectId, objectStore: FileSystemObjectStore, ctx: Context) {
-
             val result = objectStore.get(id) ?: throw RestErrorStatus.notFound
+            ctx.header("Cache-Control", "max-age=31622400")
             ctx.writeSeekableStream(result.inputStream(), result.descriptor.mimeType.mimeString)
 
         }

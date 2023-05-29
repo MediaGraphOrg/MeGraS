@@ -1,9 +1,12 @@
 package org.megras.graphstore
 
-import org.megras.data.graph.Quad
-import org.megras.data.graph.QuadValue
+import org.megras.data.graph.*
+import org.megras.data.schema.MeGraS
+import org.megras.util.knn.DistancePairComparator
+import org.megras.util.knn.FixedSizePriorityQueue
+import java.io.Serializable
 
-open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by quads {
+open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by quads, Serializable {
 
     constructor() : this(setOf())
 
@@ -43,6 +46,47 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
     override fun toSet(): Set<Quad> = quads
 
     override fun plus(other: QuadSet): QuadSet = BasicQuadSet(quads + other.toSet())
+    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
+
+        val quads = this.filter{ it.predicate == predicate && it.`object` is VectorValue && it.`object`.length == `object`.length && it.`object`.type == `object`.type }
+        val vectors = quads.mapNotNull { it.`object` as? VectorValue }.toSet()
+
+        val queue = FixedSizePriorityQueue(count, DistancePairComparator<Pair<Double, VectorValue>>())
+        val dist = distance.distance()
+
+        if (`object` is DoubleVectorValue) {
+            val v = `object`.vector
+            vectors.forEach {
+                val vv = (it as DoubleVectorValue).vector
+                val d = dist.distance(v, vv)
+                queue.add(d to it)
+            }
+        } else {
+            `object` as LongVectorValue
+            val v = `object`.vector
+            vectors.forEach {
+                val vv = (it as LongVectorValue).vector
+                val d = dist.distance(v, vv)
+                queue.add(d to it)
+            }
+        }
+
+        val relevantVectors = mutableSetOf<VectorValue>()
+        val ret = BasicMutableQuadSet()
+        queue.forEach {
+            relevantVectors.add(it.second)
+            ret.add(Quad(it.second, MeGraS.QUERY_DISTANCE.uri, DoubleValue(it.first)))
+        }
+        quads.forEach {
+            if (it.`object` in relevantVectors) {
+                ret.add(it)
+            }
+        }
+
+        return ret
+    }
+
+    override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = BasicQuadSet(quads.filter { it.predicate == predicate && it.`object` is StringValue && it.`object`.value.contains(objectFilterText) }.toSet())
 
 
 }

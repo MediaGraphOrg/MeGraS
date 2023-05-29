@@ -663,7 +663,7 @@ abstract class AbstractDbStore : MutableQuadSet {
                     vectorValueIdCache.put(id, value)
                 }
 
-                returnMap.putAll(map)
+                returnMap.putAll(inserted)
 
             }
         }

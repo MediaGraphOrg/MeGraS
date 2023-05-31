@@ -72,7 +72,10 @@ class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmen
             if (bounds.minY < minY) minY = bounds.minY
             if (bounds.maxY > maxY) maxY = bounds.maxY
         }
-        bounds = Bounds(minX, maxX, minY, maxY, rotoscopeList.first().time, rotoscopeList.last().time)
+        bounds = Bounds()
+            .addX(minX, maxX)
+            .addY(minY, maxY)
+            .addT(rotoscopeList.first().time, rotoscopeList.last().time)
     }
 
     override fun contains(rhs: Bounds): Boolean {

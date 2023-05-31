@@ -1,6 +1,7 @@
 package org.megras.segmentation.media
 
 import org.megras.segmentation.type.*
+import java.awt.AlphaComposite
 import java.awt.Color
 import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
@@ -23,12 +24,56 @@ object ImageSegmenter {
 
     fun segment(image: BufferedImage, segmentation: Segmentation, imageType: Int = BufferedImage.TYPE_4BYTE_ABGR): BufferedImage? =
         when (segmentation) {
+            is Width -> segmentWidth(image, segmentation, imageType)
+            is Height -> segmentHeight(image, segmentation, imageType)
             is TwoDimensionalSegmentation -> segmentShape(image, segmentation, imageType)
             is ColorChannel -> segmentColor(image, segmentation, imageType)
             else -> null
         }
 
-    fun segmentShape(image: BufferedImage, segmentation: TwoDimensionalSegmentation, imageType: Int): BufferedImage? {
+    private fun segmentWidth(image: BufferedImage, segmentation: Width, imageType: Int): BufferedImage? {
+        return try {
+            val xBounds = segmentation.bounds.getXBounds()
+
+            val out = BufferedImage((xBounds[1] - xBounds[0]).toInt(), image.height, imageType)
+            val g = out.createGraphics()
+            g.drawImage(image, -xBounds[0].toInt(), 0, null)
+            g.composite = AlphaComposite.Clear
+            segmentation.getIntervalsToDiscard().forEach {
+                g.fillRect((it.low - xBounds[0]).toInt(), 0, (it.high - it.low).toInt(), image.height)
+            }
+            g.dispose()
+
+            out
+        } catch (e: Exception) {
+            //TODO log
+            null
+        }
+    }
+
+    private fun segmentHeight(image: BufferedImage, segmentation: Height, imageType: Int): BufferedImage? {
+        return try {
+            var yBounds = segmentation.bounds.getYBounds()
+            // Recompute bounds to have the origin bottom left instead of top left
+            yBounds = doubleArrayOf(image.height - yBounds[1], image.height - yBounds[0])
+
+            val out = BufferedImage(image.width, (yBounds[1] - yBounds[0]).toInt(), imageType)
+            val g = out.createGraphics()
+            g.drawImage(image, 0, -yBounds[0].toInt(), null)
+            g.composite = AlphaComposite.Clear
+            segmentation.getIntervalsToDiscard().forEach {
+                g.fillRect(0, (image.height - it.high - yBounds[0]).toInt(), image.width, (it.high - it.low).toInt())
+            }
+            g.dispose()
+
+            out
+        } catch (e: Exception) {
+            //TODO log
+            null
+        }
+    }
+
+    private fun segmentShape(image: BufferedImage, segmentation: TwoDimensionalSegmentation, imageType: Int): BufferedImage? {
         return try {
             val xBounds = segmentation.bounds.getXBounds()
             val yBounds = segmentation.bounds.getYBounds()

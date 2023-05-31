@@ -41,11 +41,10 @@ object ObjUtil {
             }
         }
 
-        return Bounds(
-            b[0].toDouble(), b[1].toDouble(),
-            b[2].toDouble(), b[3].toDouble(),
-            b[4].toDouble(), b[5].toDouble()
-        )
+        return Bounds()
+            .addX(b[0].toDouble(), b[1].toDouble())
+            .addY(b[2].toDouble(), b[3].toDouble())
+            .addZ(b[4].toDouble(), b[5].toDouble())
     }
 
     fun translate(obj: Obj, x: Float, y: Float, z: Float): Obj {

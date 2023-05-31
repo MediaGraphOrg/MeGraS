@@ -139,6 +139,16 @@ object SegmentationUtil {
                 Page(intervals)
             }
 
+            SegmentationType.WIDTH -> {
+                val intervals = parseIntervals(segmentDefinition) ?: return null
+                Width(intervals)
+            }
+
+            SegmentationType.HEIGHT -> {
+                val intervals = parseIntervals(segmentDefinition) ?: return null
+                Height(intervals)
+            }
+
             SegmentationType.SLICE -> {
                 val params = segmentDefinition.split(",").map {
                     it.trim().toDoubleOrNull() ?: return null

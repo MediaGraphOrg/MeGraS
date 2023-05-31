@@ -39,6 +39,10 @@ enum class SegmentationType {
 
     PAGE,
 
+    WIDTH,
+
+    HEIGHT,
+
     FREQUENCY,
 
     /**

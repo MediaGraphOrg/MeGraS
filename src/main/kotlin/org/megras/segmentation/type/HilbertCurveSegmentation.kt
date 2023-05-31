@@ -35,10 +35,14 @@ class Hilbert(val order: Int, var intervals: List<Interval>) : Segmentation, Pre
             throw IllegalArgumentException("Range is out of bounds.")
         }
 
-        return when (bounds.dimensions) {
-            2 -> toImageMask(bounds.getXDimension().toInt(), bounds.getYDimension().toInt())
-            3 -> toRotoscope(bounds.getXDimension().toInt(), bounds.getYDimension().toInt(), bounds.getTDimension())
-            else -> null
+        return if (bounds.hasX() && bounds.hasY()) {
+            if (bounds.hasT()) {
+                toRotoscope(bounds.getXDimension().toInt(), bounds.getYDimension().toInt(), bounds.getTDimension())
+            } else {
+                toImageMask(bounds.getXDimension().toInt(), bounds.getYDimension().toInt())
+            }
+        } else {
+            null
         }
     }
 

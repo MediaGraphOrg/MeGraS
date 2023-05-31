@@ -26,10 +26,14 @@ class SliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Doub
     }
 
     override fun preprocess(bounds: Bounds): Segmentation? =
-        when (bounds.dimensions) {
-            2 -> toShape(bounds)
-            3 -> toMeshBody(bounds)
-            else -> null
+        if (bounds.hasX() && bounds.hasY()) {
+            if (bounds.hasT()) {
+                toMeshBody(bounds)
+            } else {
+                toShape(bounds)
+            }
+        } else {
+            null
         }
 
     private fun toShape(bounds: Bounds): TwoDimensionalSegmentation {

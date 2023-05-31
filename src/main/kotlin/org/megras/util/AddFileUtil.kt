@@ -80,7 +80,7 @@ object AddFileUtil {
                     rawDescriptor.id,
                     rawDescriptor.mimeType,
                     rawDescriptor.length,
-                    Bounds(0, image.width, 0, image.height)
+                    Bounds().addX(0, image.width).addY(0, image.height)
                 )
                 objectStore.store(imageStream, descriptor)
 
@@ -114,7 +114,7 @@ object AddFileUtil {
                         id,
                         MimeType.PNG,
                         buf.size.toLong(),
-                        Bounds(0, buffered.width, 0, buffered.height)
+                        Bounds().addX(0, buffered.width).addY(0, buffered.height)
                     )
                     objectStore.store(inStream, descriptor)
 
@@ -171,7 +171,7 @@ object AddFileUtil {
                         id,
                         MimeType.WEBM,
                         buf.size.toLong(),
-                        Bounds(0, videoProbe.width, 0, videoProbe.height, 0, durationMillis.get())
+                        Bounds().addX(0, videoProbe.width).addY(0, videoProbe.height).addT(0, durationMillis.get())
                     )
                     objectStore.store(inStream, descriptor)
 
@@ -198,7 +198,7 @@ object AddFileUtil {
                     rawDescriptor.id,
                     rawDescriptor.mimeType,
                     rawDescriptor.length,
-                    Bounds(0, buffer.size)
+                    Bounds().addT(0, buffer.size)
                 )
                 objectStore.store(textStream, descriptor)
 
@@ -215,7 +215,7 @@ object AddFileUtil {
                     rawDescriptor.id,
                     rawDescriptor.mimeType,
                     rawDescriptor.length,
-                    Bounds(0, ptToMm(page.mediaBox.width), 0, ptToMm(page.mediaBox.height), 0, pdf.numberOfPages)
+                    Bounds().addX(0, ptToMm(page.mediaBox.width)).addY(0, ptToMm(page.mediaBox.height)).addT(0, pdf.numberOfPages)
                 )
                 objectStore.store(pdfStream, descriptor)
 

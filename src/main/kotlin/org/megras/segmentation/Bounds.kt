@@ -6,14 +6,10 @@ import java.awt.Shape
 @Serializable
 class Bounds {
 
-    private var bounds = DoubleArray(6) { Double.NaN }
+    private var bounds = DoubleArray(8) { Double.NaN }
     var dimensions = 0
 
     constructor()
-
-    constructor(dimensions: Int) {
-        this.dimensions = dimensions
-    }
 
     constructor(boundString: String) {
         bounds = boundString.split(",").map {
@@ -29,41 +25,38 @@ class Bounds {
         this.bounds = doubleArrayOf(
             shape.bounds.minX.coerceAtLeast(0.0), shape.bounds.maxX.coerceAtLeast(0.0),
             shape.bounds.minY.coerceAtLeast(0.0), shape.bounds.maxY.coerceAtLeast(0.0),
+            Double.NaN, Double.NaN,
             Double.NaN, Double.NaN)
         dimensions = 2
     }
 
-    constructor(minT: Double, maxT: Double) {
-        this.bounds = doubleArrayOf(
-            Double.NaN, Double.NaN,
-            Double.NaN, Double.NaN,
-            minT.coerceAtLeast(0.0), maxT.coerceAtLeast(0.0))
-        dimensions = 1
+    fun addX(min: Number, max: Number): Bounds {
+        this.bounds[0] = min.toDouble().coerceAtLeast(0.0)
+        this.bounds[1] = max.toDouble().coerceAtLeast(0.0)
+        dimensions++
+        return this
     }
 
-    constructor(minT: Number, maxT: Number) : this(minT.toDouble(), maxT.toDouble())
-
-    constructor(minX: Double, maxX: Double, minY: Double, maxY: Double) {
-        this.bounds = doubleArrayOf(
-            minX.coerceAtLeast(0.0), maxX.coerceAtLeast(0.0),
-            minY.coerceAtLeast(0.0), maxY.coerceAtLeast(0.0),
-            Double.NaN, Double.NaN)
-        dimensions = 2
+    fun addY(min: Number, max: Number): Bounds {
+        this.bounds[2] = min.toDouble().coerceAtLeast(0.0)
+        this.bounds[3] = max.toDouble().coerceAtLeast(0.0)
+        dimensions++
+        return this
     }
 
-    constructor(minX: Number, maxX: Number, minY: Number, maxY: Number)
-            : this(minX.toDouble(), maxX.toDouble(), minY.toDouble(), maxY.toDouble())
-
-    constructor(minX: Double, maxX: Double, minY: Double, maxY: Double, minT: Double, maxT: Double) {
-        this.bounds = doubleArrayOf(
-            minX.coerceAtLeast(0.0), maxX.coerceAtLeast(0.0),
-            minY.coerceAtLeast(0.0), maxY.coerceAtLeast(0.0),
-            minT.coerceAtLeast(0.0), maxT.coerceAtLeast(0.0))
-        dimensions = 3
+    fun addZ(min: Number, max: Number): Bounds {
+        this.bounds[4] = min.toDouble().coerceAtLeast(0.0)
+        this.bounds[5] = max.toDouble().coerceAtLeast(0.0)
+        dimensions++
+        return this
     }
 
-    constructor(minX: Number, maxX: Number, minY: Number, maxY: Number, minT: Number, maxT: Number)
-            : this(minX.toDouble(), maxX.toDouble(), minY.toDouble(), maxY.toDouble(), minT.toDouble(), maxT.toDouble())
+    fun addT(min: Number, max: Number): Bounds {
+        this.bounds[6] = min.toDouble().coerceAtLeast(0.0)
+        this.bounds[7] = max.toDouble().coerceAtLeast(0.0)
+        dimensions++
+        return this
+    }
 
     override fun equals(other: Any?): Boolean {
         if (other !is Bounds) return false
@@ -72,32 +65,38 @@ class Bounds {
 
     fun contains(rhs: Bounds): Boolean {
         if (this.dimensions > rhs.dimensions) return false
-        return when (dimensions) {
-            1 -> this.bounds[4] <= rhs.bounds[4] && this.bounds[5] >= rhs.bounds[5]
-            2 -> this.bounds[0] <= rhs.bounds[0] && this.bounds[1] >= rhs.bounds[1] &&
-                    this.bounds[2] <= rhs.bounds[2] && this.bounds[3] >= rhs.bounds[3]
-            3 -> this.bounds[0] <= rhs.bounds[0] && this.bounds[1] >= rhs.bounds[1] &&
-                    this.bounds[2] <= rhs.bounds[2] && this.bounds[3] >= rhs.bounds[3] &&
-                    this.bounds[4] <= rhs.bounds[4] && this.bounds[5] >= rhs.bounds[5]
-            else -> false
-        }
+        if (this.hasX() && (this.bounds[0] > rhs.bounds[0] || this.bounds[1] < rhs.bounds[1])) return false
+        if (this.hasY() && (this.bounds[2] > rhs.bounds[2] || this.bounds[3] < rhs.bounds[3])) return false
+        if (this.hasZ() && (this.bounds[4] > rhs.bounds[4] || this.bounds[5] < rhs.bounds[5])) return false
+        if (this.hasT() && (this.bounds[6] > rhs.bounds[6] || this.bounds[7] < rhs.bounds[7])) return false
+        return true
     }
 
     fun overlaps(rhs: Bounds): Boolean {
         return (
-            (!this.bounds[0].isNaN() && !rhs.bounds[0].isNaN() && this.bounds[0] <= rhs.bounds[1] && this.bounds[1] >= rhs.bounds[0]) ||
-            (!this.bounds[2].isNaN() && !rhs.bounds[2].isNaN() && this.bounds[2] <= rhs.bounds[3] && this.bounds[3] >= rhs.bounds[2]) ||
-            (!this.bounds[4].isNaN() && !rhs.bounds[4].isNaN() && this.bounds[4] <= rhs.bounds[5] && this.bounds[5] >= rhs.bounds[4])
+            (this.hasX() && rhs.hasX() && this.bounds[0] <= rhs.bounds[1] && this.bounds[1] >= rhs.bounds[0]) ||
+            (this.hasY() && rhs.hasY() && this.bounds[2] <= rhs.bounds[3] && this.bounds[3] >= rhs.bounds[2]) ||
+            (this.hasZ() && rhs.hasZ() && this.bounds[4] <= rhs.bounds[5] && this.bounds[5] >= rhs.bounds[4]) ||
+            (this.hasT() && rhs.hasT() && this.bounds[6] <= rhs.bounds[7] && this.bounds[7] >= rhs.bounds[6])
         )
     }
 
     fun orthogonalTo(rhs: Bounds): Boolean {
         return !(
-                    (!this.bounds[0].isNaN() && !rhs.bounds[0].isNaN()) ||
-                    (!this.bounds[2].isNaN() && !rhs.bounds[2].isNaN()) ||
-                    (!this.bounds[4].isNaN() && !rhs.bounds[4].isNaN())
-                )
+            (this.hasX() && rhs.hasX()) ||
+            (this.hasY() && rhs.hasY()) ||
+            (this.hasZ() && rhs.hasZ()) ||
+            (this.hasT() && rhs.hasT())
+        )
     }
+
+    fun hasX(): Boolean = !this.bounds[0].isNaN() && !this.bounds[1].isNaN()
+
+    fun hasY(): Boolean = !this.bounds[2].isNaN() && !this.bounds[3].isNaN()
+
+    fun hasZ(): Boolean = !this.bounds[4].isNaN() && !this.bounds[5].isNaN()
+
+    fun hasT(): Boolean = !this.bounds[6].isNaN() && !this.bounds[7].isNaN()
 
     fun isRelative(): Boolean = this.bounds.any { it > 1.0 }
 
@@ -126,10 +125,7 @@ class Bounds {
     fun getTDimension(): Double = bounds[5] - bounds[4]
 
     override fun toString() = bounds.map { if (it.isNaN()) {"-"} else {it} }.joinToString(",")
-
     override fun hashCode(): Int {
-        var result = bounds.contentHashCode()
-        result = 31 * result + dimensions
-        return result
+        return bounds.contentHashCode()
     }
 }

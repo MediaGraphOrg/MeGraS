@@ -26,32 +26,20 @@ abstract class OneDimensionalSegmentation(val intervals: List<Interval>) : Segme
     }
 
     override fun contains(rhs: Bounds): Boolean {
-        val minT = rhs.getMinT()
-        val maxT = rhs.getMaxT()
-        if (minT.isNaN() || maxT.isNaN()) return false
-
-        return this.intervals.any { it.low <= minT && it.high >= maxT }
-    }
-
-    override fun getDefinition(): String = intervals.joinToString(",") { "${it.low}-${it.high}" }
-}
-
-class Time(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
-    override val segmentationType = SegmentationType.TIME
-
-    override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
-
-    override fun translate(by: Bounds): Segmentation {
-        if (by.dimensions == 1) {
-            return Time(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
+        val min = when {
+            this.bounds.hasX() -> rhs.getMinX()
+            this.bounds.hasY() -> rhs.getMinY()
+            this.bounds.hasT() -> rhs.getMinT()
+            else -> return false
         }
-        return this
-    }
+        val max = when {
+            this.bounds.hasX() -> rhs.getMaxX()
+            this.bounds.hasY() -> rhs.getMaxY()
+            this.bounds.hasT() -> rhs.getMaxT()
+            else -> return false
+        }
 
-    override fun toAbsolute(bounds: Bounds): Segmentation? {
-        val factor = bounds.getTDimension()
-        if (factor.isNaN()) return null
-        return Time(intervals.map { Interval(it.low * factor, it.high * factor) })
+        return this.intervals.any { it.low <= min && it.high >= max }
     }
 
     fun getIntervalsToDiscard(): List<Interval> {
@@ -62,16 +50,18 @@ class Time(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), R
         }
         return newIntervals
     }
+
+    override fun getDefinition(): String = intervals.joinToString(",") { "${it.low}-${it.high}" }
 }
 
-class Character(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
-    override val segmentationType = SegmentationType.CHARACTER
+open class TemporalSegmentation(override val segmentationType: SegmentationType?, intervals: List<Interval>): OneDimensionalSegmentation(intervals), RelativeSegmentation {
+    override var bounds = Bounds().addT(intervals.first().low, intervals.last().high)
 
     override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
 
     override fun translate(by: Bounds): Segmentation {
-        if (by.dimensions == 1) {
-            return Character(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
+        if (by.hasT()) {
+            return TemporalSegmentation(segmentationType, intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
         }
         return this
     }
@@ -79,18 +69,25 @@ class Character(intervals: List<Interval>) : OneDimensionalSegmentation(interval
     override fun toAbsolute(bounds: Bounds): Segmentation? {
         val factor = bounds.getTDimension()
         if (factor.isNaN()) return null
-        return Character(intervals.map { Interval(it.low * factor, it.high * factor) })
+        return TemporalSegmentation(segmentationType, intervals.map { Interval(it.low * factor, it.high * factor) })
     }
 }
 
-class Page(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
-    override val segmentationType = SegmentationType.PAGE
+class Time(intervals: List<Interval>) : TemporalSegmentation(SegmentationType.TIME, intervals)
+
+class Character(intervals: List<Interval>) : TemporalSegmentation(SegmentationType.CHARACTER, intervals)
+
+class Page(intervals: List<Interval>) : TemporalSegmentation(SegmentationType.PAGE, intervals)
+
+class Width(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
+    override val segmentationType = SegmentationType.WIDTH
+    override var bounds = Bounds().addX(intervals.first().low, intervals.last().high)
 
     override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
 
     override fun translate(by: Bounds): Segmentation {
-        if (by.dimensions == 1) {
-            return Page(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
+        if (by.hasX()) {
+            return Width(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
         }
         return this
     }
@@ -98,12 +95,33 @@ class Page(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), R
     override fun toAbsolute(bounds: Bounds): Segmentation? {
         val factor = bounds.getTDimension()
         if (factor.isNaN()) return null
-        return Page(intervals.map { Interval(it.low * factor, it.high * factor) })
+        return Width(intervals.map { Interval(it.low * factor, it.high * factor) })
+    }
+}
+
+class Height(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
+    override val segmentationType = SegmentationType.HEIGHT
+    override var bounds = Bounds().addY(intervals.first().low, intervals.last().high)
+
+    override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
+
+    override fun translate(by: Bounds): Segmentation {
+        if (by.hasY()) {
+            return Height(intervals.map { Interval(it.low + by.getMinY(), it.high + by.getMinY()) })
+        }
+        return this
+    }
+
+    override fun toAbsolute(bounds: Bounds): Segmentation? {
+        val factor = bounds.getTDimension()
+        if (factor.isNaN()) return null
+        return Height(intervals.map { Interval(it.low * factor, it.high * factor) })
     }
 }
 
 class Frequency(val interval: Interval) : OneDimensionalSegmentation(listOf(interval)) {
     override val segmentationType: SegmentationType = SegmentationType.FREQUENCY
+    override var bounds = Bounds().addT(intervals.first().low, intervals.last().high)
 
     init {
         require(interval.low <= interval.high) {

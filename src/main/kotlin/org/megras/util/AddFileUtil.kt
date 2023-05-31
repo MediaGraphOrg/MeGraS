@@ -83,7 +83,7 @@ object AddFileUtil {
                     rawDescriptor.length,
                     Bounds().addX(0, image.width).addY(0, image.height)
                 )
-                objectStore.store(imageStream, descriptor)
+                objectStore.storeDescriptor(descriptor)
 
                 //return
                 descriptor

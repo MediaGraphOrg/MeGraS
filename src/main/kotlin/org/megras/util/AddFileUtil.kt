@@ -57,7 +57,8 @@ object AddFileUtil {
                 Quad(oid, MeGraS.MEDIA_TYPE.uri, StringValue(MediaType.mimeTypeMap[descriptor.mimeType]!!.name)),
                 Quad(oid, MeGraS.FILE_NAME.uri, StringValue(file.name)),
                 Quad(oid, MeGraS.CANONICAL_ID.uri, StringValue(canonical.id.id)),
-                Quad(oid, MeGraS.CANONICAL_MIME_TYPE.uri, StringValue(canonical.mimeType.mimeString))
+                Quad(oid, MeGraS.CANONICAL_MIME_TYPE.uri, StringValue(canonical.mimeType.mimeString)),
+                Quad(oid, MeGraS.BOUNDS.uri, StringValue(canonical.bounds.toString()))
             )
         )
 
@@ -243,7 +244,7 @@ object AddFileUtil {
         }
     }
 
-    private fun ptToMm(pt: Float): Float {
+    fun ptToMm(pt: Float): Float {
         return pt * 25.4f / 72;
     }
 }

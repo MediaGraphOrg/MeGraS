@@ -1,5 +1,6 @@
 package org.megras.segmentation.media
 
+import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.Segmentation
 import org.megras.segmentation.type.Time
 import java.io.InputStream
@@ -7,7 +8,7 @@ import java.io.InputStream
 
 object TextSegmenter {
 
-    fun segment(text: InputStream, segmentation: Segmentation): ByteArray? = try {
+    fun segment(text: InputStream, segmentation: Segmentation): SegmentationResult? = try {
         if (segmentation is Time) {
             val textBytes = text.readBytes()
 
@@ -19,7 +20,8 @@ object TextSegmenter {
                     return null
                 }
             }
-            textBytes.sliceArray(indices)
+            val segment = textBytes.sliceArray(indices)
+            SegmentationResult(segment, Bounds().addT(0, segment.size))
         }
         null
     } catch (e: Exception) {

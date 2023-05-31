@@ -5,6 +5,8 @@ import com.github.kokorin.jaffree.ffmpeg.*
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.megras.api.rest.RestErrorStatus
+import org.megras.data.fs.ObjectStoreResult
+import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
 import java.nio.channels.SeekableByteChannel
 import java.util.concurrent.TimeUnit
@@ -15,15 +17,15 @@ object AudioVideoSegmenter {
 
     private const val outputFormat = "webm"
 
-    fun segment(stream: SeekableByteChannel, segmentation: Segmentation): ByteArray? = try {
+    fun segment(storedObject: ObjectStoreResult, segmentation: Segmentation): SegmentationResult? = try {
         when (segmentation) {
-            is Rect -> segmentRect(stream, segmentation)
+            is Rect -> segmentRect(storedObject, segmentation)
             is TwoDimensionalSegmentation,
             is ThreeDimensionalSegmentation,
-            is ColorChannel -> segmentPerFrame(stream, segmentation)
-            is StreamChannel -> segmentChannel(stream, segmentation)
-            is Time -> segmentTime(stream, segmentation)
-            is Frequency -> segmentFrequency(stream, segmentation)
+            is ColorChannel -> segmentPerFrame(storedObject, segmentation)
+            is StreamChannel -> segmentChannel(storedObject, segmentation)
+            is Time -> segmentTime(storedObject, segmentation)
+            is Frequency -> segmentFrequency(storedObject, segmentation)
             else -> null
         }
     } catch (e: Exception) {
@@ -31,7 +33,8 @@ object AudioVideoSegmenter {
         null
     }
 
-    private fun segmentRect(stream: SeekableByteChannel, rect: Rect): ByteArray {
+    private fun segmentRect(storedObject: ObjectStoreResult, rect: Rect): SegmentationResult {
+        val stream = storedObject.byteChannel()
         if (!hasStreamType(stream, StreamType.VIDEO)) {
             throw RestErrorStatus.noVideo
         }
@@ -43,10 +46,14 @@ object AudioVideoSegmenter {
             .setOverwriteOutput(true)
             .addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))
             .execute()
-        return out.array()
+        return SegmentationResult(out.array(),
+            Bounds().addX(0, rect.width).addY(0, rect.height)
+                .addT(storedObject.descriptor.bounds.getMinT(), storedObject.descriptor.bounds.getMaxT())
+        )
     }
 
-    private fun segmentPerFrame(stream: SeekableByteChannel, segmentation: Segmentation): ByteArray {
+    private fun segmentPerFrame(storedObject: ObjectStoreResult, segmentation: Segmentation): SegmentationResult {
+        val stream = storedObject.byteChannel()
         if (!hasStreamType(stream, StreamType.VIDEO)) {
             throw RestErrorStatus.noVideo
         }
@@ -55,13 +62,38 @@ object AudioVideoSegmenter {
         val videoProbe = probe.first { s -> s.codecType == StreamType.VIDEO }
         val frameRate = videoProbe.rFrameRate.toInt()
 
-        return VideoShapeSegmenter(
+        val totalDuration = AtomicLong()
+        FFmpeg.atPath()
+            .addInput(ChannelInput.fromChannel(stream))
+            .addOutput(NullOutput())
+            .setProgressListener { progress -> totalDuration.set(progress.timeMillis) }
+            .execute()
+
+        val segment = VideoShapeSegmenter(
             stream,
             segmentation,
             frameRate,
             videoProbe.width,
             videoProbe.height
         ).execute()
+
+        val width = if (segmentation.bounds.hasX()) {
+            segmentation.bounds.getMaxX() - segmentation.bounds.getMinX()
+        } else {
+            videoProbe.width
+        }
+        val height = if (segmentation.bounds.hasY()) {
+            segmentation.bounds.getMaxY() - segmentation.bounds.getMinY()
+        } else {
+            videoProbe.height
+        }
+        val duration = if (segmentation.bounds.hasY()) {
+            segmentation.bounds.getMaxT() - segmentation.bounds.getMinT()
+        } else {
+            totalDuration.get()
+        }
+
+        return SegmentationResult(segment, Bounds().addX(0, width).addY(0, height).addT(0, duration))
     }
 
     /**
@@ -69,7 +101,8 @@ object AudioVideoSegmenter {
      * - selection is either "audio" or "video", then discard the other
      * - selection is indices of streams
      */
-    private fun segmentChannel(stream: SeekableByteChannel, channel: StreamChannel): ByteArray? {
+    private fun segmentChannel(storedObject: ObjectStoreResult, channel: StreamChannel): SegmentationResult? {
+        val stream = storedObject.byteChannel()
         val out = SeekableInMemoryByteChannel()
         val ffmpeg = FFmpeg
             .atPath()
@@ -105,10 +138,19 @@ object AudioVideoSegmenter {
 
         ffmpeg.addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat)).execute()
 
-        return out.array()
+        val bounds = Bounds()
+        val probe = probeStream(out)
+        val videoProbe = probe.firstOrNull { s -> s.codecType == StreamType.VIDEO }
+        if (videoProbe != null) {
+            bounds.addX(0, videoProbe.width).addY(0, videoProbe.height)
+        }
+        bounds.addT(0, storedObject.descriptor.bounds.getTDimension())
+
+        return SegmentationResult(out.array(), bounds)
     }
 
-    private fun segmentFrequency(stream: SeekableByteChannel, frequency: Frequency): ByteArray {
+    private fun segmentFrequency(storedObject: ObjectStoreResult, frequency: Frequency): SegmentationResult {
+        val stream = storedObject.byteChannel()
         if (!hasStreamType(stream, StreamType.AUDIO)) {
             throw RestErrorStatus.noAudio
         }
@@ -121,10 +163,11 @@ object AudioVideoSegmenter {
             .addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))
             .execute()
 
-        return out.array()
+        return SegmentationResult(out.array(), storedObject.descriptor.bounds)
     }
 
-    private fun segmentTime(stream: SeekableByteChannel, time: Time): ByteArray {
+    private fun segmentTime(storedObject: ObjectStoreResult, time: Time): SegmentationResult {
+        val stream = storedObject.byteChannel()
         val out = SeekableInMemoryByteChannel()
 
         val firstPoint = time.intervals.first().low
@@ -151,7 +194,9 @@ object AudioVideoSegmenter {
         ffmpeg.addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))
                 .execute()
 
-        return out.array()
+        val bounds = storedObject.descriptor.bounds
+        bounds.addT(0, time.bounds.getTDimension())
+        return SegmentationResult(out.array(), bounds)
     }
 
     private fun probeStream(stream: SeekableByteChannel): List<com.github.kokorin.jaffree.ffprobe.Stream> {

@@ -1,5 +1,6 @@
 package org.megras.segmentation.media
 
+import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
 import java.awt.AlphaComposite
 import java.awt.Color
@@ -12,14 +13,14 @@ import javax.imageio.ImageIO
 
 object ImageSegmenter {
 
-    fun segment(inputStream: InputStream, segmentation: Segmentation, imageType: Int = BufferedImage.TYPE_4BYTE_ABGR): ByteArray? {
+    fun segment(inputStream: InputStream, segmentation: Segmentation, imageType: Int = BufferedImage.TYPE_4BYTE_ABGR): SegmentationResult? {
         val image = ImageIO.read(inputStream)
-        val segmentedImage = segment(image, segmentation, imageType)
+        val segmentedImage = segment(image, segmentation, imageType) ?: return null
 
         val outputStream = ByteArrayOutputStream()
         ImageIO.write(segmentedImage, "PNG", outputStream)
 
-        return outputStream.toByteArray()
+        return SegmentationResult(outputStream.toByteArray(), Bounds().addX(0, segmentedImage.width).addY(0, segmentedImage.height))
     }
 
     fun segment(image: BufferedImage, segmentation: Segmentation, imageType: Int = BufferedImage.TYPE_4BYTE_ABGR): BufferedImage? =
@@ -116,7 +117,7 @@ object ImageSegmenter {
         return if (image.type != imageType) {
             val out = BufferedImage(image.width, image.height, imageType)
             val g = out.createGraphics()
-            g.drawImage(out, 0, 0, null)
+            g.drawImage(image, 0, 0, null)
             g.dispose()
             out
         } else {

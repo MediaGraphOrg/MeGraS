@@ -3,7 +3,6 @@ package org.megras.segmentation.type
 import org.apache.batik.ext.awt.geom.ExtendedPathIterator.*
 import org.apache.batik.parser.AWTPathProducer
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.SegmentationClass
 import org.megras.segmentation.SegmentationType
 import org.megras.util.extensions.equalsEpsilon
 import org.tinyspline.BSpline
@@ -12,7 +11,6 @@ import java.awt.Rectangle
 import java.awt.Shape
 import java.awt.geom.AffineTransform
 import java.awt.geom.Area
-import java.awt.geom.GeneralPath
 import java.awt.geom.Path2D
 import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
@@ -24,9 +22,6 @@ import kotlin.math.roundToInt
 
 abstract class TwoDimensionalSegmentation : Segmentation {
     abstract var shape: Shape
-
-    override val segmentationClass: SegmentationClass
-        get() = SegmentationClass.SPACE
 
     override fun equivalentTo(rhs: Segmentation): Boolean {
         if (rhs !is TwoDimensionalSegmentation) return false
@@ -309,7 +304,6 @@ class BSpline(private val points: List<Pair<Double, Double>>) : TwoDimensionalSe
 
 class ImageMask(private val mask: BufferedImage) : TwoDimensionalSegmentation() {
     override val segmentationType: SegmentationType = SegmentationType.MASK
-    override val segmentationClass: SegmentationClass = SegmentationClass.SPACE
     override lateinit var shape: Shape
     override lateinit var bounds: Bounds
 

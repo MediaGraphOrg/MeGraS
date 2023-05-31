@@ -4,7 +4,6 @@ import de.javagl.obj.Obj
 import de.javagl.obj.ObjWriter
 import de.sciss.shapeint.ShapeInterpolator
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.SegmentationClass
 import org.megras.segmentation.SegmentationType
 import org.megras.util.ObjUtil
 import java.awt.Shape
@@ -47,7 +46,6 @@ data class RotoscopePair(var time: Double, var space: TwoDimensionalSegmentation
 
 class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmentation(), RelativeSegmentation {
     override val segmentationType = SegmentationType.ROTOSCOPE
-    override val segmentationClass = SegmentationClass.SPACETIME
     override lateinit var bounds: Bounds
 
     override val isRelative = rotoscopeList.all { it.time in 0.0 .. 1.0 && (it.space is RelativeSegmentation && (it.space as RelativeSegmentation).isRelative) }
@@ -134,7 +132,6 @@ class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmen
 
 class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeSegmentation {
     override val segmentationType = SegmentationType.MESH
-    override val segmentationClass = SegmentationClass.SPACETIME
     override lateinit var bounds: Bounds
     override var isRelative = false
 
@@ -170,7 +167,6 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         val z = time.toFloat()
         val path = ObjUtil.slice(obj, z) ?: return null
 
-        val keepBounds = bounds
         return object: TwoDimensionalSegmentation() {
             override var shape: Shape = path
             override var bounds: Bounds = Bounds(path)

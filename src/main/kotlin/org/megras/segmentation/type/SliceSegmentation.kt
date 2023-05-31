@@ -1,13 +1,11 @@
 package org.megras.segmentation.type
 
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.SegmentationClass
 import org.megras.segmentation.SegmentationType
 import org.megras.util.ObjUtil
 
 class SliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Double, val above: Boolean) : Segmentation, PreprocessSegmentation {
     override val segmentationType = SegmentationType.SLICE
-    override var segmentationClass = SegmentationClass.SPACE
     override var bounds: Bounds = Bounds()
 
     override fun equivalentTo(rhs: Segmentation): Boolean {

@@ -1,14 +1,11 @@
 package org.megras.segmentation.type
 
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.SegmentationClass
 import org.megras.segmentation.SegmentationType
 
 data class Interval(val low: Double, val high: Double)
 
 abstract class OneDimensionalSegmentation(val intervals: List<Interval>) : Segmentation {
-    override val segmentationClass = SegmentationClass.TIME
-    override var bounds = Bounds(intervals.first().low, intervals.last().high)
 
     override fun equivalentTo(rhs: Segmentation): Boolean {
         if (rhs !is OneDimensionalSegmentation) return false

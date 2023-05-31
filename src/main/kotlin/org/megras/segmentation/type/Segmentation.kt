@@ -1,13 +1,11 @@
 package org.megras.segmentation.type
 
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.SegmentationClass
 import org.megras.segmentation.SegmentationType
 
 
 sealed interface Segmentation {
     val segmentationType: SegmentationType?
-    val segmentationClass: SegmentationClass
     var bounds: Bounds
 
     /**

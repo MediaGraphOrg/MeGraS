@@ -3,7 +3,6 @@ package org.megras.segmentation.type
 import org.davidmoten.hilbert.HilbertCurve
 import org.davidmoten.hilbert.SmallHilbertCurve
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.SegmentationClass
 import org.megras.segmentation.SegmentationType
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -12,7 +11,6 @@ import kotlin.math.roundToLong
 
 class Hilbert(val order: Int, var intervals: List<Interval>) : Segmentation, PreprocessSegmentation {
     override val segmentationType: SegmentationType = SegmentationType.HILBERT
-    override val segmentationClass: SegmentationClass = SegmentationClass.SPACE
     override var bounds = Bounds()
 
     private lateinit var hilbertCurve: SmallHilbertCurve

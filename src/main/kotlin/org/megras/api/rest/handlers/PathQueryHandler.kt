@@ -59,7 +59,11 @@ class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
             }
 
             results.addAll(step)
-            start = step.map { it.`object` }.toSet()
+            start = if (reverse) {
+                step.map { it.subject }.toSet()
+            } else {
+                step.map { it.`object` }.toSet()
+            }
 
 
         }

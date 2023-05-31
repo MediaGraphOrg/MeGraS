@@ -23,37 +23,37 @@ class Bounds {
 
     constructor(shape: Shape) {
         this.bounds = doubleArrayOf(
-            shape.bounds.minX.coerceAtLeast(0.0), shape.bounds.maxX.coerceAtLeast(0.0),
-            shape.bounds.minY.coerceAtLeast(0.0), shape.bounds.maxY.coerceAtLeast(0.0),
+            shape.bounds.minX, shape.bounds.maxX,
+            shape.bounds.minY, shape.bounds.maxY,
             Double.NaN, Double.NaN,
             Double.NaN, Double.NaN)
         dimensions = 2
     }
 
     fun addX(min: Number, max: Number): Bounds {
-        this.bounds[0] = min.toDouble().coerceAtLeast(0.0)
-        this.bounds[1] = max.toDouble().coerceAtLeast(0.0)
+        this.bounds[0] = min.toDouble()
+        this.bounds[1] = max.toDouble()
         dimensions++
         return this
     }
 
     fun addY(min: Number, max: Number): Bounds {
-        this.bounds[2] = min.toDouble().coerceAtLeast(0.0)
-        this.bounds[3] = max.toDouble().coerceAtLeast(0.0)
+        this.bounds[2] = min.toDouble()
+        this.bounds[3] = max.toDouble()
         dimensions++
         return this
     }
 
     fun addZ(min: Number, max: Number): Bounds {
-        this.bounds[4] = min.toDouble().coerceAtLeast(0.0)
-        this.bounds[5] = max.toDouble().coerceAtLeast(0.0)
+        this.bounds[4] = min.toDouble()
+        this.bounds[5] = max.toDouble()
         dimensions++
         return this
     }
 
     fun addT(min: Number, max: Number): Bounds {
-        this.bounds[6] = min.toDouble().coerceAtLeast(0.0)
-        this.bounds[7] = max.toDouble().coerceAtLeast(0.0)
+        this.bounds[6] = min.toDouble()
+        this.bounds[7] = max.toDouble()
         dimensions++
         return this
     }
@@ -98,7 +98,7 @@ class Bounds {
 
     fun hasT(): Boolean = !this.bounds[6].isNaN() && !this.bounds[7].isNaN()
 
-    fun isRelative(): Boolean = this.bounds.any { it > 1.0 }
+    fun isRelative(): Boolean = !this.bounds.any { it > 1.0 }
 
     fun getMinX(): Double = bounds[0]
 
@@ -108,15 +108,21 @@ class Bounds {
 
     fun getMaxY(): Double = bounds[3]
 
-    fun getMinT(): Double = bounds[4]
+    fun getMinZ(): Double = bounds[4]
 
-    fun getMaxT(): Double = bounds[5]
+    fun getMaxZ(): Double = bounds[5]
+
+    fun getMinT(): Double = bounds[6]
+
+    fun getMaxT(): Double = bounds[7]
 
     fun getXBounds(): DoubleArray = bounds.copyOfRange(0, 2)
 
     fun getYBounds(): DoubleArray = bounds.copyOfRange(2, 4)
 
-    fun getTBounds(): DoubleArray = bounds.copyOfRange(4, 6)
+    fun getZBounds(): DoubleArray = bounds.copyOfRange(4, 6)
+
+    fun getTBounds(): DoubleArray = bounds.copyOfRange(6, 8)
 
     fun getXDimension(): Double = bounds[1] - bounds[0]
 

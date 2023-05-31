@@ -46,8 +46,9 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         val lookInCache = ctx.queryParam("nocache") == null
 
         val storedObject = getStoredObjectInCache(documentId)
+        val mediaType = MediaType.mimeTypeMap[storedObject.descriptor.mimeType] ?: throw RestErrorStatus.unknownMediaType
 
-        var segmentation = SegmentationUtil.parseSegmentation(segmentType, segmentDefinition) ?: throw RestErrorStatus.invalidSegmentation
+        var segmentation = SegmentationUtil.parseSegmentation(segmentType, segmentDefinition, mediaType) ?: throw RestErrorStatus.invalidSegmentation
         val currentPaths = mutableListOf("$documentId/${segmentation.toURI()}")
 
         if (segmentation is PreprocessSegmentation) {
@@ -147,14 +148,14 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
             }
         }
 
-        val segmentResult: SegmentationResult = when(MediaType.mimeTypeMap[storedObject.descriptor.mimeType]) {
+        val segmentResult: SegmentationResult = when(mediaType) {
             MediaType.TEXT -> TextSegmenter.segment(storedObject.inputStream(), segmentation)
             MediaType.IMAGE -> ImageSegmenter.segment(storedObject.inputStream(), segmentation)
             MediaType.AUDIO,
             MediaType.VIDEO -> AudioVideoSegmenter.segment(storedObject, segmentation)
             MediaType.DOCUMENT -> DocumentSegmenter.segment(storedObject.inputStream(), segmentation)
             MediaType.MESH -> MeshSegmenter.segment(storedObject.inputStream(), segmentation)
-            MediaType.UNKNOWN, null -> throw RestErrorStatus.unknownMediaType
+            MediaType.UNKNOWN -> throw RestErrorStatus.unknownMediaType
         } ?: throw RestErrorStatus.invalidSegmentation
 
         val inStream = ByteArrayInputStream(segmentResult.segment)

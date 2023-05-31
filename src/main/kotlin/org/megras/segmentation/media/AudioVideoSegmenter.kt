@@ -87,7 +87,7 @@ object AudioVideoSegmenter {
         } else {
             videoProbe.height
         }
-        val duration = if (segmentation.bounds.hasY()) {
+        val duration = if (segmentation.bounds.hasT()) {
             segmentation.bounds.getMaxT() - segmentation.bounds.getMinT()
         } else {
             totalDuration.get()

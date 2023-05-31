@@ -122,7 +122,27 @@ class Bounds {
 
     fun getYDimension(): Double = bounds[3] - bounds[2]
 
-    fun getTDimension(): Double = bounds[5] - bounds[4]
+    fun getZDimension(): Double = bounds[5] - bounds[4]
+
+    fun getTDimension(): Double = bounds[7] - bounds[6]
+
+    /**
+     * converts a 3D spatial bound (x,y,z) to a temporal one (x,y,t)
+     */
+    fun toTemporal() {
+        this.addT(this.bounds[4], this.bounds[5])
+        this.bounds[4] = Double.NaN
+        this.bounds[5] = Double.NaN
+    }
+
+    /**
+     * converts a 3D spatial bound (x,y,z) to a temporal one (x,y,t)
+     */
+    fun toSpatial() {
+        this.addZ(this.bounds[6], this.bounds[7])
+        this.bounds[6] = Double.NaN
+        this.bounds[7] = Double.NaN
+    }
 
     override fun toString() = bounds.map { if (it.isNaN()) {"-"} else {it} }.joinToString(",")
     override fun hashCode(): Int {

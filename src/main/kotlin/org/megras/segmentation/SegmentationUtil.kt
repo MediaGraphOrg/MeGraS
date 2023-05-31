@@ -1,6 +1,7 @@
 package org.megras.segmentation
 
 import de.javagl.obj.ObjReader
+import org.megras.data.model.MediaType
 import org.megras.segmentation.type.*
 import java.io.ByteArrayInputStream
 import java.util.*
@@ -20,7 +21,7 @@ object SegmentationUtil {
             null //not found
         }
 
-    fun parseSegmentation(segmentType: String, segmentDefinition: String): Segmentation? {
+    fun parseSegmentation(segmentType: String, segmentDefinition: String, mediaType: MediaType? = null): Segmentation? {
 
         val type = parseSegmentationType(segmentType)
         return when (type) {
@@ -188,7 +189,11 @@ object SegmentationUtil {
                 try {
                     val objDescription = segmentDefinition.replace(",", "\n")
                     val obj = ObjReader.read(objDescription.byteInputStream())
-                    MeshBody(obj)
+                    val segment = MeshBody(obj)
+                    if (mediaType != null && mediaType == MediaType.VIDEO) {
+                        segment.bounds.toTemporal()
+                    }
+                    segment
                 } catch (e: Exception) {
                     null
                 }

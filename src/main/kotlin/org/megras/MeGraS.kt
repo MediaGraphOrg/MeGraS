@@ -23,12 +23,10 @@ object MeGraS {
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 
-        //val tsvSet = TSVMutableQuadSet("quads.tsv", false)
-
         val postgresStore = PostgresStore()
         val cottontailStore = CottontailStore()
 
-        val quadSet = HybridMutableQuadSet(postgresStore, cottontailStore) //TSVMutableQuadSet(File("quads.tsv"))
+        val quadSet = HybridMutableQuadSet(postgresStore, cottontailStore)
 
         postgresStore.setup()
         cottontailStore.setup()
@@ -41,7 +39,6 @@ object MeGraS {
 
         RestApi.stop()
 
-        //tsvSet.store()
 
     }
 

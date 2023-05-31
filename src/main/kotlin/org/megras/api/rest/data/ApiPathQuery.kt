@@ -1,3 +1,3 @@
 package org.megras.api.rest.data
 
-data class ApiPathQuery(val seeds: List<String?>?, val predicates: List<String?>?, val maxDepth: Int)
+data class ApiPathQuery(val seeds: List<String?>?, val predicates: List<String?>?, val maxDepth: Int, val reverse: Boolean = false)

@@ -224,6 +224,8 @@ object ObjUtil {
     }
 
     fun sortMesh(obj: Obj): Obj {
+        val obj = ObjUtils.triangulate(obj)
+
         // Collect vertices
         val vertices = mutableListOf<FloatTuple>()
         for (v in 0 until obj.numVertices) {

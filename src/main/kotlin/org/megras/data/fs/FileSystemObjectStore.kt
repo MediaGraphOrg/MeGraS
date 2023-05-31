@@ -57,7 +57,8 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
         val id = idFromStream(file.inputStream())
         val target = storageFile(id)
         if(target.exists()) {
-            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length())
+            // Bounds is not correct, but does not matter for current use case
+            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length(), Bounds())
         }
         return null
     }

@@ -68,7 +68,8 @@ class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val
                 val descriptor = StoredObjectDescriptor(
                     id,
                     MimeType.PNG,
-                    buf.size.toLong()
+                    buf.size.toLong(),
+                    objectStoreResult.descriptor.bounds
                 )
 
                 objectStore.store(inStream, descriptor)
@@ -83,6 +84,7 @@ class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val
             }
             MediaType.AUDIO -> TODO()
             MediaType.UNKNOWN -> TODO()
+            else -> TODO()
         }
 
 

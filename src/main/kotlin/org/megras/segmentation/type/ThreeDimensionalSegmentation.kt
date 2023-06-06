@@ -109,10 +109,11 @@ class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmen
         val t = (time - startFrame) / (endFrame - startFrame)
         val newShape = ShapeInterpolator().evaluate(startShape.shape, endShape.shape, t.toFloat())
 
+        val newBounds = bounds
         return object: TwoDimensionalSegmentation() {
             override val segmentationType = null
             override var shape: Shape = newShape
-            override var bounds: Bounds = Bounds(newShape)
+            override var bounds: Bounds = newBounds
             override fun getDefinition(): String = ""
         }
     }
@@ -170,9 +171,10 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         val z = time.toFloat()
         val path = ObjUtil.slice(obj, z) ?: return null
 
+        val newBounds = bounds
         return object: TwoDimensionalSegmentation() {
             override var shape: Shape = path
-            override var bounds: Bounds = Bounds(path)
+            override var bounds: Bounds = newBounds
             override val segmentationType = null
             override fun getDefinition(): String = ""
         }

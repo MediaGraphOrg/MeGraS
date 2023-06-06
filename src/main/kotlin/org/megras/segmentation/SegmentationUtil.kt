@@ -6,6 +6,7 @@ import org.megras.segmentation.type.*
 import java.io.ByteArrayInputStream
 import java.util.*
 import javax.imageio.ImageIO
+import kotlin.math.round
 
 object SegmentationUtil {
 
@@ -177,7 +178,7 @@ object SegmentationUtil {
 
                     val segmentation = parseSegmentation(segmentationType, segmentationDescription)
                     if (time != null && segmentation is TwoDimensionalSegmentation) {
-                        rotoscopeList.add(RotoscopePair(time * 1000, segmentation))
+                        rotoscopeList.add(RotoscopePair(round(time * 1000), segmentation))
                     } else {
                         return null
                     }

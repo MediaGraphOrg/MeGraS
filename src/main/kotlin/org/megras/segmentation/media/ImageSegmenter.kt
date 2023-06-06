@@ -88,7 +88,7 @@ object ImageSegmenter {
             val out = BufferedImage((xBounds[1] - xBounds[0]).toInt(), (yBounds[1] - yBounds[0]).toInt(), imageType)
             val g = out.createGraphics()
             g.clip(movedShape)
-            g.drawImage(image, -xBounds[0].toInt(), -yBounds[0].toInt(), null)
+            g.drawImage(image, -xBounds[0].toInt(), -(image.height - yBounds[1]).toInt(), null)
             g.dispose()
 
             out

@@ -2,6 +2,7 @@ package org.megras.graphstore
 
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
+import org.megras.data.graph.StringValue
 import org.megras.data.graph.VectorValue
 
 class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: MutableQuadSet) : MutableQuadSet {
@@ -29,7 +30,7 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = knn.nearestNeighbor(predicate, `object`, count, distance)
 
-    override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = base.textFilter(predicate, objectFilterText)
+    override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = knn.textFilter(predicate, objectFilterText)
 
     override val size: Int
         get() = base.size
@@ -43,13 +44,13 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
     override fun iterator(): MutableIterator<Quad> = base.iterator()
 
     override fun add(element: Quad): Boolean {
-        return base.add(element) or if(element.subject is VectorValue || element.`object` is VectorValue) {
+        return base.add(element) or if(element.subject is VectorValue || element.`object` is VectorValue || element.subject is StringValue || element.`object` is StringValue) {
             knn.add(element)
         } else false
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {
-        return base.addAll(elements) or knn.addAll(elements.filter { it.subject is VectorValue || it.`object` is VectorValue })
+        return base.addAll(elements) or knn.addAll(elements.filter { it.subject is VectorValue || it.`object` is VectorValue || it.subject is StringValue || it.`object` is StringValue})
     }
 
     override fun clear() {

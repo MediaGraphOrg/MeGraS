@@ -67,7 +67,7 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
             BasicQuadSet(set)
         } else {
             (objects ?: emptyList()).flatMapTo(set){ quads ->
-                sIndex[quads].filter { sFilter(it) && pFilter(it) }
+                oIndex[quads].filter { sFilter(it) && pFilter(it) }
             }
             BasicQuadSet(set)
         }
@@ -113,7 +113,7 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
         if (quads.addAll(elements)) {
             elements.groupBy { it.subject }.forEach { (qv, q) -> if(qv is URIValue) sIndex.putAll(qv, q) }
             elements.groupBy { it.predicate }.forEach { (qv, q) -> if(qv is URIValue) pIndex.putAll(qv, q) }
-            elements.groupBy { it.`object` }.forEach { (qv, q) -> if(qv is URIValue) oIndex.putAll(qv, q) }
+            elements.groupBy { it.`object` }.forEach { (qv, q) -> oIndex.putAll(qv, q) }
             System.gc()
             return true
         }

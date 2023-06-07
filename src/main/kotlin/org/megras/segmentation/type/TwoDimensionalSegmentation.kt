@@ -319,7 +319,7 @@ class ImageMask(private val mask: BufferedImage) : TwoDimensionalSegmentation() 
             xstart = Int.MAX_VALUE
             xend = 0
             for (x in 0 until mask.width) {
-                if (mask.getRGB(x, y) == Color.WHITE.rgb) {
+                if (Color(mask.getRGB(x, y)) == Color.WHITE) {
                     if (xstart == Int.MAX_VALUE) {
                         xstart = x
                         xend = x
@@ -337,6 +337,13 @@ class ImageMask(private val mask: BufferedImage) : TwoDimensionalSegmentation() 
                 area.add(Area(r))
             }
         }
+
+        // Flip the shape because it will get flipped back by the ImageSegmenter
+        val at = AffineTransform()
+        at.scale(1.0, -1.0)
+        at.translate(0.0, (-mask.height).toDouble())
+        area.transform(at)
+
         shape = area
         bounds = Bounds(shape)
     }

@@ -1,8 +1,7 @@
 package org.megras.api.rest
 
 import io.javalin.Javalin
-import io.javalin.apibuilder.ApiBuilder.get
-import io.javalin.apibuilder.ApiBuilder.post
+import io.javalin.apibuilder.ApiBuilder.*
 import io.javalin.http.HandlerType
 import io.javalin.http.Header
 import io.javalin.openapi.plugin.OpenApiPlugin
@@ -31,6 +30,7 @@ object RestApi {
         val aboutObjectRequestHandler = AboutObjectRequestHandler(quadSet, objectStore)
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
+        val addQuadRequestHandler = AddQuadRequestHandler(quadSet)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
         val subjectQueryHandler = SubjectQueryHandler(quadSet)
@@ -92,6 +92,7 @@ object RestApi {
             get("/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}", canonicalSegmentRequestHandler::get)
             get("/{objectId}/c/{segmentId}*", cachedSegmentRequestHandler::get)
             post("/add/file", addFileRequestHandler::post)
+            post("/add/quads", addQuadRequestHandler::post)
             post("/query/quads", basicQueryHandler::post)
             post("/query/text", textQueryHandler::post)
             post("/query/subject", subjectQueryHandler::post)

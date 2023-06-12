@@ -2,8 +2,6 @@ package org.megras.api.rest
 
 import io.javalin.Javalin
 import io.javalin.apibuilder.ApiBuilder.*
-import io.javalin.http.HandlerType
-import io.javalin.http.Header
 import io.javalin.openapi.plugin.OpenApiPlugin
 import io.javalin.openapi.plugin.OpenApiPluginConfiguration
 import io.javalin.openapi.plugin.swagger.SwaggerConfiguration
@@ -107,12 +105,6 @@ object RestApi {
         }.exception(Exception::class.java) { e, ctx ->
             e.printStackTrace()
         }.start(config.httpPort)
-
-        javalin?.before {
-            if (it.method() == HandlerType.OPTIONS) {
-                it.header("Origin")?.let { origin -> it.header(Header.ACCESS_CONTROL_ALLOW_ORIGIN, origin) };
-            }
-        }
     }
 
     fun stop() {

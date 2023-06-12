@@ -26,4 +26,8 @@ interface ObjectStore {
     fun storageFile(id: StoredObjectId): File
 
     fun descriptorFile(id: StoredObjectId): File
+
+    fun remove(id: StoredObjectId): Boolean
+
+    fun removeAll(ids: Collection<StoredObjectId>): Boolean
 }

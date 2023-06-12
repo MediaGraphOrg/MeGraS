@@ -38,6 +38,7 @@ object RestApi {
         val objectQueryHandler = ObjectQueryHandler(quadSet)
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
+        val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
 
 
         javalin = Javalin.create {
@@ -98,6 +99,7 @@ object RestApi {
             post("/query/object", objectQueryHandler::post)
             post("/query/knn", knnQueryHandler::post)
             post("/query/path", pathQueryHandler::post)
+            delete("/<objectId>", deleteObjectRequestHandler::delete)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

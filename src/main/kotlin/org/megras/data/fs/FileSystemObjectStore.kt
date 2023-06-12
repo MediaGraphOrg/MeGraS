@@ -101,4 +101,13 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
 
     override fun descriptorFile(id: StoredObjectId): File = File(storageFile(id).parentFile, "${id}.meta")
 
+    override fun remove(id: StoredObjectId): Boolean {
+        val storageFile = storageFile(id)
+        val descriptorFile = descriptorFile(id)
+        return storageFile.delete() && descriptorFile.delete()
+    }
+
+    override fun removeAll(ids: Collection<StoredObjectId>): Boolean {
+        return ids.all { remove(it) }
+    }
 }

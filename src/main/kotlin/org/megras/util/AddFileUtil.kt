@@ -201,7 +201,7 @@ object AddFileUtil {
                     rawDescriptor.length,
                     Bounds().addT(0, buffer.size)
                 )
-                objectStore.store(textStream, descriptor)
+                objectStore.storeDescriptor(descriptor)
 
                 //return
                 descriptor
@@ -218,7 +218,8 @@ object AddFileUtil {
                     rawDescriptor.length,
                     Bounds().addX(0, ptToMm(page.mediaBox.width)).addY(0, ptToMm(page.mediaBox.height)).addT(0, pdf.numberOfPages)
                 )
-                objectStore.store(pdfStream, descriptor)
+                objectStore.storeDescriptor(descriptor)
+                pdf.close()
 
                 //return
                 descriptor
@@ -234,7 +235,7 @@ object AddFileUtil {
                     rawDescriptor.length,
                     bounds
                 )
-                objectStore.store(objStream, descriptor)
+                objectStore.storeDescriptor(descriptor)
 
                 //return
                 descriptor

@@ -126,8 +126,8 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
                 val parsedUri = URI(cleaned)
                 val host = parsedUri.host ?: ""
                 parsedUri.userInfo
-                val suffix = uri.substringAfter(host)
-                val prefix = uri.substringBefore(suffix)
+                val suffix = cleaned.substringAfter(host)
+                val prefix = cleaned.substringBefore(suffix)
                 prefix to suffix
             }catch (e: URISyntaxException) {
                 "" to cleaned

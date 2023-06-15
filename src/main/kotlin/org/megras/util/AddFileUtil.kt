@@ -139,6 +139,43 @@ object AddFileUtil {
             MimeType.WAV,
             MimeType.WAX,
             MimeType.WMA,
+            MimeType.WEBM_A -> {
+                try {
+                    val audioStream = objectStore.get(rawDescriptor.id)!!.byteChannel()
+                    val outStream = SeekableInMemoryByteChannel()
+                    val durationMillis = AtomicLong()
+
+                    FFmpeg.atPath()
+                        .addInput(ChannelInput.fromChannel(audioStream))
+                        .setProgressListener { progress -> durationMillis.set(progress.timeMillis) }
+                        .addArguments("-c:a", "libvorbis")
+                        .setOverwriteOutput(true)
+                        .addOutput(ChannelOutput.toChannel("", outStream).setFormat("webm"))
+                        .execute()
+
+                    val buf = outStream.array()
+                    val inStream = ByteArrayInputStream(buf)
+                    val id = objectStore.idFromStream(inStream)
+
+                    inStream.reset()
+
+                    val descriptor = StoredObjectDescriptor(
+                        id,
+                        MimeType.WEBM_A,
+                        buf.size.toLong(),
+                        Bounds().addT(0, durationMillis.get())
+                    )
+                    objectStore.store(inStream, descriptor)
+
+                    //return
+                    descriptor
+
+                } catch (e: Exception) {
+                    //TODO log
+                    rawDescriptor
+                }
+            }
+
             MimeType.MKV,
             MimeType.WEBM,
             MimeType.MOV,

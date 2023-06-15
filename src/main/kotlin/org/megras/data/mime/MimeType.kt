@@ -34,6 +34,7 @@ enum class MimeType(val mimeString: String) {
     WAV("audio/x-wav"),
     WAX("audio/x-ms-wax"),
     WMA("audio/x-ms-wma"),
+    WEBM_A("audio/webm"),
 
     //video
     MOV("video/quicktime"),

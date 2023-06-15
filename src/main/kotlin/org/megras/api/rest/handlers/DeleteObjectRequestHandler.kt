@@ -8,6 +8,7 @@ import org.megras.data.fs.StoredObjectId
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.schema.MeGraS
+import org.megras.data.schema.SchemaOrg
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
@@ -22,7 +23,10 @@ class DeleteObjectRequestHandler(private val quads: MutableQuadSet, private val 
 
         val objectId = ObjectId(ctx.pathParam("objectId"))
 
-        val relevant = recursiveSearch(objectId)
+        var relevant = recursiveSearch(objectId)
+
+        val uris = relevant.map { it.subject }.toSet()
+        relevant += quads.filter(null, setOf(SchemaOrg.SAME_AS.uri), uris)
 
         val fileIds = relevant.filter(
             null,

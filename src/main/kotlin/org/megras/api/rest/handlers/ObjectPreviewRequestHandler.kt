@@ -27,6 +27,7 @@ import org.megras.id.ObjectId
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
@@ -92,13 +93,28 @@ class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val
                     .addOutput(ChannelOutput.toChannel("thumbnail.png", out))
                     .execute()
 
-                val inStream = storeImagePreview(objectId, out.array(), objectStoreResult)
+                val playIcon = ImageIO.read(File("play_icon.png"))
+                val imageStream = ByteArrayInputStream(out.array())
+                val image = ImageIO.read(imageStream)
+                val g = image.createGraphics()
+                val w = (image.width - 100) / 2
+                val h = (image.height - 100) / 2
+                g.drawImage(playIcon, w, h, null)
+                g.dispose()
+
+                val inStream = storeImagePreview(objectId, image, objectStoreResult)
 
                 ctx.header("Cache-Control", "max-age=31622400")
                 ctx.writeSeekableStream(inStream, MimeType.PNG.mimeString)
             }
 
-            MediaType.AUDIO -> TODO()
+            MediaType.AUDIO -> {
+                val audioIcon = ImageIO.read(File("audio_icon.png"))
+
+                val inStream = storeImagePreview(objectId, audioIcon, objectStoreResult)
+                ctx.header("Cache-Control", "max-age=31622400")
+                ctx.writeSeekableStream(inStream, MimeType.PNG.mimeString)
+            }
 
             MediaType.DOCUMENT -> {
                 val pdfStream = objectStoreResult.inputStream()

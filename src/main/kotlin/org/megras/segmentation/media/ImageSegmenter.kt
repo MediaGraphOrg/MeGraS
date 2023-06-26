@@ -2,6 +2,7 @@ package org.megras.segmentation.media
 
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
+import org.slf4j.LoggerFactory
 import java.awt.AlphaComposite
 import java.awt.Color
 import java.awt.geom.AffineTransform
@@ -12,6 +13,8 @@ import javax.imageio.ImageIO
 
 
 object ImageSegmenter {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     fun segment(inputStream: InputStream, segmentation: Segmentation, imageType: Int = BufferedImage.TYPE_4BYTE_ABGR): SegmentationResult? {
         val image = ImageIO.read(inputStream)
@@ -29,7 +32,10 @@ object ImageSegmenter {
             is Height -> segmentHeight(image, segmentation, imageType)
             is TwoDimensionalSegmentation -> segmentShape(image, segmentation, imageType)
             is ColorChannel -> segmentColor(image, segmentation, imageType)
-            else -> null
+            else -> {
+                logger.warn("Segmentation type '${segmentation.getType()}' not applicable to images")
+                null
+            }
         }
 
     private fun segmentWidth(image: BufferedImage, segmentation: Width, imageType: Int): BufferedImage? {
@@ -47,7 +53,7 @@ object ImageSegmenter {
 
             out
         } catch (e: Exception) {
-            //TODO log
+            logger.error("Error while segmenting image width: ${e.localizedMessage}")
             null
         }
     }
@@ -69,7 +75,7 @@ object ImageSegmenter {
 
             out
         } catch (e: Exception) {
-            //TODO log
+            logger.error("Error while segmenting image height: ${e.localizedMessage}")
             null
         }
     }
@@ -93,7 +99,7 @@ object ImageSegmenter {
 
             out
         } catch (e: Exception) {
-            //TODO log
+            logger.error("Error while segmenting image shape: ${e.localizedMessage}")
             null
         }
     }

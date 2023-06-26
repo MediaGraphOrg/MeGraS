@@ -8,6 +8,7 @@ import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.ObjectStoreResult
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
+import org.slf4j.LoggerFactory
 import java.nio.channels.SeekableByteChannel
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -16,6 +17,8 @@ import java.util.concurrent.atomic.AtomicLong
 object AudioVideoSegmenter {
 
     private const val outputFormat = "webm"
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     fun segment(storedObject: ObjectStoreResult, segmentation: Segmentation): SegmentationResult? = try {
         when (segmentation) {
@@ -26,10 +29,13 @@ object AudioVideoSegmenter {
             is StreamChannel -> segmentChannel(storedObject, segmentation)
             is Time -> segmentTime(storedObject, segmentation)
             is Frequency -> segmentFrequency(storedObject, segmentation)
-            else -> null
+            else -> {
+                logger.warn("Segmentation type '${segmentation.getType()}' not applicable to audio/video")
+                null
+            }
         }
     } catch (e: Exception) {
-        //TODO log
+        logger.error("Error while segmenting audio/video: ${e.localizedMessage}")
         null
     }
 

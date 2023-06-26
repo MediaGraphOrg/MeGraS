@@ -5,19 +5,25 @@ import org.megras.segmentation.type.SliceSegmentation
 import org.megras.segmentation.type.Segmentation
 import org.megras.segmentation.SegmentationType
 import org.megras.util.ObjUtil
+import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
 
 object MeshSegmenter {
 
+    private val logger = LoggerFactory.getLogger(this.javaClass)
+
     fun segment(inputStream: InputStream, segmentation: Segmentation): SegmentationResult? = try {
         when(segmentation.segmentationType) {
             SegmentationType.SLICE -> slice(inputStream, segmentation as SliceSegmentation)
-            else -> null
+            else -> {
+                logger.warn("Segmentation type '${segmentation.getType()}' not applicable to 3D mesh")
+                null
+            }
         }
     } catch (e: Exception) {
-        //TODO log
+        logger.error("Error while segmenting 3D mesh: ${e.localizedMessage}")
         null
     }
 

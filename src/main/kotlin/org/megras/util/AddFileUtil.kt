@@ -18,6 +18,7 @@ import org.megras.graphstore.MutableQuadSet
 import org.megras.id.IdUtil
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
+import org.slf4j.LoggerFactory
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -28,6 +29,8 @@ import kotlin.math.min
 
 
 object AddFileUtil {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     fun addFile(objectStore: FileSystemObjectStore, quads: MutableQuadSet, file: PseudoFile): ObjectId {
 
@@ -123,7 +126,7 @@ object AddFileUtil {
                     descriptor
 
                 } catch (e: Exception) {
-                    //TODO log
+                    logger.error("Error while creating canonical representation for ${rawDescriptor.mimeType}: ${e.localizedMessage}")
                     rawDescriptor
                 }
             }
@@ -171,7 +174,7 @@ object AddFileUtil {
                     descriptor
 
                 } catch (e: Exception) {
-                    //TODO log
+                    logger.error("Error while creating canonical representation for ${rawDescriptor.mimeType}: ${e.localizedMessage}")
                     rawDescriptor
                 }
             }
@@ -217,7 +220,7 @@ object AddFileUtil {
                     descriptor
 
                 } catch (e: Exception) {
-                    //TODO log
+                    logger.error("Error while creating canonical representation for ${rawDescriptor.mimeType}: ${e.localizedMessage}")
                     rawDescriptor
                 }
             }

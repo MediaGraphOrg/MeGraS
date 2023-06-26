@@ -91,6 +91,9 @@ dependencies {
 
     implementation 'de.sciss:shapeinterpolator:0.1.0'
 
+    /* Evaluate equations */
+    implementation 'com.ezylang:EvalEx:3.0.5'
+
     /* CSV */
     implementation group: 'com.github.doyaaaaaken', name: 'kotlin-csv-jvm', version: '1.9.0'
 

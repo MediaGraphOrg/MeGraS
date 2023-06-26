@@ -1,5 +1,6 @@
 package org.megras.util
 
+import com.ezylang.evalex.Expression
 import de.javagl.obj.*
 import org.megras.api.rest.RestErrorStatus
 import org.megras.segmentation.Bounds
@@ -149,10 +150,10 @@ object ObjUtil {
     }
 
     fun segmentSlice(obj: Obj, s: SliceSegmentation): Obj {
-        return this.segmentSlice(obj, s.a, s.b, s.c, s.d, s.above)
+        return this.segmentSlice(obj, s.expression, s.above)
     }
 
-    fun segmentSlice(obj: Obj, a: Double, b: Double, c: Double, d: Double, above: Boolean): Obj {
+    fun segmentSlice(obj: Obj, expression: Expression, above: Boolean): Obj {
         val segmentedObj = Objs.create()
         (0 until obj.numVertices).forEach { v -> segmentedObj.addVertex(obj.getVertex(v)) }
 
@@ -167,18 +168,17 @@ object ObjUtil {
                 val v1 = obj.getVertex(face.getVertexIndex(v))
                 val v2 = obj.getVertex(face.getVertexIndex((v + 1) % face.numVertices))
 
-                val d1 = (a * v1.x + b * v1.y + c * v1.z + d).toFloat()
-                val d2 = (a * v2.x + b * v2.y + c * v2.z + d).toFloat()
+                val d1 = expression.with("x", v1.x).with("y", v1.y).with("z", v1.z).evaluate().numberValue.toFloat()
+                val d2 = expression.with("x", v2.x).with("y", v2.y).with("z", v2.z).evaluate().numberValue.toFloat()
 
-                if (d1 > 0 == above) {
+                if (d1 >= 0 == above) {
                     keepVertices.add(face.getVertexIndex(v))
                 }
                 if (d1 == 0F) {
-                    keepVertices.add(face.getVertexIndex(v))
                     coverVertices.add(face.getVertexIndex(v))
                 }
 
-                if (d1 * d2 < 0) {
+                if (d1 * d2 <= 0) {
                     val t = -d1 / (d2 - d1)
                     val x = v1.x + t * (v2.x - v1.x)
                     val y = v1.y + t * (v2.y - v1.y)

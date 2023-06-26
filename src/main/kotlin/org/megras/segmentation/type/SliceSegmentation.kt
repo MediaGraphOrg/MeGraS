@@ -1,23 +1,28 @@
 package org.megras.segmentation.type
 
+import com.ezylang.evalex.Expression
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationType
 import org.megras.util.ObjUtil
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.File
+import java.math.BigDecimal
+import javax.imageio.ImageIO
 
-class SliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Double, val above: Boolean) : Segmentation, PreprocessSegmentation {
+abstract class SliceSegmentation : Segmentation, PreprocessSegmentation {
     override val segmentationType = SegmentationType.SLICE
     override var bounds: Bounds = Bounds()
 
+    abstract val expression: Expression
+    abstract val above: Boolean
+
     override fun equivalentTo(rhs: Segmentation): Boolean {
         return rhs is SliceSegmentation &&
-                this.a == rhs.a && this.b == rhs.b && this.c == rhs.c && this.d == rhs.d && this.above == rhs.above
+                this.expression == rhs.expression && this.above == rhs.above
     }
 
-    override fun contains(rhs: Segmentation): Boolean {
-        if (rhs !is SliceSegmentation) return false
-        return this.a == rhs.a && this.b == rhs.b && this.c == rhs.c && this.above == rhs.above &&
-                ((above && rhs.d <= this.d) || (!above && this.d <= rhs.d))
-    }
+    override fun contains(rhs: Segmentation): Boolean = false
 
     override fun contains(rhs: Bounds): Boolean = true
 
@@ -27,7 +32,7 @@ class SliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Doub
 
     override fun preprocess(bounds: Bounds): Segmentation? =
         if (bounds.hasX() && bounds.hasY()) {
-            if (bounds.hasT()) {
+            if (bounds.hasT() || bounds.hasZ()) {
                 toMeshBody(bounds)
             } else {
                 toShape(bounds)
@@ -36,7 +41,29 @@ class SliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Doub
             null
         }
 
-    private fun toShape(bounds: Bounds): TwoDimensionalSegmentation {
+    abstract fun toShape(bounds: Bounds): TwoDimensionalSegmentation
+
+    private fun toMeshBody(bounds: Bounds): ThreeDimensionalSegmentation {
+        val obj = ObjUtil.generateCuboid(
+            bounds.getMinX().toFloat(), bounds.getMaxX().toFloat(),
+            bounds.getMinY().toFloat(), bounds.getMaxY().toFloat(),
+            bounds.getMinT().toFloat(), bounds.getMaxT().toFloat()
+        )
+        val segmentedObj = ObjUtil.segmentSlice(obj, expression, above)
+        return MeshBody(segmentedObj)
+    }
+
+    override fun getDefinition(): String = expression.expressionString + if (above) "above" else "below"
+}
+
+class LinearSliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Double, override val above: Boolean) : SliceSegmentation() {
+    override val expression = if (d == 0.0) {
+        Expression("${a}*x + ${b}*y + ${c}")
+    } else {
+        Expression("${a}*x + ${b}*y + ${c}*z + ${d}")
+    }
+
+    override fun toShape(bounds: Bounds): TwoDimensionalSegmentation {
         val minX = bounds.getMinX()
         val maxX = bounds.getXDimension() + minX
         val minY = bounds.getMinY()
@@ -86,16 +113,24 @@ class SliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Doub
 
         return x to y
     }
+}
 
-    private fun toMeshBody(bounds: Bounds): ThreeDimensionalSegmentation {
-        val obj = ObjUtil.generateCuboid(
-            bounds.getMinX().toFloat(), bounds.getMaxX().toFloat(),
-            bounds.getMinY().toFloat(), bounds.getMaxY().toFloat(),
-            bounds.getMinT().toFloat(), bounds.getMaxT().toFloat()
-        )
-        val segmentedObj = ObjUtil.segmentSlice(obj, a, b, c, d, above)
-        return MeshBody(segmentedObj)
+class ExpressionSliceSegmentation(override val expression: Expression, override val above: Boolean) : SliceSegmentation() {
+    override fun toShape(bounds: Bounds): TwoDimensionalSegmentation {
+        val mask = BufferedImage(bounds.getXDimension().toInt(), bounds.getYDimension().toInt(), BufferedImage.TYPE_BYTE_BINARY)
+
+        for (x in 0 until mask.width) {
+            for (y in 0 until mask.height) {
+                val res = expression.with("x", x).with("y", y).evaluate()
+                val positive = res.numberValue >= BigDecimal.ZERO
+                if (positive == above) {
+                    mask.setRGB(x, mask.height - 1 - y, Color.WHITE.rgb)
+                } else {
+                    mask.setRGB(x, mask.height - 1 - y, Color.BLACK.rgb)
+                }
+            }
+        }
+        ImageIO.write(mask, "png", File("test.png"))
+        return ImageMask(mask)
     }
-
-    override fun getDefinition(): String = "$a,$b,$c,$d," + if (above) "1" else "0"
 }

@@ -1,5 +1,6 @@
 package org.megras.segmentation
 
+import com.ezylang.evalex.Expression
 import de.javagl.obj.ObjReader
 import org.megras.data.model.MediaType
 import org.megras.segmentation.type.*
@@ -151,15 +152,22 @@ object SegmentationUtil {
                 Height(intervals)
             }
 
+            /**
+             * variants:
+             * quadratic linear equation ax+by+c=0: a,b,c,above or below
+             * cubic linear equation ax+by+cz+d=0: a,b,c,d,above or below
+             * arbitrary expression: expression,above or below
+             */
             SegmentationType.SLICE -> {
-                val params = segmentDefinition.split(",").map {
-                    it.trim().toDoubleOrNull() ?: return null
-                }
-
-                when (params.size) {
-                    4 -> SliceSegmentation(params[0], params[1], 0.0, params[2], params[3] == 1.0)
-                    5 -> SliceSegmentation(params[0], params[1], params[2], params[3], params[4] == 1.0)
-                    else -> null
+                val parts = segmentDefinition.split(",")
+                if (parts.size == 2) {
+                    ExpressionSliceSegmentation(Expression(parts[0].trim()), parts[1] == "above")
+                } else {
+                    when (parts.size) {
+                        4 -> LinearSliceSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), 0.0, parts[3] == "above")
+                        5 -> LinearSliceSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), parts[3].toDouble(), parts[4] == "above")
+                        else -> null
+                    }
                 }
             }
 

@@ -21,7 +21,6 @@ abstract class OneDimensionalSegmentation(val intervals: List<Interval>) : Segme
                 this.intervals.any { i -> i.low <= j.low && j.high <= i.high }
             }
         }
-        // TODO: compare to ThreeDimensionalSegmentation
         return false
     }
 

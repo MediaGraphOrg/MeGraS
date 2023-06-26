@@ -146,24 +146,27 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
     }
 
     override fun contains(rhs: Bounds): Boolean {
-        val minX = rhs.getMinX()
-        val maxX = rhs.getMaxX()
-        val minY = rhs.getMinY()
-        val maxY = rhs.getMaxY()
-        val minT = rhs.getMinT()
-        val maxT = rhs.getMaxT()
-        if (minX.isNaN() || maxX.isNaN() || minY.isNaN() || maxY.isNaN() || minT.isNaN() || maxT.isNaN()) return false
+        val minX = rhs.getMinX().toFloat()
+        val maxX = rhs.getMaxX().toFloat()
+        val minY = rhs.getMinY().toFloat()
+        val maxY = rhs.getMaxY().toFloat()
+        val minZ = if (rhs.hasT()) {rhs.getMinT().toFloat()} else {rhs.getMinZ().toFloat()}
+        val maxZ = if (rhs.hasT()) {rhs.getMaxT().toFloat()} else {rhs.getMaxZ().toFloat()}
+        if (minX.isNaN() || maxX.isNaN() || minY.isNaN() || maxY.isNaN() || minZ.isNaN() || maxZ.isNaN()) return false
 
-        // TODO
-        return false
+        return ObjUtil.contains(obj, minX, maxX, minY, maxY, minZ, maxZ)
     }
 
     override fun translate(by: Bounds): Segmentation {
         val minX = by.getMinX().toFloat()
         val minY = by.getMinY().toFloat()
-        val minT = by.getMinT().toFloat()
+        val minZ = if (by.hasZ()) {
+            by.getMinZ().toFloat()
+        } else {
+            by.getMinT().toFloat()
+        }
 
-        val translatedObj = ObjUtil.translate(obj, minX, minY, minT)
+        val translatedObj = ObjUtil.translate(obj, minX, minY, minZ)
         return MeshBody(translatedObj)
     }
 
@@ -184,9 +187,13 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         if (bounds.dimensions < 3) return null
         val xFactor = bounds.getXDimension().toFloat()
         val yFactor = bounds.getYDimension().toFloat()
-        val tFactor = bounds.getTDimension().toFloat()
+        val zFactor = if (bounds.hasT()) {
+            bounds.getTDimension().toFloat()
+        } else {
+            bounds.getZDimension().toFloat()
+        }
 
-        val newObj = ObjUtil.scale(obj, xFactor, yFactor, tFactor)
+        val newObj = ObjUtil.scale(obj, xFactor, yFactor, zFactor)
         return MeshBody(newObj)
     }
 

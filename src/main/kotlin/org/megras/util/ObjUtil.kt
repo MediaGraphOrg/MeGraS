@@ -261,6 +261,22 @@ object ObjUtil {
         return sortedObj
     }
 
+    fun contains(obj: Obj, minX: Float, maxX: Float, minY: Float, maxY: Float, minZ: Float, maxZ: Float): Boolean {
+        val res = BooleanArray(6) { false }
+
+        for (v in 0 until obj.numVertices) {
+            val vertex = obj.getVertex(v)
+            if (!res[0] && vertex.x <= minX) res[0] = true
+            if (!res[1] && vertex.x >= maxX) res[1] = true
+            if (!res[2] && vertex.y <= minY) res[2] = true
+            if (!res[3] && vertex.y <= maxY) res[3] = true
+            if (!res[4] && vertex.z <= minZ) res[4] = true
+            if (!res[5] && vertex.z <= maxZ) res[5] = true
+        }
+        // TODO: also check faces, not just vertices
+        return res.all { it }
+    }
+
     private class ObjVertexSorter(private val array: List<FloatTuple>) : Comparator<Int> {
         val sortedIndices = array.indices.sortedWith(this).toMutableList()
 

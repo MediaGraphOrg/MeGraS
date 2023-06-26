@@ -8,6 +8,7 @@ import com.github.kokorin.jaffree.ffmpeg.NullOutput
 import com.sksamuel.scrimage.ImmutableImage
 import io.javalin.http.Context
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
+import org.apache.commons.io.IOUtils
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
@@ -24,6 +25,7 @@ import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.MutableQuadSet
 import org.megras.id.ObjectId
+import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -62,10 +64,27 @@ class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val
         val mediaType = MediaType.mimeTypeMap[objectStoreResult.descriptor.mimeType] ?: MediaType.UNKNOWN
 
         when(mediaType) {
-            MediaType.TEXT -> TODO()
+            MediaType.TEXT -> {
+                val text = IOUtils.toString(objectStoreResult.inputStream())
+
+                val image = BufferedImage(200, 200, BufferedImage.TYPE_INT_ARGB)
+                val g = image.createGraphics()
+                g.color = Color.BLACK
+
+                var yOffset = 20
+                for (line in text.split("\n")) {
+                    g.drawString(line, 10, yOffset)
+                    yOffset += g.fontMetrics.height
+                }
+                g.dispose()
+
+                val inStream = storeImagePreview(objectId, image, objectStoreResult)
+
+                ctx.header("Cache-Control", "max-age=31622400")
+                ctx.writeSeekableStream(inStream, MimeType.PNG.mimeString)
+            }
 
             MediaType.IMAGE -> {
-
                 val buffered = ImmutableImage.loader().fromStream(objectStoreResult.inputStream()).max(200, 200).toNewBufferedImage(BufferedImage.TYPE_INT_ARGB) //TODO select appropriate type based on input image
 
                 val inStream = storeImagePreview(objectId, buffered, objectStoreResult)

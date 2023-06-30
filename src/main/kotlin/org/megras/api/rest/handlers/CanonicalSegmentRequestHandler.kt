@@ -7,10 +7,7 @@ import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.ObjectStoreResult
 import org.megras.data.fs.StoredObjectDescriptor
 import org.megras.data.fs.StoredObjectId
-import org.megras.data.graph.LocalQuadValue
-import org.megras.data.graph.Quad
-import org.megras.data.graph.QuadValue
-import org.megras.data.graph.StringValue
+import org.megras.data.graph.*
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.data.schema.SchemaOrg
@@ -130,19 +127,23 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
             return
         }
 
+        var previousOrthogonalSegmentation: Segmentation? = null
         if (segmentId != null) {
             val relevant = quads.filterSubject(LocalQuadValue(documentId))
             if (relevant.size > 0) {
                 val previousSegmentation = getSegmentationForCached(relevant, LocalQuadValue(documentId))
-                if (previousSegmentation != null && !previousSegmentation.orthogonalTo(segmentation)) {
-
-                    // if this segmentation is equivalent to previous, skip and redirect to it
-                    if (previousSegmentation.equivalentTo(segmentation.translate(previousSegmentation.bounds))) {
-                        currentPaths.forEach { currentPath ->
-                            quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, LocalQuadValue(documentId)))
+                if (previousSegmentation != null) {
+                    if (previousSegmentation.orthogonalTo(segmentation)) {
+                        previousOrthogonalSegmentation = previousSegmentation
+                    } else {
+                        // if this segmentation is equivalent to previous, skip and redirect to it
+                        if (previousSegmentation.equivalentTo(segmentation.translate(previousSegmentation.bounds))) {
+                            currentPaths.forEach { currentPath ->
+                                quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, LocalQuadValue(documentId)))
+                            }
+                            redirect(ctx, LocalQuadValue(objectId).uri, nextSegmentation)
+                            return
                         }
-                        redirect(ctx, LocalQuadValue(objectId).uri, nextSegmentation)
-                        return
                     }
                 }
             }
@@ -186,6 +187,23 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         )
         currentPaths.forEach { currentPath ->
             quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, cacheObject))
+        }
+        if (previousOrthogonalSegmentation != null) {
+            // the previous segmentation is orthogonal to this one, we can therefore store the result also with flipped segmentations
+            val parentQuad = quads.filter(listOf(LocalQuadValue(documentId)), listOf(MeGraS.SEGMENT_OF.uri), null).firstOrNull()
+            if (parentQuad != null) {
+                val parent = parentQuad.`object` as LocalQuadValue // objectId of the parent resource
+                val parentCacheId = HashUtil.hashToBase64(parent.uri + segmentation.toURI(), HashUtil.HashType.MD5)
+                val parentCacheObject = ObjectId("$objectId/c/$parentCacheId") // should already exist
+                quads.addAll(
+                    listOf(
+                        Quad(cacheObject, MeGraS.SEGMENT_OF.uri, parentCacheObject),
+                        Quad(cacheObject, MeGraS.SEGMENT_TYPE.uri, StringValue(previousOrthogonalSegmentation.getType())),
+                        Quad(cacheObject, MeGraS.SEGMENT_DEFINITION.uri, StringValue(previousOrthogonalSegmentation.getDefinition())),
+                        Quad(cacheObject, MeGraS.SEGMENT_BOUNDS.uri, StringValue(previousOrthogonalSegmentation.bounds.toString()))
+                    )
+                )
+            }
         }
 
         redirect(ctx, cacheObject.uri, nextSegmentation)

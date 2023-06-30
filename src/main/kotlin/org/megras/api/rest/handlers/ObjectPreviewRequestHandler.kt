@@ -1,10 +1,7 @@
 package org.megras.api.rest.handlers
 
 import com.github.kokorin.jaffree.StreamType
-import com.github.kokorin.jaffree.ffmpeg.ChannelInput
-import com.github.kokorin.jaffree.ffmpeg.ChannelOutput
-import com.github.kokorin.jaffree.ffmpeg.FFmpeg
-import com.github.kokorin.jaffree.ffmpeg.NullOutput
+import com.github.kokorin.jaffree.ffmpeg.*
 import com.sksamuel.scrimage.ImmutableImage
 import io.javalin.http.Context
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
@@ -27,12 +24,11 @@ import org.megras.graphstore.MutableQuadSet
 import org.megras.id.ObjectId
 import java.awt.Color
 import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.InputStream
+import java.io.*
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
+
 
 class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
     override fun get(ctx: Context) {
@@ -128,9 +124,46 @@ class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val
             }
 
             MediaType.AUDIO -> {
-                val audioIcon = ImageIO.read(File("audio_icon.png"))
+                val stream = objectStoreResult.byteChannel()
 
-                val inStream = storeImagePreview(objectId, audioIcon, objectStoreResult)
+                val out = ByteArrayOutputStream()
+                FFmpeg.atPath()
+                    .addInput(ChannelInput.fromChannel(stream).setDuration(5, TimeUnit.SECONDS))
+                    .setComplexFilter("compand,showwavespic=colors=white|white:size=200x200")
+                    .setOverwriteOutput(true)
+                    .addOutput(FrameOutput
+                        .withConsumer(
+                            object : FrameConsumer {
+                                override fun consumeStreams(streams: List<Stream?>?) {}
+
+                                override fun consume(frame: Frame?) {
+                                    if (frame == null) {
+                                        return
+                                    }
+                                    try {
+                                        ImageIO.write(frame.image, "png", out)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            }
+                        )
+                        .setFrameCount(StreamType.AUDIO, 1)
+                        .disableStream(StreamType.AUDIO)
+                    )
+                    .execute()
+
+                val byteData = out.toByteArray()
+                val imageStream = ByteArrayInputStream(byteData)
+                val waveForm = ImageIO.read(imageStream)
+                val image = BufferedImage(200, 100, BufferedImage.TYPE_INT_ARGB)
+                val g = image.createGraphics()
+                g.color = Color.WHITE
+                g.fillRect(0, 0, 200, 100)
+                g.drawImage(waveForm, 0, -50, null)
+                g.dispose()
+
+                val inStream = storeImagePreview(objectId, image, objectStoreResult)
                 ctx.header("Cache-Control", "max-age=31622400")
                 ctx.writeSeekableStream(inStream, MimeType.PNG.mimeString)
             }

@@ -110,7 +110,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
             }
 
             // check for equivalent segmentations
-            redirectPath = findEquivalentInCache(objectId, segmentation, currentPaths)
+            redirectPath = findEquivalentInCache(documentId, segmentation, currentPaths)
             if (redirectPath != null) {
                 redirect(ctx, redirectPath, nextSegmentation)
                 logger.info("found equivalent to ${currentPaths.first()} in cache: $redirectPath")

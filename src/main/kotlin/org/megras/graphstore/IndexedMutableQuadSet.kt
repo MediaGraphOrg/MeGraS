@@ -67,7 +67,7 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
             BasicQuadSet(set)
         } else {
             (objects ?: emptyList()).flatMapTo(set){ quads ->
-                sIndex[quads].filter { sFilter(it) && pFilter(it) }
+                oIndex[quads].filter { sFilter(it) && pFilter(it) }
             }
             BasicQuadSet(set)
         }

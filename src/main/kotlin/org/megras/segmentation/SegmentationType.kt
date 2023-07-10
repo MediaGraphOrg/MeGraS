@@ -46,10 +46,12 @@ enum class SegmentationType {
     FREQUENCY,
 
     /**
-     * slice of a 2D line / 3D plane specified as a,b,c,d,above
-     * such ax + by + cz = d and 'above' indicates which side of the line/plane to keep
+     * cut along a 2D line / 3D plane as 'a,b,c,d,above' or 'expression,above'
+     * - 'above' indicates which side of the line/plane to keep
+     * - ax + by + cz = d
+     * - expression using the variables 'x', 'y', and 'z'
      */
-    SLICE,
+    CUT,
 
     /**
      * space-time transition (rotoscoping) of an arbitrary shape

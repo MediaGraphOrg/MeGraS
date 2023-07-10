@@ -10,15 +10,15 @@ import java.io.File
 import java.math.BigDecimal
 import javax.imageio.ImageIO
 
-abstract class SliceSegmentation : Segmentation, PreprocessSegmentation {
-    override val segmentationType = SegmentationType.SLICE
+abstract class CutSegmentation : Segmentation, PreprocessSegmentation {
+    override val segmentationType = SegmentationType.CUT
     override var bounds: Bounds = Bounds()
 
     abstract val expression: Expression
     abstract val above: Boolean
 
     override fun equivalentTo(rhs: Segmentation): Boolean {
-        return rhs is SliceSegmentation &&
+        return rhs is CutSegmentation &&
                 this.expression == rhs.expression && this.above == rhs.above
     }
 
@@ -27,7 +27,7 @@ abstract class SliceSegmentation : Segmentation, PreprocessSegmentation {
     override fun contains(rhs: Bounds): Boolean = true
 
     override fun orthogonalTo(rhs: Segmentation): Boolean {
-        return rhs !is SliceSegmentation
+        return rhs !is CutSegmentation
     }
 
     override fun preprocess(bounds: Bounds): Segmentation? =
@@ -49,14 +49,14 @@ abstract class SliceSegmentation : Segmentation, PreprocessSegmentation {
             bounds.getMinY().toFloat(), bounds.getMaxY().toFloat(),
             bounds.getMinT().toFloat(), bounds.getMaxT().toFloat()
         )
-        val segmentedObj = ObjUtil.segmentSlice(obj, expression, above)
+        val segmentedObj = ObjUtil.segmentCut(obj, expression, above)
         return MeshBody(segmentedObj)
     }
 
     override fun getDefinition(): String = expression.expressionString + if (above) "above" else "below"
 }
 
-class LinearSliceSegmentation(val a: Double, val b: Double, val c: Double, val d: Double, override val above: Boolean) : SliceSegmentation() {
+class LinearCutSegmentation(val a: Double, val b: Double, val c: Double, val d: Double, override val above: Boolean) : CutSegmentation() {
     override val expression = if (d == 0.0) {
         Expression("${a}*x + ${b}*y + ${c}")
     } else {
@@ -115,7 +115,7 @@ class LinearSliceSegmentation(val a: Double, val b: Double, val c: Double, val d
     }
 }
 
-class ExpressionSliceSegmentation(override val expression: Expression, override val above: Boolean) : SliceSegmentation() {
+class GeneralCutSegmentation(override val expression: Expression, override val above: Boolean) : CutSegmentation() {
     override fun toShape(bounds: Bounds): TwoDimensionalSegmentation {
         val mask = BufferedImage(bounds.getXDimension().toInt(), bounds.getYDimension().toInt(), BufferedImage.TYPE_BYTE_BINARY)
 

@@ -1,7 +1,7 @@
 package org.megras.segmentation.media
 
 import de.javagl.obj.*
-import org.megras.segmentation.type.SliceSegmentation
+import org.megras.segmentation.type.CutSegmentation
 import org.megras.segmentation.type.Segmentation
 import org.megras.segmentation.SegmentationType
 import org.megras.util.ObjUtil
@@ -16,7 +16,7 @@ object MeshSegmenter {
 
     fun segment(inputStream: InputStream, segmentation: Segmentation): SegmentationResult? = try {
         when(segmentation.segmentationType) {
-            SegmentationType.SLICE -> slice(inputStream, segmentation as SliceSegmentation)
+            SegmentationType.CUT -> cut(inputStream, segmentation as CutSegmentation)
             else -> {
                 logger.warn("Segmentation type '${segmentation.getType()}' not applicable to 3D mesh")
                 null
@@ -27,10 +27,10 @@ object MeshSegmenter {
         null
     }
 
-    private fun slice(inputStream: InputStream, sliceSegmentation: SliceSegmentation): SegmentationResult {
+    private fun cut(inputStream: InputStream, cutSegmentation: CutSegmentation): SegmentationResult {
         val obj = ObjReader.read(inputStream)
 
-        val segmentedObj = ObjUtil.segmentSlice(obj, sliceSegmentation)
+        val segmentedObj = ObjUtil.segmentCut(obj, cutSegmentation)
 
         val out = ByteArrayOutputStream()
         ObjWriter.write(segmentedObj, out)

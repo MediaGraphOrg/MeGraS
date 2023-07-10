@@ -158,14 +158,14 @@ object SegmentationUtil {
              * cubic linear equation ax+by+cz+d=0: a,b,c,d,above or below
              * arbitrary expression: expression,above or below
              */
-            SegmentationType.SLICE -> {
+            SegmentationType.CUT -> {
                 val parts = segmentDefinition.split(",")
                 if (parts.size == 2) {
-                    ExpressionSliceSegmentation(Expression(parts[0].trim()), parts[1] == "above")
+                    GeneralCutSegmentation(Expression(parts[0].trim()), parts[1] == "above")
                 } else {
                     when (parts.size) {
-                        4 -> LinearSliceSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), 0.0, parts[3] == "above")
-                        5 -> LinearSliceSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), parts[3].toDouble(), parts[4] == "above")
+                        4 -> LinearCutSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), 0.0, parts[3] == "above")
+                        5 -> LinearCutSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), parts[3].toDouble(), parts[4] == "above")
                         else -> null
                     }
                 }

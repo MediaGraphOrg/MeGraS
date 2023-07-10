@@ -4,7 +4,7 @@ import com.ezylang.evalex.Expression
 import de.javagl.obj.*
 import org.megras.api.rest.RestErrorStatus
 import org.megras.segmentation.Bounds
-import org.megras.segmentation.type.SliceSegmentation
+import org.megras.segmentation.type.CutSegmentation
 import java.awt.geom.Path2D
 import java.util.*
 import kotlin.math.abs
@@ -149,11 +149,11 @@ object ObjUtil {
         return path
     }
 
-    fun segmentSlice(obj: Obj, s: SliceSegmentation): Obj {
-        return this.segmentSlice(obj, s.expression, s.above)
+    fun segmentCut(obj: Obj, s: CutSegmentation): Obj {
+        return this.segmentCut(obj, s.expression, s.above)
     }
 
-    fun segmentSlice(obj: Obj, expression: Expression, above: Boolean): Obj {
+    fun segmentCut(obj: Obj, expression: Expression, above: Boolean): Obj {
         val segmentedObj = Objs.create()
         (0 until obj.numVertices).forEach { v -> segmentedObj.addVertex(obj.getVertex(v)) }
 
@@ -248,12 +248,12 @@ object ObjUtil {
             }
             faces.add(newFaceIndices.toIntArray())
         }
-        faces.sortBy { it.sum() }
+        val sortedFaces = faces.sortedWith(compareBy({it[0]}, {it[1]}, {it[2]}))
 
         // Add the next vertices and faces to a new obj object
         val sortedObj = Objs.create()
         sorter.sortedIndices.forEach { i -> sortedObj.addVertex(vertices[i]) }
-        faces.forEach {face ->
+        sortedFaces.forEach {face ->
             val newFace = ObjFaces.create(face, null, null)
             sortedObj.addFace(newFace)
         }

@@ -10,6 +10,8 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import javax.imageio.ImageIO
+import kotlin.math.max
+import kotlin.math.min
 
 
 object ImageSegmenter {
@@ -97,7 +99,11 @@ object ImageSegmenter {
             g.drawImage(image, -xBounds[0].toInt(), -(image.height - yBounds[1]).toInt(), null)
             g.dispose()
 
-            out
+            if (xBounds[0] < 0 || yBounds[0] < 0 || xBounds[1] > image.width || yBounds[1] > image.height) {
+                trimTransparent(out)
+            } else {
+                out
+            }
         } catch (e: Exception) {
             logger.error("Error while segmenting image shape: ${e.localizedMessage}")
             null
@@ -129,5 +135,23 @@ object ImageSegmenter {
         } else {
             image
         }
+    }
+
+    private fun trimTransparent(image: BufferedImage): BufferedImage? {
+        var top = image.height / 2
+        var bottom = top
+        var left = image.width / 2
+        var right = left
+        for (x in 0 until image.width) {
+            for (y in 0 until image.height) {
+                if (image.getRGB(x, y) != 0) {
+                    top = min(top, y)
+                    bottom = max(bottom, y)
+                    left = min(left, x)
+                    right = max(right, x)
+                }
+            }
+        }
+        return image.getSubimage(left, top, right - left + 1, bottom - top + 1)
     }
 }

@@ -36,6 +36,7 @@ object RestApi {
         val objectQueryHandler = ObjectQueryHandler(quadSet)
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
+        val sparqlQueryHandler = SparqlQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
@@ -91,6 +92,7 @@ object RestApi {
             post("/query/object", objectQueryHandler::post)
             post("/query/knn", knnQueryHandler::post)
             post("/query/path", pathQueryHandler::post)
+            get("/query/sparql", sparqlQueryHandler::get)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

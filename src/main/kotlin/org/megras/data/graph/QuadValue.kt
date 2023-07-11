@@ -139,7 +139,9 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
     private constructor(pair: Pair<String, String>) : this(pair.first, pair.second)
     constructor(uri: String) : this(estimatePrefix(uri))
 
-    override fun toString() = "<${prefix}${uri}>"
+    val value: String
+        get() = "${prefix}${uri}"
+    override fun toString() = "<$value>"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

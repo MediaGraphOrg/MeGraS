@@ -57,6 +57,34 @@ abstract class TwoDimensionalSegmentation : Segmentation {
 
         return this.shape.contains(minX, minY, maxX - minX, maxY - minY)
     }
+
+    fun union(rhs: TwoDimensionalSegmentation): TwoDimensionalSegmentation? {
+        val area1 = Area(this.shape)
+        val area2 = Area(rhs.shape)
+        area1.add(area2)
+
+        val definition = StringBuilder()
+        val iter = area1.getPathIterator(null)
+        val coords = FloatArray(6)
+        while (!iter.isDone) {
+            when (iter.currentSegment(coords)) {
+                SEG_MOVETO -> definition.append("M${coords[0]},${coords[1]}")
+                SEG_LINETO -> definition.append("L${coords[0]},${coords[1]}")
+                SEG_QUADTO -> definition.append("Q${coords[0]},${coords[1]} ${coords[2]},${coords[3]}")
+                SEG_CUBICTO -> definition.append("C${coords[0]},${coords[1]} ${coords[2]},${coords[3]} ${coords[4]},${coords[5]}")
+                SEG_CLOSE -> definition.append("Z")
+            }
+            iter.next()
+        }
+        if (definition.isEmpty()) return null
+
+        return object: TwoDimensionalSegmentation() {
+            override val segmentationType = SegmentationType.PATH
+            override var shape: Shape = area1
+            override var bounds: Bounds = Bounds(area1.bounds)
+            override fun getDefinition(): String = definition.toString()
+        }
+    }
 }
 
 class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Double) : TwoDimensionalSegmentation(), RelativeSegmentation {
@@ -69,9 +97,12 @@ class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Doubl
 
     override val isRelative = xmin in 0.0..1.0 && xmax in 0.0..1.0 && ymin in 0.0..1.0 && ymax in 0.0..1.0
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.dimensions >= 2) {
-            return Rect(xmin + by.getMinX(), xmax + by.getMinX(), ymin + by.getMinY(), ymax + by.getMinY())
+            return when (plus) {
+                true -> Rect(xmin + by.getMinX(), xmax + by.getMinX(), ymin + by.getMinY(), ymax + by.getMinY())
+                false -> Rect(xmin - by.getMinX(), xmax - by.getMinX(), ymin - by.getMinY(), ymax - by.getMinY())
+            }
         }
         return this
     }
@@ -124,9 +155,12 @@ class Polygon(val points: List<Pair<Double, Double>>) : TwoDimensionalSegmentati
         }
     }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.dimensions >= 2) {
-            return Polygon(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+            return when (plus) {
+                true -> Polygon(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+                false -> Polygon(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
+            }
         }
         return this
     }
@@ -169,10 +203,13 @@ class SVGPath(override var shape: Shape) : TwoDimensionalSegmentation(), Relativ
 
     constructor(path: String) : this(AWTPathProducer.createShape(StringReader(path), 0))
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.dimensions >= 2) {
             val transform = AffineTransform()
-            transform.translate(by.getMinX(), by.getMinY())
+            when (plus) {
+                true -> transform.translate(by.getMinX(), by.getMinY())
+                false -> transform.translate(-by.getMinX(), -by.getMinY())
+            }
             return SVGPath(transform.createTransformedShape(shape))
         }
         return this
@@ -231,9 +268,12 @@ class BezierSpline(private val points: List<Pair<Double, Double>>) : TwoDimensio
         bounds = Bounds(shape)
     }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.dimensions >= 2) {
-            return BezierSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+            return when (plus) {
+                true -> BezierSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+                false -> BezierSpline(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
+            }
         }
         return this
     }
@@ -285,9 +325,12 @@ class BSpline(private val points: List<Pair<Double, Double>>) : TwoDimensionalSe
         bounds = Bounds(shape)
     }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.dimensions >= 2) {
-            return BSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+            return when (plus) {
+                true -> BSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+                false -> BSpline(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
+            }
         }
         return this
     }

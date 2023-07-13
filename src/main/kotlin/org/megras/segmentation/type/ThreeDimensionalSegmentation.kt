@@ -86,10 +86,13 @@ class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmen
         return this.rotoscopeList.first().time <= minT && this.rotoscopeList.last().time >= maxT && this.rotoscopeList.all { it.space.contains(rhs) }
     }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         when (by.dimensions) {
-            2 -> return Rotoscope(rotoscopeList.map { RotoscopePair(it.time, it.space.translate(by) as TwoDimensionalSegmentation) })
-            3 -> return Rotoscope(rotoscopeList.map { RotoscopePair(it.time + by.getMinT(), it.space.translate(by) as TwoDimensionalSegmentation) })
+            2 -> return Rotoscope(rotoscopeList.map { RotoscopePair(it.time, it.space.translate(by, plus) as TwoDimensionalSegmentation) })
+            3 -> return when (plus) {
+                true -> Rotoscope(rotoscopeList.map { RotoscopePair(it.time + by.getMinT(), it.space.translate(by, plus) as TwoDimensionalSegmentation) })
+                false -> Rotoscope(rotoscopeList.map { RotoscopePair(it.time - by.getMinT(), it.space.translate(by, plus) as TwoDimensionalSegmentation) })
+            }
         }
         return this
     }
@@ -157,7 +160,7 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         return ObjUtil.contains(obj, minX, maxX, minY, maxY, minZ, maxZ)
     }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         val minX = by.getMinX().toFloat()
         val minY = by.getMinY().toFloat()
         val minZ = if (by.hasZ()) {
@@ -166,7 +169,7 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
             by.getMinT().toFloat()
         }
 
-        val translatedObj = ObjUtil.translate(obj, minX, minY, minZ)
+        val translatedObj = ObjUtil.translate(obj, minX, minY, minZ, plus)
         return MeshBody(translatedObj)
     }
 

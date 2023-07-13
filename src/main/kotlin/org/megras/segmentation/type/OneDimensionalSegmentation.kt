@@ -58,9 +58,12 @@ open class TemporalSegmentation(override val segmentationType: SegmentationType?
 
     override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.hasT()) {
-            return TemporalSegmentation(segmentationType, intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
+            return when (plus) {
+                true -> TemporalSegmentation(segmentationType, intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
+                false -> TemporalSegmentation(segmentationType, intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
+            }
         }
         return this
     }
@@ -84,9 +87,12 @@ class Width(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), 
 
     override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.hasX()) {
-            return Width(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
+            return when (plus) {
+                true -> Width(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
+                false -> Width(intervals.map { Interval(it.low - by.getMinX(), it.high - by.getMinX()) })
+            }
         }
         return this
     }
@@ -104,9 +110,12 @@ class Height(intervals: List<Interval>) : OneDimensionalSegmentation(intervals),
 
     override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
 
-    override fun translate(by: Bounds): Segmentation {
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
         if (by.hasY()) {
-            return Height(intervals.map { Interval(it.low + by.getMinY(), it.high + by.getMinY()) })
+            return when (plus) {
+                true -> Height(intervals.map { Interval(it.low + by.getMinY(), it.high + by.getMinY()) })
+                false -> Height(intervals.map { Interval(it.low - by.getMinY(), it.high - by.getMinY()) })
+            }
         }
         return this
     }

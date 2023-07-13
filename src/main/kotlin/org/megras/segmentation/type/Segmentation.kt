@@ -33,7 +33,7 @@ sealed interface Segmentation {
         return this.bounds.orthogonalTo(rhs.bounds)
     }
 
-    fun translate(by: Bounds): Segmentation {
+    fun translate(by: Bounds, plus: Boolean = true): Segmentation {
         return this
     }
 

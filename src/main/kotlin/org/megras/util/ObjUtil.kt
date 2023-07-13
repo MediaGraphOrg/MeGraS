@@ -48,11 +48,14 @@ object ObjUtil {
             .addZ(b[4].toDouble(), b[5].toDouble())
     }
 
-    fun translate(obj: Obj, x: Float, y: Float, z: Float): Obj {
+    fun translate(obj: Obj, x: Float, y: Float, z: Float, plus: Boolean): Obj {
         val newObj = Objs.create()
         for (i in 0 until obj.numVertices) {
             val vertex = obj.getVertex(i)
-            newObj.addVertex(vertex.x + x, vertex.y + y, vertex.z + z)
+            when (plus) {
+                true -> newObj.addVertex(vertex.x + x, vertex.y + y, vertex.z + z)
+                false -> newObj.addVertex(vertex.x - x, vertex.y - y, vertex.z - z)
+            }
         }
         for (j in 0 until obj.numFaces) {
             val face = obj.getFace(j)

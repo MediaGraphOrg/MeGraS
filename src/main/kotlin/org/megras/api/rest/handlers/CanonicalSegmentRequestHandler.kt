@@ -14,11 +14,13 @@ import org.megras.data.schema.SchemaOrg
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
+import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationUtil
 import org.megras.segmentation.media.*
 import org.megras.segmentation.type.PreprocessSegmentation
 import org.megras.segmentation.type.RelativeSegmentation
 import org.megras.segmentation.type.Segmentation
+import org.megras.segmentation.type.TwoDimensionalSegmentation
 import org.megras.util.HashUtil
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
@@ -207,6 +209,79 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         }
 
         redirect(ctx, cacheObject.uri, nextSegmentation)
+    }
+
+    /**
+     * /{objectId}/segment/{segmentation}/{segmentDefinition}/and/{nextSegmentation}/{nextSegmentDefinition}"
+     */
+    fun intersection(ctx: Context) {
+        val objectId = ctx.pathParam("objectId")
+        val segmentId = ctx.pathParamMap()["segmentId"]
+        val documentId = objectId + (if (segmentId != null) {"/c/$segmentId"} else {""})
+        val segmentType1 = ctx.pathParam("segmentation1")
+        val segmentDefinition1 = ctx.pathParam("segmentDefinition1")
+        val segmentType2 = ctx.pathParam("segmentation2")
+        val segmentDefinition2 = ctx.pathParam("segmentDefinition2")
+
+        val storedObject = getStoredObjectInCache(documentId)
+        val mediaType = MediaType.mimeTypeMap[storedObject.descriptor.mimeType] ?: throw RestErrorStatus.unknownMediaType
+
+        val segmentation1 = prepareSegmentation(segmentType1, segmentDefinition1, mediaType, storedObject.descriptor.bounds) ?: throw RestErrorStatus.invalidSegmentation
+        var segmentation2 = prepareSegmentation(segmentType2, segmentDefinition2, mediaType, storedObject.descriptor.bounds) ?: throw RestErrorStatus.invalidSegmentation
+
+        if (segmentation1.orthogonalTo(segmentation2)) {
+            if (SegmentationUtil.shouldSwap(segmentation1.segmentationType, segmentation2.segmentationType)) {
+                ctx.redirect("/$documentId/${segmentation2.toURI()}/${segmentation1.toURI()}")
+            } else {
+                ctx.redirect("/$documentId/${segmentation1.toURI()}/${segmentation2.toURI()}")
+            }
+        } else {
+            segmentation2 = segmentation2.translate(segmentation1.bounds, plus = false)
+            ctx.redirect("/$documentId/${segmentation1.toURI()}/${segmentation2.toURI()}")
+        }
+    }
+
+    /**
+     * /{objectId}/segment/{segmentation}/{segmentDefinition}/or/{nextSegmentation}/{nextSegmentDefinition}"
+     */
+    fun union(ctx: Context) {
+        val objectId = ctx.pathParam("objectId")
+        val segmentId = ctx.pathParamMap()["segmentId"]
+        val documentId = objectId + (if (segmentId != null) {"/c/$segmentId"} else {""})
+        val segmentType1 = ctx.pathParam("segmentation1")
+        val segmentDefinition1 = ctx.pathParam("segmentDefinition1")
+        val segmentType2 = ctx.pathParam("segmentation2")
+        val segmentDefinition2 = ctx.pathParam("segmentDefinition2")
+
+        val storedObject = getStoredObjectInCache(documentId)
+        val mediaType = MediaType.mimeTypeMap[storedObject.descriptor.mimeType] ?: throw RestErrorStatus.unknownMediaType
+
+        val segmentation1 = prepareSegmentation(segmentType1, segmentDefinition1, mediaType, storedObject.descriptor.bounds) ?: throw RestErrorStatus.invalidSegmentation
+        val segmentation2 = prepareSegmentation(segmentType2, segmentDefinition2, mediaType, storedObject.descriptor.bounds) ?: throw RestErrorStatus.invalidSegmentation
+
+        if (segmentation1 is TwoDimensionalSegmentation && segmentation2 is TwoDimensionalSegmentation) {
+            val res = segmentation1.union(segmentation2)
+            if (res != null) {
+                ctx.redirect("/$documentId/${res.toURI()}")
+            } else {
+                throw RestErrorStatus.emptySegment
+            }
+        } else {
+            throw RestErrorStatus.invalidSegmentation
+        }
+    }
+
+    private fun prepareSegmentation(segmentType: String, segmentDefinition: String, mediaType: MediaType, objectBounds: Bounds): Segmentation? {
+        var segmentation = SegmentationUtil.parseSegmentation(segmentType, segmentDefinition, mediaType)
+
+        if (segmentation is PreprocessSegmentation) {
+            segmentation = segmentation.preprocess(objectBounds)
+        }
+
+        if (segmentation is RelativeSegmentation && segmentation.isRelative) {
+            segmentation = segmentation.toAbsolute(objectBounds)
+        }
+        return segmentation
     }
 
     private fun findPathInCache(currentPaths: List<String>): String? {

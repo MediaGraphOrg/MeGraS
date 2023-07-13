@@ -30,6 +30,7 @@ abstract class TwoDimensionalSegmentation : Segmentation {
     }
 
     override fun contains(rhs: Segmentation): Boolean {
+        if (rhs is ImageMask) return false // image mask cannot be translated back to original -> always contained
         if (!this.bounds.contains(rhs.bounds)) return false
         if (rhs is TwoDimensionalSegmentation) {
             val rhsArea = Area(rhs.shape)
@@ -389,6 +390,23 @@ class ImageMask(private val mask: BufferedImage) : TwoDimensionalSegmentation() 
 
         shape = area
         bounds = Bounds(shape)
+    }
+
+    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+        if (by.dimensions >= 2) {
+            val newMask = when (plus) {
+                true -> BufferedImage((mask.width + by.getMinX()).toInt(), (mask.height + by.getMinY()).toInt(), mask.type)
+                false -> BufferedImage(by.getXDimension().toInt(), by.getYDimension().toInt(), mask.type)
+            }
+            val g = newMask.createGraphics()
+            when (plus) {
+                true -> g.drawImage(mask, by.getMinX().toInt(), mask.height - by.getMaxY().toInt(), null)
+                false -> g.drawImage(mask, -by.getMinX().toInt(), -(mask.height - by.getMaxY()).toInt(), null)
+            }
+            g.dispose()
+            return ImageMask(newMask)
+        }
+        return this
     }
 
     override fun getDefinition(): String {

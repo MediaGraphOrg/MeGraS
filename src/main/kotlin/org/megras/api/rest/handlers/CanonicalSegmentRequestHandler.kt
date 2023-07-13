@@ -83,17 +83,17 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
                     return
                 }
             } else {
-                nextSegmentation = nextSegmentation.translate(segmentation.bounds)
+                val normalizedNextSegmentation = nextSegmentation.translate(segmentation.bounds)
 
                 // if two segmentations are equivalent, discard the second one
-                if (segmentation.equivalentTo(nextSegmentation)) {
+                if (segmentation.equivalentTo(normalizedNextSegmentation)) {
                     ctx.redirect("/${currentPaths.first()}" + (if (tail != null) "/$tail" else ""))
                     return
                 }
 
                 // if the first segmentation contains the second one, directly apply the second one
-                if (segmentation.contains(nextSegmentation)) {
-                    ctx.redirect("/$documentId/$nextSegmentation" + (if (tail != null) "/$tail" else ""))
+                if (segmentation.contains(normalizedNextSegmentation)) {
+                    ctx.redirect("/$documentId/${normalizedNextSegmentation.toURI()}" + (if (tail != null) "/$tail" else ""))
                     return
                 }
             }

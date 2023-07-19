@@ -39,6 +39,7 @@ class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
         val seeds = query.seeds?.mapNotNull { if (it != null) QuadValue.of(it) else null } ?: throw RestErrorStatus(400, "invalid query")
         val predicates = query.predicates?.mapNotNull { if (it != null) QuadValue.of(it) else null } ?: throw RestErrorStatus(400, "invalid query")
         val maxDepth = if(query.maxDepth > 0) query.maxDepth else Int.MAX_VALUE
+        val reverse = query.reverse
 
         val results = mutableSetOf<Quad>()
 
@@ -47,14 +48,22 @@ class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
         while (iteration++ < maxDepth) {
 
-            val step = quads.filter(start, predicates, null)
+            val step = if (reverse) {
+                quads.filter(null, predicates, start)
+            } else {
+                quads.filter(start, predicates, null)
+            }
 
             if (step.isEmpty()) {
                 break
             }
 
             results.addAll(step)
-            start = step.map { it.`object` }.toSet()
+            start = if (reverse) {
+                step.map { it.subject }.toSet()
+            } else {
+                step.map { it.`object` }.toSet()
+            }
 
 
         }

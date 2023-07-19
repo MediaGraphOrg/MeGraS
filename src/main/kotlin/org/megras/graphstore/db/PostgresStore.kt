@@ -1,5 +1,6 @@
 package org.megras.graphstore.db
 
+import com.google.common.cache.CacheBuilder
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -245,14 +246,31 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         return Quad(id, s, p, o)
     }
 
-    private fun getIds(ids: Collection<Long>): QuadSet { //TODO caching
+    private val idCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>()
+
+    private fun getIds(ids: Collection<Long>): QuadSet {
 
         if (ids.isEmpty()) {
             return BasicQuadSet()
         }
 
-        val quadIds = transaction {
-            QuadsTable.select { QuadsTable.id inList ids }.map {
+        val mutableIds = ids.toMutableSet()
+
+        val quadIds = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+
+        mutableIds.removeIf {
+            val cached = idCache.getIfPresent(it)
+            if (cached != null) {
+                quadIds.add(it to cached)
+                true
+            } else {
+                false
+            }
+        }
+
+        val lookUpQuadIds = transaction {
+            QuadsTable.slice(QuadsTable.id, QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o)
+                .select { QuadsTable.id inList ids }.map {
                 it[QuadsTable.id] to Triple(
                     (it[QuadsTable.sType] to it[QuadsTable.s]),
                     (it[QuadsTable.pType] to it[QuadsTable.p]),
@@ -260,6 +278,12 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
                 )
             }
         }
+
+        lookUpQuadIds.forEach {
+            idCache.put(it.first, it.second)
+        }
+
+        quadIds.addAll(lookUpQuadIds)
 
         val quadValueIds = quadIds.flatMap { listOf(it.second.first, it.second.second, it.second.third) }.toSet()
         val quadValues = getQuadValues(quadValueIds)

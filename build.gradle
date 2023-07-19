@@ -1,9 +1,10 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.7.20'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.7.20'
+    id 'org.jetbrains.kotlin.jvm' version '1.8.10'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.8.10'
     id 'java'
     id 'application'
-    id "org.jetbrains.kotlin.kapt" version "1.7.20"
+    id 'org.jetbrains.kotlin.kapt' version '1.8.10'
+    id 'antlr'
 }
 
 group 'org.megras'
@@ -35,6 +36,9 @@ dependencies {
     def grpcVersion = '1.49.2'
     def protobufVersion = '3.21.7'
     def exposedVersion = '0.40.1'
+//    def antlrVersion = '4.13.0'
+    def jenaVersion = '4.8.0'
+    def picnicVersion = '0.6.0'
 
     /* Javalin */
     implementation group: 'io.javalin', name: 'javalin', version: javalinVersion
@@ -65,6 +69,7 @@ dependencies {
     implementation group: 'org.jline', name: 'jline-terminal-jna', version: jlineVersion
     implementation group: 'org.jline', name: 'jline-reader', version: jlineVersion
     implementation group: 'org.jline', name: 'jline-builtins', version: jlineVersion
+    implementation group: 'com.jakewharton.picnic', name: 'picnic', version: picnicVersion
 
     /* CliKt */
     implementation group: 'com.github.ajalt', name: 'clikt', version: '2.8.0'
@@ -117,12 +122,38 @@ dependencies {
     implementation group: 'org.jetbrains.exposed', name: 'exposed-jdbc', version: exposedVersion
     implementation group: 'org.postgresql', name: 'postgresql', version: '42.2.2'
 
+//    /* Antlr4 */
+//    antlr group: 'org.antlr', name: 'antlr4', version: antlrVersion
+//    implementation group: 'org.antlr', name: 'antlr4-runtime', version: antlrVersion
 
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.7.22'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.0'
+    /* Jena */
+    implementation group: 'org.apache.jena', name: 'jena-core', version: jenaVersion
+    implementation group: 'org.apache.jena', name: 'jena-arq', version: jenaVersion
+
+
+
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
 }
+
+//generateGrammarSource {
+//    maxHeapSize = "64m"
+//    arguments += ["-visitor",
+//                  "-long-messages",
+//                  "-package", "org.megras.lang.sparql"]
+//
+//}
 
 test {
     useJUnitPlatform()
+}
+
+compileKotlin {
+//    dependsOn(tasks.generateGrammarSource)
+    kotlinOptions.jvmTarget = '1.8'
+}
+
+compileTestKotlin {
+    kotlinOptions.jvmTarget = '1.8'
 }

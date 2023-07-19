@@ -84,17 +84,17 @@ object AudioVideoSegmenter {
         ).execute()
 
         val width = if (segmentation.bounds.hasX()) {
-            segmentation.bounds.getMaxX() - segmentation.bounds.getMinX()
+            segmentation.bounds.getXDimension()
         } else {
             videoProbe.width
         }
         val height = if (segmentation.bounds.hasY()) {
-            segmentation.bounds.getMaxY() - segmentation.bounds.getMinY()
+            segmentation.bounds.getYDimension()
         } else {
             videoProbe.height
         }
         val duration = if (segmentation.bounds.hasT()) {
-            segmentation.bounds.getMaxT() - segmentation.bounds.getMinT()
+            segmentation.bounds.getTDimension()
         } else {
             totalDuration.get()
         }
@@ -193,7 +193,7 @@ object AudioVideoSegmenter {
             ffmpeg.addArguments("-vf", blackFilters.joinToString(", "))
 
             // The audio between segments is muted (need shifting because beginning might be cut away)
-            val muteFilters = time.getIntervalsToDiscard().map { "volume=enable='between(t,${it.low - firstPoint},${it.high - firstPoint})':volume=0" }
+            val muteFilters = discard.map { "volume=enable='between(t,${it.low - firstPoint},${it.high - firstPoint})':volume=0" }
             ffmpeg.addArguments("-af", muteFilters.joinToString(", "))
         }
 

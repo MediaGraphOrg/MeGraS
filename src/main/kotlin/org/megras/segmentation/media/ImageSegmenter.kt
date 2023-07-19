@@ -87,6 +87,7 @@ object ImageSegmenter {
             val xBounds = segmentation.bounds.getXBounds()
             val yBounds = segmentation.bounds.getYBounds()
 
+            // image origin is top left, segment origin is bottom left -> needs transformation
             val transform = AffineTransform()
             transform.translate(-xBounds[0], -yBounds[0])
             transform.scale(1.0, -1.0)
@@ -100,6 +101,7 @@ object ImageSegmenter {
             g.dispose()
 
             if (xBounds[0] < 0 || yBounds[0] < 0 || xBounds[1] > image.width || yBounds[1] > image.height) {
+                // if segment is larger than image, cut off transparent margins
                 trimTransparent(out)
             } else {
                 out

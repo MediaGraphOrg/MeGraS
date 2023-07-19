@@ -117,10 +117,12 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
             }
         }
 
+        // segmentation must overlap media bounds
         if (!segmentation.bounds.overlaps(storedObject.descriptor.bounds)) {
             throw RestErrorStatus.emptySegment
         }
 
+        // if segmentation covers the whole media, it can be returned directly
         if (segmentation.contains(storedObject.descriptor.bounds)) {
             currentPaths.forEach { currentPath ->
                 quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, LocalQuadValue(documentId)))
@@ -151,6 +153,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
             }
         }
 
+        // perform segmentation operation
         val segmentResult: SegmentationResult = when(mediaType) {
             MediaType.TEXT -> TextSegmenter.segment(storedObject.inputStream(), segmentation)
             MediaType.IMAGE -> ImageSegmenter.segment(storedObject.inputStream(), segmentation)
@@ -212,7 +215,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
     }
 
     /**
-     * /{objectId}/segment/{segmentation}/{segmentDefinition}/and/{nextSegmentation}/{nextSegmentDefinition}"
+     * /{objectId}/segment/{segmentation}/{segmentDefinition}/and/{nextSegmentation}/{nextSegmentDefinition}
      */
     fun intersection(ctx: Context) {
         val objectId = ctx.pathParam("objectId")
@@ -267,6 +270,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
                 throw RestErrorStatus.emptySegment
             }
         } else {
+            // TODO: support other segmentation types
             throw RestErrorStatus.invalidSegmentation
         }
     }

@@ -75,6 +75,7 @@ object DocumentSegmenter {
         val pdfRenderer = PDFRenderer(pdf)
 
         for (i in 0 until pdf.numberOfPages) {
+            // turn into image
             val page = pdfRenderer.renderImage(i, 1F, ImageType.ARGB)
 
             val seg = when (segmentation) {
@@ -83,12 +84,16 @@ object DocumentSegmenter {
                 else -> segmentation
             } ?: return null
 
+            // segment image
             val segmentedPage = ImageSegmenter.segment(page, seg, BufferedImage.TYPE_4BYTE_ABGR) ?: return null
             val out = ByteArrayOutputStream()
             ImageIO.write(segmentedPage, "png", out)
 
+            // add a pdf page
             val newPage = PDPage(PDRectangle(segmentedPage.width.toFloat(), segmentedPage.height.toFloat()))
             newPdf.addPage(newPage)
+
+            // draw image onto pdf page
             val img = PDImageXObject.createFromByteArray(newPdf, out.toByteArray(), "$i")
             val contentStream = PDPageContentStream(newPdf, newPage)
             contentStream.drawImage(img, 0f, 0f)

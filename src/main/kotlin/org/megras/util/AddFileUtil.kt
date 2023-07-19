@@ -68,7 +68,11 @@ object AddFileUtil {
         return oid
     }
 
-
+    /**
+     * image -> PNG
+     * audio -> Vorbis in WebM container
+     * video -> VP9 in WebM container
+     */
     private fun generateCanonicalRepresentation(
         objectStore: FileSystemObjectStore,
         rawDescriptor: StoredObjectDescriptor

@@ -138,10 +138,10 @@ object ImageSegmenter {
     }
 
     private fun trimTransparent(image: BufferedImage): BufferedImage? {
-        var top = image.height / 2
-        var bottom = top
-        var left = image.width / 2
-        var right = left
+        var top = image.height
+        var bottom = 0
+        var left = image.width
+        var right = 0
         for (x in 0 until image.width) {
             for (y in 0 until image.height) {
                 if (image.getRGB(x, y) != 0) {

@@ -1,7 +1,9 @@
 package org.megras.util
 
 import com.github.kokorin.jaffree.StreamType
-import com.github.kokorin.jaffree.ffmpeg.*
+import com.github.kokorin.jaffree.ffmpeg.ChannelInput
+import com.github.kokorin.jaffree.ffmpeg.ChannelOutput
+import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import de.javagl.obj.ObjReader
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
@@ -24,8 +26,6 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
-import kotlin.math.max
-import kotlin.math.min
 
 
 object AddFileUtil {
@@ -290,6 +290,6 @@ object AddFileUtil {
     }
 
     fun ptToMm(pt: Float): Float {
-        return pt * 25.4f / 72;
+        return pt * 25.4f / 72
     }
 }

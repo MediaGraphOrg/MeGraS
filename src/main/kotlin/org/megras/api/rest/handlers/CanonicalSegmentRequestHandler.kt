@@ -17,10 +17,7 @@ import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationUtil
 import org.megras.segmentation.media.*
-import org.megras.segmentation.type.PreprocessSegmentation
-import org.megras.segmentation.type.RelativeSegmentation
-import org.megras.segmentation.type.Segmentation
-import org.megras.segmentation.type.TwoDimensionalSegmentation
+import org.megras.segmentation.type.*
 import org.megras.util.HashUtil
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
@@ -239,7 +236,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
                 ctx.redirect("/$documentId/${segmentation1.toURI()}/${segmentation2.toURI()}")
             }
         } else {
-            segmentation2 = segmentation2.translate(segmentation1.bounds, plus = false)
+            segmentation2 = segmentation2.translate(segmentation1.bounds, TranslateDirection.NEGATIVE)
             ctx.redirect("/$documentId/${segmentation1.toURI()}/${segmentation2.toURI()}")
         }
     }

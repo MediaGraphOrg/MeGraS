@@ -44,23 +44,34 @@ abstract class CutSegmentation : Segmentation, PreprocessSegmentation {
     abstract fun toShape(bounds: Bounds): TwoDimensionalSegmentation
 
     private fun toMeshBody(bounds: Bounds): ThreeDimensionalSegmentation {
+        val z = if (bounds.hasZ()) {
+            bounds.getZBounds()
+        } else {
+            bounds.getTBounds()
+        }
         val obj = ObjUtil.generateCuboid(
             bounds.getMinX().toFloat(), bounds.getMaxX().toFloat(),
             bounds.getMinY().toFloat(), bounds.getMaxY().toFloat(),
-            bounds.getMinT().toFloat(), bounds.getMaxT().toFloat()
+            z[0].toFloat(), z[1].toFloat()
         )
         val segmentedObj = ObjUtil.segmentCut(obj, expression, above)
         return MeshBody(segmentedObj)
     }
 
-    override fun getDefinition(): String = expression.expressionString + if (above) "above" else "below"
+    override fun getDefinition(): String = expression.expressionString + if (above) ",above" else ",below"
 }
 
-class LinearCutSegmentation(val a: Double, val b: Double, val c: Double, val d: Double, override val above: Boolean) : CutSegmentation() {
+class LinearCutSegmentation(
+    private val a: Double,
+    private val b: Double,
+    private val c: Double,
+    private val d: Double,
+    override val above: Boolean
+) : CutSegmentation() {
     override val expression = if (d == 0.0) {
-        Expression("${a}*x + ${b}*y + ${c}")
+        Expression("${a}*x + ${b}*y + $c")
     } else {
-        Expression("${a}*x + ${b}*y + ${c}*z + ${d}")
+        Expression("${a}*x + ${b}*y + ${c}*z + $d")
     }
 
     override fun toShape(bounds: Bounds): TwoDimensionalSegmentation {
@@ -117,7 +128,11 @@ class LinearCutSegmentation(val a: Double, val b: Double, val c: Double, val d: 
 
 class GeneralCutSegmentation(override val expression: Expression, override val above: Boolean) : CutSegmentation() {
     override fun toShape(bounds: Bounds): TwoDimensionalSegmentation {
-        val mask = BufferedImage(bounds.getXDimension().toInt(), bounds.getYDimension().toInt(), BufferedImage.TYPE_BYTE_BINARY)
+        val mask = BufferedImage(
+            bounds.getXDimension().toInt(),
+            bounds.getYDimension().toInt(),
+            BufferedImage.TYPE_BYTE_BINARY
+        )
 
         for (x in 0 until mask.width) {
             for (y in 0 until mask.height) {

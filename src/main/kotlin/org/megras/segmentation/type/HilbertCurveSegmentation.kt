@@ -9,7 +9,7 @@ import java.awt.image.BufferedImage
 import kotlin.math.pow
 import kotlin.math.roundToLong
 
-class Hilbert(val order: Int, var intervals: List<Interval>) : Segmentation, PreprocessSegmentation {
+class Hilbert(private val order: Int, private var intervals: List<Interval>) : Segmentation, PreprocessSegmentation {
     override val segmentationType: SegmentationType = SegmentationType.HILBERT
     override var bounds = Bounds()
 
@@ -72,16 +72,11 @@ class Hilbert(val order: Int, var intervals: List<Interval>) : Segmentation, Pre
 
     private fun toRotoscope(width: Int, height: Int, duration: Double): Rotoscope {
         val rotoscopeList = mutableListOf<RotoscopePair>()
-
-        val startTime = System.currentTimeMillis()
-
         for (i in 0 until dimensionSize.toInt()) {
             val mask = toImageMask(width, height, i / dimensionSize)
             rotoscopeList.add(RotoscopePair(duration * i / dimensionSize, mask))
             rotoscopeList.add(RotoscopePair(duration * (i + 0.999) / dimensionSize, mask))
         }
-        val estimatedTime = System.currentTimeMillis() - startTime;
-        println(estimatedTime / 1000)
         return Rotoscope(rotoscopeList)
     }
 
@@ -96,5 +91,5 @@ class Hilbert(val order: Int, var intervals: List<Interval>) : Segmentation, Pre
         return found != null
     }
 
-    override fun getDefinition(): String = "${order}," + intervals.joinToString(",") {"${it.low}-${it.high}"}
+    override fun getDefinition(): String = "${order}," + intervals.joinToString(",") { "${it.low}-${it.high}" }
 }

@@ -5,6 +5,7 @@ import de.javagl.obj.*
 import org.megras.api.rest.RestErrorStatus
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.CutSegmentation
+import org.megras.segmentation.type.TranslateDirection
 import java.awt.geom.Path2D
 import java.util.*
 import kotlin.math.abs
@@ -20,6 +21,9 @@ data class Vertex(val x: Float, val y: Float) {
 
 object ObjUtil {
 
+    /**
+     * Finds the X,Y,Z bounds of the mesh
+     */
     fun computeBounds(obj: Obj): Bounds {
         val b = floatArrayOf(
             Float.MAX_VALUE, Float.MIN_VALUE,
@@ -48,13 +52,16 @@ object ObjUtil {
             .addZ(b[4].toDouble(), b[5].toDouble())
     }
 
-    fun translate(obj: Obj, x: Float, y: Float, z: Float, plus: Boolean): Obj {
+    /**
+     * Translate a mesh by x,y,z in positive or negative direction
+     */
+    fun translate(obj: Obj, x: Float, y: Float, z: Float, direction: TranslateDirection): Obj {
         val newObj = Objs.create()
         for (i in 0 until obj.numVertices) {
             val vertex = obj.getVertex(i)
-            when (plus) {
-                true -> newObj.addVertex(vertex.x + x, vertex.y + y, vertex.z + z)
-                false -> newObj.addVertex(vertex.x - x, vertex.y - y, vertex.z - z)
+            when (direction) {
+                TranslateDirection.POSITIVE -> newObj.addVertex(vertex.x + x, vertex.y + y, vertex.z + z)
+                TranslateDirection.NEGATIVE -> newObj.addVertex(vertex.x - x, vertex.y - y, vertex.z - z)
             }
         }
         for (j in 0 until obj.numFaces) {
@@ -65,6 +72,9 @@ object ObjUtil {
         return newObj
     }
 
+    /**
+     * Scale a mesh by x,y,z factors
+     */
     fun scale(obj: Obj, x: Float, y: Float, z: Float): Obj {
         val newObj = Objs.create()
         for (i in 0 until obj.numVertices) {
@@ -79,6 +89,10 @@ object ObjUtil {
         return newObj
     }
 
+    /**
+     * Slice a mesh in the Z dimension
+     * Returns an XY path of the outline of the slice
+     */
     fun slice(obj: Obj, z: Float): Path2D.Float? {
         val lines: MutableList<Pair<Vertex, Vertex>> = LinkedList()
 
@@ -156,6 +170,9 @@ object ObjUtil {
         return this.segmentCut(obj, s.expression, s.above)
     }
 
+    /**
+     * Cut a mesh by an equation expression and retain one of the two cut sides
+     */
     fun segmentCut(obj: Obj, expression: Expression, above: Boolean): Obj {
         val segmentedObj = Objs.create()
         (0 until obj.numVertices).forEach { v -> segmentedObj.addVertex(obj.getVertex(v)) }
@@ -200,6 +217,8 @@ object ObjUtil {
                 }
             }
         }
+        // cover cut with another face
+        // TODO: cover case when cut is not planar
         segmentedObj.addFace(*coverVertices.toIntArray())
         return ObjUtils.convertToRenderable(segmentedObj)
     }
@@ -226,6 +245,9 @@ object ObjUtil {
         return obj
     }
 
+    /**
+     * Triangulate a mesh and sort it by ascending vertices and faces
+     */
     fun sortMesh(obj: Obj): Obj {
         val obj = ObjUtils.triangulate(obj)
 
@@ -251,12 +273,12 @@ object ObjUtil {
             }
             faces.add(newFaceIndices.toIntArray())
         }
-        val sortedFaces = faces.sortedWith(compareBy({it[0]}, {it[1]}, {it[2]}))
+        val sortedFaces = faces.sortedWith(compareBy({ it[0] }, { it[1] }, { it[2] }))
 
         // Add the next vertices and faces to a new obj object
         val sortedObj = Objs.create()
         sorter.sortedIndices.forEach { i -> sortedObj.addVertex(vertices[i]) }
-        sortedFaces.forEach {face ->
+        sortedFaces.forEach { face ->
             val newFace = ObjFaces.create(face, null, null)
             sortedObj.addFace(newFace)
         }

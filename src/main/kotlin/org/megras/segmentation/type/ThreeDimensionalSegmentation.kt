@@ -16,7 +16,7 @@ abstract class ThreeDimensionalSegmentation : Segmentation {
         if (this.bounds != rhs.bounds) return false
 
         val timeBounds = this.bounds.getTBounds()
-        for (t in timeBounds[0].toInt() .. timeBounds[0].toInt()) {
+        for (t in timeBounds[0].toInt()..timeBounds[0].toInt()) {
             val shape1 = this.slice(t)
             val shape2 = rhs.slice(t)
             if (shape1 != null && shape2 != null && !shape1.equivalentTo(shape2)) return false
@@ -29,7 +29,7 @@ abstract class ThreeDimensionalSegmentation : Segmentation {
         if (!this.bounds.contains(rhs.bounds)) return false
 
         val timeBounds = rhs.bounds.getTBounds()
-        for (t in timeBounds[0].toInt() .. timeBounds[1].toInt()) {
+        for (t in timeBounds[0].toInt()..timeBounds[1].toInt()) {
             val shape1 = this.slice(t)
             val shape2 = rhs.slice(t)
             if (shape1 != null && shape2 != null && !shape1.contains(shape2)) return false
@@ -44,11 +44,13 @@ abstract class ThreeDimensionalSegmentation : Segmentation {
 
 data class RotoscopePair(var time: Double, var space: TwoDimensionalSegmentation)
 
-class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmentation(), RelativeSegmentation {
+class Rotoscope(private var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmentation(), RelativeSegmentation {
     override val segmentationType = SegmentationType.ROTOSCOPE
     override lateinit var bounds: Bounds
 
-    override val isRelative = rotoscopeList.all { it.time in 0.0 .. 1.0 && (it.space is RelativeSegmentation && (it.space as RelativeSegmentation).isRelative) }
+    override val isRelative = rotoscopeList.all {
+        it.time in 0.0..1.0 && (it.space is RelativeSegmentation && (it.space as RelativeSegmentation).isRelative)
+    }
 
     init {
         require(rotoscopeList.size >= 2) {
@@ -83,15 +85,34 @@ class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmen
         val maxT = rhs.getMaxT()
         if (minT.isNaN() || maxT.isNaN()) return false
 
-        return this.rotoscopeList.first().time <= minT && this.rotoscopeList.last().time >= maxT && this.rotoscopeList.all { it.space.contains(rhs) }
+        return this.rotoscopeList.first().time <= minT &&
+                this.rotoscopeList.last().time >= maxT &&
+                this.rotoscopeList.all { it.space.contains(rhs) }
     }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         when (by.dimensions) {
-            2 -> return Rotoscope(rotoscopeList.map { RotoscopePair(it.time, it.space.translate(by, plus) as TwoDimensionalSegmentation) })
-            3 -> return when (plus) {
-                true -> Rotoscope(rotoscopeList.map { RotoscopePair(it.time + by.getMinT(), it.space.translate(by, plus) as TwoDimensionalSegmentation) })
-                false -> Rotoscope(rotoscopeList.map { RotoscopePair(it.time - by.getMinT(), it.space.translate(by, plus) as TwoDimensionalSegmentation) })
+            2 -> return Rotoscope(rotoscopeList.map {
+                RotoscopePair(
+                    it.time,
+                    it.space.translate(by, direction) as TwoDimensionalSegmentation
+                )
+            })
+
+            3 -> return when (direction) {
+                TranslateDirection.POSITIVE -> Rotoscope(rotoscopeList.map {
+                    RotoscopePair(
+                        it.time + by.getMinT(),
+                        it.space.translate(by, direction) as TwoDimensionalSegmentation
+                    )
+                })
+
+                TranslateDirection.NEGATIVE -> Rotoscope(rotoscopeList.map {
+                    RotoscopePair(
+                        it.time - by.getMinT(),
+                        it.space.translate(by, direction) as TwoDimensionalSegmentation
+                    )
+                })
             }
         }
         return this
@@ -113,7 +134,7 @@ class Rotoscope(var rotoscopeList: List<RotoscopePair>) : ThreeDimensionalSegmen
         val newShape = ShapeInterpolator().evaluate(startShape.shape, endShape.shape, t.toFloat())
 
         val newBounds = bounds
-        return object: TwoDimensionalSegmentation() {
+        return object : TwoDimensionalSegmentation() {
             override val segmentationType = null
             override var shape: Shape = newShape
             override var bounds: Bounds = newBounds
@@ -153,14 +174,22 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         val maxX = rhs.getMaxX().toFloat()
         val minY = rhs.getMinY().toFloat()
         val maxY = rhs.getMaxY().toFloat()
-        val minZ = if (rhs.hasT()) {rhs.getMinT().toFloat()} else {rhs.getMinZ().toFloat()}
-        val maxZ = if (rhs.hasT()) {rhs.getMaxT().toFloat()} else {rhs.getMaxZ().toFloat()}
+        val minZ = if (rhs.hasT()) {
+            rhs.getMinT().toFloat()
+        } else {
+            rhs.getMinZ().toFloat()
+        }
+        val maxZ = if (rhs.hasT()) {
+            rhs.getMaxT().toFloat()
+        } else {
+            rhs.getMaxZ().toFloat()
+        }
         if (minX.isNaN() || maxX.isNaN() || minY.isNaN() || maxY.isNaN() || minZ.isNaN() || maxZ.isNaN()) return false
 
         return ObjUtil.contains(obj, minX, maxX, minY, maxY, minZ, maxZ)
     }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         val minX = by.getMinX().toFloat()
         val minY = by.getMinY().toFloat()
         val minZ = if (by.hasZ()) {
@@ -169,7 +198,7 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
             by.getMinT().toFloat()
         }
 
-        val translatedObj = ObjUtil.translate(obj, minX, minY, minZ, plus)
+        val translatedObj = ObjUtil.translate(obj, minX, minY, minZ, direction)
         return MeshBody(translatedObj)
     }
 
@@ -178,7 +207,7 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         val path = ObjUtil.slice(obj, z) ?: return null
 
         val newBounds = bounds
-        return object: TwoDimensionalSegmentation() {
+        return object : TwoDimensionalSegmentation() {
             override var shape: Shape = path
             override var bounds: Bounds = newBounds
             override val segmentationType = null

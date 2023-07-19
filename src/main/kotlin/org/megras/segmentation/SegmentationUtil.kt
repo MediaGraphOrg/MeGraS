@@ -16,7 +16,7 @@ object SegmentationUtil {
             (first == SegmentationType.COLOR && second != SegmentationType.COLOR)
     }
 
-    fun parseSegmentationType(name: String): SegmentationType? =
+    private fun parseSegmentationType(name: String): SegmentationType? =
         try {
             SegmentationType.valueOf(name.uppercase())
         } catch (e: IllegalArgumentException) {
@@ -25,8 +25,7 @@ object SegmentationUtil {
 
     fun parseSegmentation(segmentType: String, segmentDefinition: String, mediaType: MediaType? = null): Segmentation? {
 
-        val type = parseSegmentationType(segmentType)
-        return when (type) {
+        return when (parseSegmentationType(segmentType)) {
             SegmentationType.RECT -> {
                 val coords = segmentDefinition.split(",").mapNotNull {
                     it.trim().toDoubleOrNull()

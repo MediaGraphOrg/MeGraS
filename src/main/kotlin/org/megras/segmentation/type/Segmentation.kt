@@ -3,6 +3,10 @@ package org.megras.segmentation.type
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationType
 
+enum class TranslateDirection {
+    POSITIVE,
+    NEGATIVE
+}
 
 sealed interface Segmentation {
     val segmentationType: SegmentationType?
@@ -33,7 +37,7 @@ sealed interface Segmentation {
         return this.bounds.orthogonalTo(rhs.bounds)
     }
 
-    fun translate(by: Bounds, plus: Boolean = true): Segmentation {
+    fun translate(by: Bounds, direction: TranslateDirection = TranslateDirection.POSITIVE): Segmentation {
         return this
     }
 

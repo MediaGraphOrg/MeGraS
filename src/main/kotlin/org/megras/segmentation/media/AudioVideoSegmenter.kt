@@ -52,7 +52,8 @@ object AudioVideoSegmenter {
             .setOverwriteOutput(true)
             .addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))
             .execute()
-        return SegmentationResult(out.array(),
+        return SegmentationResult(
+            out.array(),
             Bounds().addX(0, rect.width).addY(0, rect.height)
                 .addT(storedObject.descriptor.bounds.getMinT(), storedObject.descriptor.bounds.getMaxT())
         )
@@ -124,7 +125,7 @@ object AudioVideoSegmenter {
                 throw RestErrorStatus.noAudio
             }
 
-            when(channel.selection[0]) {
+            when (channel.selection[0]) {
                 "video" -> {
                     ffmpeg.addArguments("-c:v", "copy").addArgument("-an")
                 }
@@ -135,7 +136,7 @@ object AudioVideoSegmenter {
             }
         }
         // stream number selection
-        else if (channel.selection.all { it.toIntOrNull() != null }){
+        else if (channel.selection.all { it.toIntOrNull() != null }) {
             channel.selection.forEach { ffmpeg.addArguments("-map", "0:${it}") }
             ffmpeg.addArguments("-c", "copy")
         } else {
@@ -180,9 +181,11 @@ object AudioVideoSegmenter {
         val lastPoint = time.intervals.last().high
 
         val ffmpeg = FFmpeg.atPath()
-                .addInput(ChannelInput.fromChannel(stream).setPosition(firstPoint, TimeUnit.MILLISECONDS)
-                        .setDuration(lastPoint - firstPoint, TimeUnit.MILLISECONDS))
-                .setOverwriteOutput(true)
+            .addInput(
+                ChannelInput.fromChannel(stream).setPosition(firstPoint, TimeUnit.MILLISECONDS)
+                    .setDuration(lastPoint - firstPoint, TimeUnit.MILLISECONDS)
+            )
+            .setOverwriteOutput(true)
 
         if (time.intervals.size > 1) {
             val discard = time.getIntervalsToDiscard()
@@ -198,7 +201,7 @@ object AudioVideoSegmenter {
         }
 
         ffmpeg.addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))
-                .execute()
+            .execute()
 
         val bounds = storedObject.descriptor.bounds
         bounds.addT(0, time.bounds.getTDimension())

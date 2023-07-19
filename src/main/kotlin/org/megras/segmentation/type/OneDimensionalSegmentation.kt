@@ -53,16 +53,22 @@ abstract class OneDimensionalSegmentation(val intervals: List<Interval>) : Segme
     override fun getDefinition(): String = intervals.joinToString(",") { "${it.low}-${it.high}" }
 }
 
-open class TemporalSegmentation(override val segmentationType: SegmentationType?, intervals: List<Interval>): OneDimensionalSegmentation(intervals), RelativeSegmentation {
+open class TemporalSegmentation(override val segmentationType: SegmentationType?, intervals: List<Interval>) :
+    OneDimensionalSegmentation(intervals), RelativeSegmentation {
     override var bounds = Bounds().addT(intervals.first().low, intervals.last().high)
 
-    override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
+    override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.hasT()) {
-            return when (plus) {
-                true -> TemporalSegmentation(segmentationType, intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
-                false -> TemporalSegmentation(segmentationType, intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
+            return when (direction) {
+                TranslateDirection.POSITIVE -> TemporalSegmentation(
+                    segmentationType,
+                    intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
+
+                TranslateDirection.NEGATIVE -> TemporalSegmentation(
+                    segmentationType,
+                    intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
             }
         }
         return this
@@ -85,13 +91,13 @@ class Width(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), 
     override val segmentationType = SegmentationType.WIDTH
     override var bounds = Bounds().addX(intervals.first().low, intervals.last().high)
 
-    override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
+    override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.hasX()) {
-            return when (plus) {
-                true -> Width(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
-                false -> Width(intervals.map { Interval(it.low - by.getMinX(), it.high - by.getMinX()) })
+            return when (direction) {
+                TranslateDirection.POSITIVE -> Width(intervals.map { Interval(it.low + by.getMinX(), it.high + by.getMinX()) })
+                TranslateDirection.NEGATIVE -> Width(intervals.map { Interval(it.low - by.getMinX(), it.high - by.getMinX()) })
             }
         }
         return this
@@ -108,13 +114,13 @@ class Height(intervals: List<Interval>) : OneDimensionalSegmentation(intervals),
     override val segmentationType = SegmentationType.HEIGHT
     override var bounds = Bounds().addY(intervals.first().low, intervals.last().high)
 
-    override val isRelative = intervals.all { it.low in 0.0 .. 1.0 && it.high in 0.0 .. 1.0 }
+    override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.hasY()) {
-            return when (plus) {
-                true -> Height(intervals.map { Interval(it.low + by.getMinY(), it.high + by.getMinY()) })
-                false -> Height(intervals.map { Interval(it.low - by.getMinY(), it.high - by.getMinY()) })
+            return when (direction) {
+                TranslateDirection.POSITIVE -> Height(intervals.map { Interval(it.low + by.getMinY(), it.high + by.getMinY()) })
+                TranslateDirection.NEGATIVE -> Height(intervals.map { Interval(it.low - by.getMinY(), it.high - by.getMinY()) })
             }
         }
         return this

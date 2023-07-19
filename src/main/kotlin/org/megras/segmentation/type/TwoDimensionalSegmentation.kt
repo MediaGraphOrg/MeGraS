@@ -38,7 +38,7 @@ abstract class TwoDimensionalSegmentation : Segmentation {
             return rhsArea.isEmpty
         } else if (rhs is ThreeDimensionalSegmentation) {
             val (start, end) = rhs.bounds.getTBounds()
-            for (t in start.toInt() .. end.toInt()) {
+            for (t in start.toInt()..end.toInt()) {
                 val slice = rhs.slice(t) ?: continue
                 val rhsArea = Area(slice.shape)
                 rhsArea.subtract(Area(this.shape))
@@ -64,31 +64,37 @@ abstract class TwoDimensionalSegmentation : Segmentation {
         val area2 = Area(rhs.shape)
         area1.add(area2)
 
-        val definition = StringBuilder()
-        val iter = area1.getPathIterator(null)
-        val coords = FloatArray(6)
-        while (!iter.isDone) {
-            when (iter.currentSegment(coords)) {
-                SEG_MOVETO -> definition.append("M${coords[0]},${coords[1]}")
-                SEG_LINETO -> definition.append("L${coords[0]},${coords[1]}")
-                SEG_QUADTO -> definition.append("Q${coords[0]},${coords[1]} ${coords[2]},${coords[3]}")
-                SEG_CUBICTO -> definition.append("C${coords[0]},${coords[1]} ${coords[2]},${coords[3]} ${coords[4]},${coords[5]}")
-                SEG_CLOSE -> definition.append("Z")
-            }
-            iter.next()
-        }
+        val definition = createSVGPath(area1)
         if (definition.isEmpty()) return null
 
-        return object: TwoDimensionalSegmentation() {
+        return object : TwoDimensionalSegmentation() {
             override val segmentationType = SegmentationType.PATH
             override var shape: Shape = area1
             override var bounds: Bounds = Bounds(area1.bounds)
-            override fun getDefinition(): String = definition.toString()
+            override fun getDefinition(): String = definition
         }
+    }
+
+    fun createSVGPath(shape: Shape): String {
+        val pathString = StringBuilder()
+        val iter = shape.getPathIterator(null)
+        val coords = FloatArray(6)
+        while (!iter.isDone) {
+            when (iter.currentSegment(coords)) {
+                SEG_MOVETO -> pathString.append("M${coords[0]},${coords[1]}")
+                SEG_LINETO -> pathString.append("L${coords[0]},${coords[1]}")
+                SEG_QUADTO -> pathString.append("Q${coords[0]},${coords[1]} ${coords[2]},${coords[3]}")
+                SEG_CUBICTO -> pathString.append("C${coords[0]},${coords[1]} ${coords[2]},${coords[3]} ${coords[4]},${coords[5]}")
+                SEG_CLOSE -> pathString.append("Z")
+            }
+            iter.next()
+        }
+        return pathString.toString()
     }
 }
 
-class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Double) : TwoDimensionalSegmentation(), RelativeSegmentation {
+class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Double) : TwoDimensionalSegmentation(),
+    RelativeSegmentation {
 
     override val segmentationType: SegmentationType = SegmentationType.RECT
     val width: Double = xmax - xmin
@@ -98,11 +104,22 @@ class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Doubl
 
     override val isRelative = xmin in 0.0..1.0 && xmax in 0.0..1.0 && ymin in 0.0..1.0 && ymax in 0.0..1.0
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
-            return when (plus) {
-                true -> Rect(xmin + by.getMinX(), xmax + by.getMinX(), ymin + by.getMinY(), ymax + by.getMinY())
-                false -> Rect(xmin - by.getMinX(), xmax - by.getMinX(), ymin - by.getMinY(), ymax - by.getMinY())
+            return when (direction) {
+                TranslateDirection.POSITIVE -> Rect(
+                    xmin + by.getMinX(),
+                    xmax + by.getMinX(),
+                    ymin + by.getMinY(),
+                    ymax + by.getMinY()
+                )
+
+                TranslateDirection.NEGATIVE -> Rect(
+                    xmin - by.getMinX(),
+                    xmax - by.getMinX(),
+                    ymin - by.getMinY(),
+                    ymax - by.getMinY()
+                )
             }
         }
         return this
@@ -148,7 +165,7 @@ class Polygon(val points: List<Pair<Double, Double>>) : TwoDimensionalSegmentati
     )
     override var bounds: Bounds = Bounds(shape)
 
-    override val isRelative = points.all { it.first in 0.0 .. 1.0 && it.second in 0.0 .. 1.0 }
+    override val isRelative = points.all { it.first in 0.0..1.0 && it.second in 0.0..1.0 }
 
     init {
         require(points.size > 2) {
@@ -156,11 +173,11 @@ class Polygon(val points: List<Pair<Double, Double>>) : TwoDimensionalSegmentati
         }
     }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
-            return when (plus) {
-                true -> Polygon(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
-                false -> Polygon(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
+            return when (direction) {
+                TranslateDirection.POSITIVE -> Polygon(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+                TranslateDirection.NEGATIVE -> Polygon(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
             }
         }
         return this
@@ -204,12 +221,12 @@ class SVGPath(override var shape: Shape) : TwoDimensionalSegmentation(), Relativ
 
     constructor(path: String) : this(AWTPathProducer.createShape(StringReader(path), 0))
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
             val transform = AffineTransform()
-            when (plus) {
-                true -> transform.translate(by.getMinX(), by.getMinY())
-                false -> transform.translate(-by.getMinX(), -by.getMinY())
+            when (direction) {
+                TranslateDirection.POSITIVE -> transform.translate(by.getMinX(), by.getMinY())
+                TranslateDirection.NEGATIVE -> transform.translate(-by.getMinX(), -by.getMinY())
             }
             return SVGPath(transform.createTransformedShape(shape))
         }
@@ -225,31 +242,16 @@ class SVGPath(override var shape: Shape) : TwoDimensionalSegmentation(), Relativ
         return SVGPath(transform.createTransformedShape(shape))
     }
 
-    override fun getDefinition(): String {
-        val output = StringBuilder()
-
-        val iter = shape.getPathIterator(null)
-        val coords = FloatArray(6)
-        while (!iter.isDone) {
-            when (iter.currentSegment(coords)) {
-                SEG_MOVETO -> output.append("M${coords[0]},${coords[1]}")
-                SEG_LINETO -> output.append("L${coords[0]},${coords[1]}")
-                SEG_QUADTO -> output.append("Q${coords[0]},${coords[1]} ${coords[2]},${coords[3]}")
-                SEG_CUBICTO -> output.append("C${coords[0]},${coords[1]} ${coords[2]},${coords[3]} ${coords[4]},${coords[5]}")
-                SEG_CLOSE -> output.append("Z")
-            }
-            iter.next()
-        }
-        return output.toString()
-    }
+    override fun getDefinition(): String = createSVGPath(shape)
 }
 
-class BezierSpline(private val points: List<Pair<Double, Double>>) : TwoDimensionalSegmentation(), RelativeSegmentation {
+class BezierSpline(private val points: List<Pair<Double, Double>>) : TwoDimensionalSegmentation(),
+    RelativeSegmentation {
     override val segmentationType: SegmentationType = SegmentationType.BEZIER
     override lateinit var shape: Shape
     override lateinit var bounds: Bounds
 
-    override val isRelative = points.all { it.first in 0.0 .. 1.0 && it.second in 0.0 .. 1.0 }
+    override val isRelative = points.all { it.first in 0.0..1.0 && it.second in 0.0..1.0 }
 
     init {
         val flattenedControlPoints = points.flatMap { listOf(it.first, it.second) }
@@ -269,11 +271,11 @@ class BezierSpline(private val points: List<Pair<Double, Double>>) : TwoDimensio
         bounds = Bounds(shape)
     }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
-            return when (plus) {
-                true -> BezierSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
-                false -> BezierSpline(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
+            return when (direction) {
+                TranslateDirection.POSITIVE -> BezierSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+                TranslateDirection.NEGATIVE -> BezierSpline(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
             }
         }
         return this
@@ -294,7 +296,7 @@ class BSpline(private val points: List<Pair<Double, Double>>) : TwoDimensionalSe
     override lateinit var shape: Shape
     override lateinit var bounds: Bounds
 
-    override val isRelative = points.all { it.first in 0.0 .. 1.0 && it.second in 0.0 .. 1.0 }
+    override val isRelative = points.all { it.first in 0.0..1.0 && it.second in 0.0..1.0 }
 
     init {
         val degree: Long = 3
@@ -326,11 +328,11 @@ class BSpline(private val points: List<Pair<Double, Double>>) : TwoDimensionalSe
         bounds = Bounds(shape)
     }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
-            return when (plus) {
-                true -> BSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
-                false -> BSpline(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
+            return when (direction) {
+                TranslateDirection.POSITIVE -> BSpline(points.map { it.first + by.getMinX() to it.second + by.getMinY() })
+                TranslateDirection.NEGATIVE -> BSpline(points.map { it.first - by.getMinX() to it.second - by.getMinY() })
             }
         }
         return this
@@ -392,16 +394,36 @@ class ImageMask(private val mask: BufferedImage) : TwoDimensionalSegmentation() 
         bounds = Bounds(shape)
     }
 
-    override fun translate(by: Bounds, plus: Boolean): Segmentation {
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
-            val newMask = when (plus) {
-                true -> BufferedImage((mask.width + by.getMinX()).toInt(), (mask.height + by.getMinY()).toInt(), mask.type)
-                false -> BufferedImage(by.getXDimension().toInt(), by.getYDimension().toInt(), mask.type)
+            val newMask = when (direction) {
+                TranslateDirection.POSITIVE -> BufferedImage(
+                    (mask.width + by.getMinX()).toInt(),
+                    (mask.height + by.getMinY()).toInt(),
+                    mask.type
+                )
+
+                TranslateDirection.NEGATIVE -> BufferedImage(
+                    by.getXDimension().toInt(),
+                    by.getYDimension().toInt(),
+                    mask.type
+                )
             }
             val g = newMask.createGraphics()
-            when (plus) {
-                true -> g.drawImage(mask, by.getMinX().toInt(), mask.height - by.getMaxY().toInt(), null)
-                false -> g.drawImage(mask, -by.getMinX().toInt(), -(mask.height - by.getMaxY()).toInt(), null)
+            when (direction) {
+                TranslateDirection.POSITIVE -> g.drawImage(
+                    mask,
+                    by.getMinX().toInt(),
+                    mask.height - by.getMaxY().toInt(),
+                    null
+                )
+
+                TranslateDirection.NEGATIVE -> g.drawImage(
+                    mask,
+                    -by.getMinX().toInt(),
+                    -(mask.height - by.getMaxY()).toInt(),
+                    null
+                )
             }
             g.dispose()
             return ImageMask(newMask)

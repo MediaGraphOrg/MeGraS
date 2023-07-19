@@ -26,7 +26,8 @@ class Bounds {
             shape.bounds.minX, shape.bounds.maxX,
             shape.bounds.minY, shape.bounds.maxY,
             Double.NaN, Double.NaN,
-            Double.NaN, Double.NaN)
+            Double.NaN, Double.NaN
+        )
         dimensions = 2
     }
 
@@ -150,7 +151,14 @@ class Bounds {
         this.bounds[7] = Double.NaN
     }
 
-    override fun toString() = bounds.map { if (it.isNaN()) {"-"} else {it} }.joinToString(",")
+    override fun toString() = bounds.map {
+        if (it.isNaN()) {
+            "-"
+        } else {
+            it
+        }
+    }.joinToString(",")
+
     override fun hashCode(): Int {
         return bounds.contentHashCode()
     }

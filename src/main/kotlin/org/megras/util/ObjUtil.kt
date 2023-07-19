@@ -2,6 +2,9 @@ package org.megras.util
 
 import com.ezylang.evalex.Expression
 import de.javagl.obj.*
+import eu.mihosoft.jcsg.CSG
+import eu.mihosoft.jcsg.Polygon
+import eu.mihosoft.vvecmath.Vector3d
 import org.megras.api.rest.RestErrorStatus
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.CutSegmentation
@@ -303,6 +306,20 @@ object ObjUtil {
         }
         // TODO: also check faces, not just vertices
         return res.all { it }
+    }
+
+    fun objToCSG(obj: Obj): CSG {
+        val polygons: MutableList<Polygon> = ArrayList()
+        for (f in 0 until obj.numFaces) {
+            val face = obj.getFace(f)
+            val vertices: MutableList<Vector3d?> = ArrayList()
+            for (v in 0 until face.numVertices) {
+                val vertex = obj.getVertex(face.getVertexIndex(v))
+                vertices.add(Vector3d.xyz(vertex.x.toDouble(), vertex.y.toDouble(), vertex.z.toDouble()))
+            }
+            polygons.add(Polygon.fromPoints(vertices))
+        }
+        return CSG.fromPolygons(polygons)
     }
 
     private class ObjVertexSorter(private val array: List<FloatTuple>) : Comparator<Int> {

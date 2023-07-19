@@ -5,6 +5,7 @@ plugins {
     id 'application'
     id 'org.jetbrains.kotlin.kapt' version '1.8.10'
     id 'antlr'
+    id 'org.openjfx.javafxplugin' version '0.0.14'
 }
 
 group 'org.megras'
@@ -105,6 +106,9 @@ dependencies {
     /* Evaluate equations */
     implementation 'com.ezylang:EvalEx:3.0.5'
 
+    /* Constructive Solid Geometry */
+    implementation group: 'eu.mihosoft.vrl.jcsg', name: 'jcsg', version: '0.5.7'
+
     /* CSV */
     implementation group: 'com.github.doyaaaaaken', name: 'kotlin-csv-jvm', version: '1.9.0'
 
@@ -143,6 +147,11 @@ dependencies {
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+}
+
+javafx {
+    version = "19"
+    modules = [ 'javafx.graphics' ]
 }
 
 //generateGrammarSource {

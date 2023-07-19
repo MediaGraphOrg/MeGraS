@@ -169,6 +169,8 @@ class MeshBody(private var obj: Obj) : ThreeDimensionalSegmentation(), RelativeS
         isRelative = bounds.isRelative()
     }
 
+    fun objToCSG() = ObjUtil.objToCSG(obj)
+
     override fun contains(rhs: Bounds): Boolean {
         val minX = rhs.getMinX().toFloat()
         val maxX = rhs.getMaxX().toFloat()

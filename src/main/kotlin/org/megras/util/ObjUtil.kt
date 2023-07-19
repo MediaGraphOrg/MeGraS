@@ -175,7 +175,7 @@ object ObjUtil {
      */
     fun segmentCut(obj: Obj, expression: Expression, above: Boolean): Obj {
         val segmentedObj = Objs.create()
-        (0 until obj.numVertices).forEach { v -> segmentedObj.addVertex(obj.getVertex(v)) }
+        val vertexIndexMap = HashMap<FloatTuple, Int>()
 
         val coverVertices = mutableListOf<Int>() // vertices along the cut plane
         for (f in 0 until obj.numFaces) {
@@ -192,10 +192,12 @@ object ObjUtil {
                 val d2 = expression.with("x", v2.x).with("y", v2.y).with("z", v2.z).evaluate().numberValue.toFloat()
 
                 if (d1 >= 0 == above) {
-                    keepVertices.add(face.getVertexIndex(v))
+                    val index = vertexIndexMap.computeIfAbsent(v1) { segmentedObj.addVertex(v1); segmentedObj.numVertices - 1 }
+                    keepVertices.add(index)
                 }
                 if (d1 == 0F) {
-                    coverVertices.add(face.getVertexIndex(v))
+                    val index = vertexIndexMap.computeIfAbsent(v1) { segmentedObj.addVertex(v1); segmentedObj.numVertices - 1 }
+                    coverVertices.add(index)
                 }
 
                 if (d1 * d2 <= 0) {
@@ -203,9 +205,10 @@ object ObjUtil {
                     val x = v1.x + t * (v2.x - v1.x)
                     val y = v1.y + t * (v2.y - v1.y)
                     val z = v1.z + t * (v2.z - v1.z)
-                    segmentedObj.addVertex(x, y, z)
-                    keepVertices.add(segmentedObj.numVertices - 1)
-                    coverVertices.add(segmentedObj.numVertices - 1)
+                    val newV = FloatTuples.create(x, y, z)
+                    val index = vertexIndexMap.computeIfAbsent(newV) { segmentedObj.addVertex(newV); segmentedObj.numVertices - 1 }
+                    keepVertices.add(index)
+                    coverVertices.add(index)
                 }
             }
 

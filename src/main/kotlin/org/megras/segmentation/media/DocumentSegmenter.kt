@@ -96,7 +96,7 @@ object DocumentSegmenter {
             // draw image onto pdf page
             val img = PDImageXObject.createFromByteArray(newPdf, out.toByteArray(), "$i")
             val contentStream = PDPageContentStream(newPdf, newPage)
-            contentStream.drawImage(img, 0f, 0f)
+            contentStream.drawImage(img, 0f, 0f) // TODO: preserve correct position of the slice
             contentStream.close()
         }
         return newPdf

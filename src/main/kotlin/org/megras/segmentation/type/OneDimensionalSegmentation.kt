@@ -2,6 +2,7 @@ package org.megras.segmentation.type
 
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationType
+import kotlin.math.roundToInt
 
 data class Interval(val low: Double, val high: Double)
 
@@ -53,22 +54,16 @@ abstract class OneDimensionalSegmentation(val intervals: List<Interval>) : Segme
     override fun getDefinition(): String = intervals.joinToString(",") { "${it.low}-${it.high}" }
 }
 
-open class TemporalSegmentation(override val segmentationType: SegmentationType?, intervals: List<Interval>) :
-    OneDimensionalSegmentation(intervals), RelativeSegmentation {
+class Time(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
+    override val segmentationType = SegmentationType.TIME
     override var bounds = Bounds().addT(intervals.first().low, intervals.last().high)
-
     override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
     override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.hasT()) {
             return when (direction) {
-                TranslateDirection.POSITIVE -> TemporalSegmentation(
-                    segmentationType,
-                    intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
-
-                TranslateDirection.NEGATIVE -> TemporalSegmentation(
-                    segmentationType,
-                    intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
+                TranslateDirection.POSITIVE -> Time(intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
+                TranslateDirection.NEGATIVE -> Time(intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
             }
         }
         return this
@@ -77,20 +72,57 @@ open class TemporalSegmentation(override val segmentationType: SegmentationType?
     override fun toAbsolute(bounds: Bounds): Segmentation? {
         val factor = bounds.getTDimension()
         if (factor.isNaN()) return null
-        return TemporalSegmentation(segmentationType, intervals.map { Interval(it.low * factor, it.high * factor) })
+        return Time(intervals.map { Interval(it.low * factor, it.high * factor) })
     }
 }
 
-class Time(intervals: List<Interval>) : TemporalSegmentation(SegmentationType.TIME, intervals)
+class Character(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
+    override val segmentationType = SegmentationType.CHARACTER
+    override var bounds = Bounds().addT(intervals.first().low, intervals.last().high)
+    override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
-class Character(intervals: List<Interval>) : TemporalSegmentation(SegmentationType.CHARACTER, intervals)
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
+        if (by.hasT()) {
+            return when (direction) {
+                TranslateDirection.POSITIVE -> Character(intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
+                TranslateDirection.NEGATIVE -> Character(intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
+            }
+        }
+        return this
+    }
 
-class Page(intervals: List<Interval>) : TemporalSegmentation(SegmentationType.PAGE, intervals)
+    override fun toAbsolute(bounds: Bounds): Segmentation? {
+        val factor = bounds.getTDimension()
+        if (factor.isNaN()) return null
+        return Character(intervals.map { Interval((it.low * factor).roundToInt().toDouble(), (it.high * factor).roundToInt().toDouble()) })
+    }
+}
+
+class Page(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
+    override val segmentationType = SegmentationType.PAGE
+    override var bounds = Bounds().addT(intervals.first().low, intervals.last().high)
+    override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
+
+    override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
+        if (by.hasT()) {
+            return when (direction) {
+                TranslateDirection.POSITIVE -> Page(intervals.map { Interval(it.low + by.getMinT(), it.high + by.getMinT()) })
+                TranslateDirection.NEGATIVE -> Page(intervals.map { Interval(it.low - by.getMinT(), it.high - by.getMinT()) })
+            }
+        }
+        return this
+    }
+
+    override fun toAbsolute(bounds: Bounds): Segmentation? {
+        val factor = bounds.getTDimension()
+        if (factor.isNaN()) return null
+        return Page(intervals.map { Interval((it.low * factor).roundToInt().toDouble(), (it.high * factor).roundToInt().toDouble()) })
+    }
+}
 
 class Width(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
     override val segmentationType = SegmentationType.WIDTH
     override var bounds = Bounds().addX(intervals.first().low, intervals.last().high)
-
     override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
     override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
@@ -104,7 +136,7 @@ class Width(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), 
     }
 
     override fun toAbsolute(bounds: Bounds): Segmentation? {
-        val factor = bounds.getTDimension()
+        val factor = bounds.getXDimension()
         if (factor.isNaN()) return null
         return Width(intervals.map { Interval(it.low * factor, it.high * factor) })
     }
@@ -113,7 +145,6 @@ class Width(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), 
 class Height(intervals: List<Interval>) : OneDimensionalSegmentation(intervals), RelativeSegmentation {
     override val segmentationType = SegmentationType.HEIGHT
     override var bounds = Bounds().addY(intervals.first().low, intervals.last().high)
-
     override val isRelative = intervals.all { it.low in 0.0..1.0 && it.high in 0.0..1.0 }
 
     override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
@@ -127,7 +158,7 @@ class Height(intervals: List<Interval>) : OneDimensionalSegmentation(intervals),
     }
 
     override fun toAbsolute(bounds: Bounds): Segmentation? {
-        val factor = bounds.getTDimension()
+        val factor = bounds.getYDimension()
         if (factor.isNaN()) return null
         return Height(intervals.map { Interval(it.low * factor, it.high * factor) })
     }

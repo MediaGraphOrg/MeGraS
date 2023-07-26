@@ -74,6 +74,9 @@ class Bounds {
     }
 
     fun overlaps(rhs: Bounds): Boolean {
+        // if unbounded, it is not possible to confirm overlap
+        if ((this.bounds.all { b -> b.isNaN() } || rhs.bounds.all { b -> b.isNaN() })) return false
+
         return (
             (this.hasX() && rhs.hasX() && this.bounds[0] <= rhs.bounds[1] && this.bounds[1] >= rhs.bounds[0]) ||
             (this.hasY() && rhs.hasY() && this.bounds[2] <= rhs.bounds[3] && this.bounds[3] >= rhs.bounds[2]) ||

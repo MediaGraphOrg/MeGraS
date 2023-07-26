@@ -53,7 +53,12 @@ object ImageSegmenter {
             }
             g.dispose()
 
-            out
+            if (xBounds[0] < 0 || xBounds[1] > image.width) {
+                // if segment is larger than image, cut off transparent margins
+                trimTransparent(out)
+            } else {
+                out
+            }
         } catch (e: Exception) {
             logger.error("Error while segmenting image width: ${e.localizedMessage}")
             null
@@ -75,7 +80,12 @@ object ImageSegmenter {
             }
             g.dispose()
 
-            out
+            if (yBounds[0] < 0 || yBounds[1] > image.height) {
+                // if segment is larger than image, cut off transparent margins
+                trimTransparent(out)
+            } else {
+                out
+            }
         } catch (e: Exception) {
             logger.error("Error while segmenting image height: ${e.localizedMessage}")
             null

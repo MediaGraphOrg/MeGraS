@@ -101,9 +101,9 @@ class LinearCutSegmentation(
 
         // remove the points above/below the line
         if (above) {
-            points.removeIf { a * it.first + b * it.second - c < 0 }
+            points.removeIf { a * it.first + b * it.second + c < 0 }
         } else {
-            points.removeIf { a * it.first + b * it.second - c > 0 }
+            points.removeIf { a * it.first + b * it.second + c > 0 }
         }
         return Polygon(points.distinct())
     }
@@ -111,13 +111,13 @@ class LinearCutSegmentation(
     private fun computeIntersectionPoint(x1: Double, y1: Double, x2: Double, y2: Double): Pair<Double, Double>? {
         val a2 = y2 - y1
         val b2 = x1 - x2
-        val d2 = a2 * x1 + b2 * y1
+        val c2 = a2 * x1 + b2 * y1
         val determinant = a * b2 - a2 * b
         if (determinant == 0.0) return null
 
-        var x = (b2 * d - b * d2) / determinant
+        var x = (-1 * (b2 * c) - b * c2) / determinant
         if (x == -0.0) x = 0.0
-        var y = (a * d2 - a2 * d) / determinant
+        var y = (a * c2 - (a2 * c) * -1) / determinant
         if (y == -0.0) y = 0.0
 
         if ((x > x1 && x > x2) || (x < x1 && x < x2) || (y > y1 && y > y2) || (y < y1 && y < y2)) return null

@@ -16,7 +16,7 @@ abstract class ReductionalSegmentation(val selection: List<String>) : Segmentati
         return rhs.selection.all { this.selection.contains(it) }
     }
 
-    override fun contains(rhs: Bounds): Boolean = true
+    override fun contains(rhs: Bounds): Boolean = false
 
     override fun orthogonalTo(rhs: Segmentation): Boolean {
         return rhs !is ReductionalSegmentation

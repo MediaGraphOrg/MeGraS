@@ -192,12 +192,12 @@ object AudioVideoSegmenter {
 
             // The video between segments is turned black (need shifting because beginning might be cut away)
             // TODO: figure out how to make it transparent instead of black
-            val blackFilters = discard.map { "drawbox=t=fill:c=black:enable='between(t,${it.low - firstPoint},${it.high - firstPoint})'" }
-            ffmpeg.addArguments("-vf", blackFilters.joinToString(", "))
+            val blackFilters = discard.map { "drawbox=t=fill:c=black:enable='between(t,${(it.low - firstPoint) / 1000},${(it.high - firstPoint) / 1000})'" }
+            ffmpeg.addArguments("-vf", '"' + blackFilters.joinToString(", ") + '"')
 
             // The audio between segments is muted (need shifting because beginning might be cut away)
-            val muteFilters = discard.map { "volume=enable='between(t,${it.low - firstPoint},${it.high - firstPoint})':volume=0" }
-            ffmpeg.addArguments("-af", muteFilters.joinToString(", "))
+            val muteFilters = discard.map { "volume=enable='between(t,${(it.low - firstPoint) / 1000},${(it.high - firstPoint) / 1000})':volume=0" }
+            ffmpeg.addArguments("-af", '"' + muteFilters.joinToString(", ") + '"')
         }
 
         ffmpeg.addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))

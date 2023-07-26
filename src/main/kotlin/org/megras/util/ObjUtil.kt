@@ -169,10 +169,6 @@ object ObjUtil {
         return path
     }
 
-    fun segmentCut(obj: Obj, s: CutSegmentation): Obj {
-        return this.segmentCut(obj, s.expression, s.above)
-    }
-
     /**
      * Cut a mesh by an equation expression and retain one of the two cut sides
      */
@@ -304,8 +300,10 @@ object ObjUtil {
             if (!res[4] && vertex.z <= minZ) res[4] = true
             if (!res[5] && vertex.z <= maxZ) res[5] = true
         }
-        // TODO: also check faces, not just vertices
-        return res.all { it }
+        if (res.any { !it }) return false
+
+        // TODO: also check faces: even if all vertices are outside of the box, faces can still be inside
+        return false
     }
 
     fun objToCSG(obj: Obj): CSG {

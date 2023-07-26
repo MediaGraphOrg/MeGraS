@@ -1,10 +1,12 @@
 package org.megras.segmentation.media
 
+import org.apache.commons.io.IOUtils
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.Character
 import org.megras.segmentation.type.Segmentation
 import org.slf4j.LoggerFactory
 import java.io.InputStream
+import java.nio.charset.Charset
 
 
 object TextSegmenter {
@@ -13,18 +15,20 @@ object TextSegmenter {
 
     fun segment(text: InputStream, segmentation: Segmentation): SegmentationResult? = try {
         if (segmentation is Character) {
-            val textBytes = text.readBytes()
+            val textString = IOUtils.toString(text, Charset.defaultCharset())
+            val charList = textString.toCharArray()
 
-            val indices = mutableListOf<Int>()
-            segmentation.intervals.forEach { i ->
-                if (i.low < textBytes.size && i.high <= textBytes.size) {
-                    (i.low.toInt() until i.high.toInt()).forEach { j -> indices.add(j) }
-                } else {
-                    return null
+            val lower = segmentation.bounds.getMinT()
+            val upper = segmentation.bounds.getMaxT()
+
+            segmentation.getIntervalsToDiscard().forEach { i ->
+                if (i.low < textString.length && i.high <= textString.length) {
+                    (i.low.toInt() until i.high.toInt()).forEach { j -> charList[j] = ' ' }
                 }
             }
-            val segment = textBytes.sliceArray(indices)
-            SegmentationResult(segment, Bounds().addT(0, segment.size))
+
+            val segment = String(charList).substring(lower.toInt(), upper.toInt())
+            SegmentationResult(segment.encodeToByteArray(), Bounds().addT(0, segment.length))
         } else {
             logger.warn("Segmentation type '${segmentation.getType()}' not applicable to text")
             null

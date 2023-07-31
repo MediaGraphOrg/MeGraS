@@ -11,6 +11,7 @@ enum class MimeType(val mimeString: String) {
     HTML("text/html"),
     JS("application/javascript"),
     JSON("application/json"),
+    YAML("text/yaml"),
     TEXT("text/plain"),
 
     //images
@@ -29,10 +30,23 @@ enum class MimeType(val mimeString: String) {
     MPEG_A("audio/mpeg"),
     MIDI("audio/midi"),
     MP4_A("audio/mp4"),
-    OGG("audio/ogg"),
+    OGG_A("audio/ogg"),
     WAV("audio/x-wav"),
     WAX("audio/x-ms-wax"),
-    WMA("audio/x-ms-wma");
+    WMA("audio/x-ms-wma"),
+    WEBM_A("audio/webm"),
+
+    //video
+    MOV("video/quicktime"),
+    MP4("video/mp4"),
+    OGG("video/ogg"),
+    WEBM("video/webm"),
+    AVI("video/avi"),
+    MKV("video/x-matroska"),
+
+    PDF("application/pdf"),
+
+    OBJ("model/obj");
 
     companion object {
         val extensionMap = mapOf(
@@ -42,6 +56,8 @@ enum class MimeType(val mimeString: String) {
             "html" to HTML,
             "js" to JS,
             "json" to JSON,
+            "yml" to YAML,
+            "yaml" to YAML,
             "log" to TEXT,
             "text" to TEXT,
             "txt" to TEXT,
@@ -75,12 +91,25 @@ enum class MimeType(val mimeString: String) {
             "midi" to MIDI,
             "rmi" to MIDI,
             "mp4a" to MP4_A,
-            "oga" to OGG,
+            "oga" to OGG_A,
             "ogg" to OGG,
-            "spx" to OGG,
+            "spx" to OGG_A,
             "wav" to WAV,
             "wax" to WAX,
-            "wma" to WMA
+            "wma" to WMA,
+
+            "mov" to MOV,
+            "mp4" to MP4,
+            "m4v" to MP4,
+            "avi" to AVI,
+            "ogv" to OGG,
+            "ogx" to OGG,
+            "webm" to WEBM,
+            "mkv" to MKV,
+
+            "pdf" to PDF,
+
+            "obj" to OBJ
 
         )
 

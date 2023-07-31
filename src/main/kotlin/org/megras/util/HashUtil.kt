@@ -6,6 +6,7 @@ import org.megras.util.extensions.toHex
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.*
 
 object HashUtil {
 
@@ -27,6 +28,8 @@ object HashUtil {
 
     fun hash(string: String, hashType: HashType = HashType.SHA3_256): ByteArray = updateDigest(digest(hashType), ByteArrayInputStream(string.toByteArray(Charsets.UTF_8))).digest()
 
+    fun hash(mask: BitSet, hashType: HashType = HashType.SHA3_256): ByteArray = updateDigest(digest(hashType), ByteArrayInputStream(mask.toByteArray())).digest()
+
     fun hashToHex(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = hash(stream, hashType).toHex()
 
     fun hashToBase32(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = hash(stream, hashType).toBase32()
@@ -34,6 +37,8 @@ object HashUtil {
     fun hashToBase64(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = hash(stream, hashType).toBase64()
 
     fun hashToBase64(string: String, hashType: HashType = HashType.SHA3_256): String = hash(string, hashType).toBase64()
+
+    fun hashToBase64(mask: BitSet, hashType: HashType = HashType.SHA3_256): String = hash(mask, hashType).toBase64()
 
     enum class HashType(val algorithm: String) {
         SHA3_256("SHA3-256"),

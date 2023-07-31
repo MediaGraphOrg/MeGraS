@@ -1,5 +1,13 @@
 package org.megras.util
 
+import com.github.kokorin.jaffree.StreamType
+import com.github.kokorin.jaffree.ffmpeg.ChannelInput
+import com.github.kokorin.jaffree.ffmpeg.ChannelOutput
+import com.github.kokorin.jaffree.ffmpeg.FFmpeg
+import com.github.kokorin.jaffree.ffprobe.FFprobe
+import de.javagl.obj.ObjReader
+import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
+import org.apache.pdfbox.pdmodel.PDDocument
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.StoredObjectDescriptor
 import org.megras.data.fs.file.PseudoFile
@@ -11,11 +19,18 @@ import org.megras.data.schema.MeGraS
 import org.megras.graphstore.MutableQuadSet
 import org.megras.id.IdUtil
 import org.megras.id.ObjectId
+import org.megras.segmentation.Bounds
+import org.slf4j.LoggerFactory
+import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
 
+
 object AddFileUtil {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     fun addFile(objectStore: FileSystemObjectStore, quads: MutableQuadSet, file: PseudoFile): ObjectId {
 
@@ -41,17 +56,23 @@ object AddFileUtil {
         quads.addAll(
             listOf(
                 Quad(oid, MeGraS.RAW_ID.uri, StringValue(descriptor.id.id)),
-                Quad(oid, MeGraS.MIME_TYPE.uri, StringValue(descriptor.mimeType.mimeString)),
+                Quad(oid, MeGraS.RAW_MIME_TYPE.uri, StringValue(descriptor.mimeType.mimeString)),
                 Quad(oid, MeGraS.MEDIA_TYPE.uri, StringValue(MediaType.mimeTypeMap[descriptor.mimeType]!!.name)),
                 Quad(oid, MeGraS.FILE_NAME.uri, StringValue(file.name)),
-                Quad(oid, MeGraS.CANONICAL_ID.uri, StringValue(canonical.id.id))
+                Quad(oid, MeGraS.CANONICAL_ID.uri, StringValue(canonical.id.id)),
+                Quad(oid, MeGraS.CANONICAL_MIME_TYPE.uri, StringValue(canonical.mimeType.mimeString)),
+                Quad(oid, MeGraS.BOUNDS.uri, StringValue(canonical.bounds.toString()))
             )
         )
 
         return oid
     }
 
-
+    /**
+     * image -> PNG
+     * audio -> Vorbis in WebM container
+     * video -> VP9 in WebM container
+     */
     private fun generateCanonicalRepresentation(
         objectStore: FileSystemObjectStore,
         rawDescriptor: StoredObjectDescriptor
@@ -59,11 +80,22 @@ object AddFileUtil {
 
         return when (rawDescriptor.mimeType) {
 
-            //images to keep
-            MimeType.JPEG_I,
-            MimeType.PNG -> rawDescriptor
+            MimeType.PNG -> {
+                val imageStream = objectStore.get(rawDescriptor.id)!!.inputStream()
+                val image = ImageIO.read(imageStream)
 
-            //images to transform
+                val descriptor = StoredObjectDescriptor(
+                    rawDescriptor.id,
+                    rawDescriptor.mimeType,
+                    rawDescriptor.length,
+                    Bounds().addX(0, image.width).addY(0, image.height)
+                )
+                objectStore.storeDescriptor(descriptor)
+
+                //return
+                descriptor
+            }
+            MimeType.JPEG_I,
             MimeType.BMP,
             MimeType.GIF,
             MimeType.SVG,
@@ -71,13 +103,17 @@ object AddFileUtil {
 
                 try {
                     val buffered = ImageIO.read(objectStore.get(rawDescriptor.id)!!.inputStream())
+
+                    val rgbaImage = BufferedImage(buffered.width, buffered.height, BufferedImage.TYPE_INT_ARGB)
+                    val g = rgbaImage.createGraphics()
+                    g.drawImage(buffered, 0, 0, null)
+                    g.dispose()
+
                     val outStream = ByteArrayOutputStream()
-                    ImageIO.write(buffered, "PNG", outStream)
+                    ImageIO.write(rgbaImage, "PNG", outStream)
 
                     val buf = outStream.toByteArray()
-
                     val inStream = ByteArrayInputStream(buf)
-
                     val id = objectStore.idFromStream(inStream)
 
                     inStream.reset()
@@ -85,50 +121,175 @@ object AddFileUtil {
                     val descriptor = StoredObjectDescriptor(
                         id,
                         MimeType.PNG,
-                        buf.size.toLong()
+                        buf.size.toLong(),
+                        Bounds().addX(0, buffered.width).addY(0, buffered.height)
                     )
-
                     objectStore.store(inStream, descriptor)
 
                     //return
                     descriptor
 
                 } catch (e: Exception) {
-                    //TODO log
+                    logger.error("Error while creating canonical representation for ${rawDescriptor.mimeType}: ${e.localizedMessage}")
                     rawDescriptor
                 }
-
             }
 
-            //audio to keep
-            MimeType.OGG,
-            MimeType.MPEG_A,
             MimeType.AAC,
-            MimeType.MP4_A -> rawDescriptor
-
-
-            //audio to transform
+            MimeType.OGG_A,
+            MimeType.MPEG_A,
+            MimeType.MP4_A,
             MimeType.ADP,
             MimeType.AIF,
             MimeType.AU,
             MimeType.MIDI,
             MimeType.WAV,
             MimeType.WAX,
-            MimeType.WMA -> {
-                TODO()
+            MimeType.WMA,
+            MimeType.WEBM_A -> {
+                try {
+                    val audioStream = objectStore.get(rawDescriptor.id)!!.byteChannel()
+                    val outStream = SeekableInMemoryByteChannel()
+                    val durationMillis = AtomicLong()
+
+                    FFmpeg.atPath()
+                        .addInput(ChannelInput.fromChannel(audioStream))
+                        .setProgressListener { progress -> durationMillis.set(progress.timeMillis) }
+                        .addArguments("-c:a", "libvorbis")
+                        .setOverwriteOutput(true)
+                        .addOutput(ChannelOutput.toChannel("", outStream).setFormat("webm"))
+                        .execute()
+
+                    val buf = outStream.array()
+                    val inStream = ByteArrayInputStream(buf)
+                    val id = objectStore.idFromStream(inStream)
+
+                    inStream.reset()
+
+                    val descriptor = StoredObjectDescriptor(
+                        id,
+                        MimeType.WEBM_A,
+                        buf.size.toLong(),
+                        Bounds().addT(0, durationMillis.get())
+                    )
+                    objectStore.store(inStream, descriptor)
+
+                    //return
+                    descriptor
+
+                } catch (e: Exception) {
+                    logger.error("Error while creating canonical representation for ${rawDescriptor.mimeType}: ${e.localizedMessage}")
+                    rawDescriptor
+                }
             }
 
+            MimeType.MKV,
+            MimeType.WEBM,
+            MimeType.MOV,
+            MimeType.MP4,
+            MimeType.AVI,
+            MimeType.OGG -> {
+                try {
+                    val videoStream = objectStore.get(rawDescriptor.id)!!.byteChannel()
+                    val outStream = SeekableInMemoryByteChannel()
+                    val durationMillis = AtomicLong()
 
-            //raw and text types to keep
-            MimeType.OCTET_STREAM,
+                    val probe = FFprobe.atPath().setShowStreams(true).setInput(videoStream).execute().streams
+                    val videoProbe = probe.first { s -> s.codecType == StreamType.VIDEO }
+
+                    FFmpeg.atPath()
+                        .addInput(ChannelInput.fromChannel(videoStream))
+                        .setProgressListener { progress -> durationMillis.set(progress.timeMillis) }
+                        .addArguments("-c:v", "libvpx-vp9")
+                        .addArguments("-c:a", "libvorbis")
+                        .setOverwriteOutput(true)
+                        .addOutput(ChannelOutput.toChannel("", outStream).setFormat("webm"))
+                        .execute()
+
+                    val buf = outStream.array()
+                    val inStream = ByteArrayInputStream(buf)
+                    val id = objectStore.idFromStream(inStream)
+
+                    inStream.reset()
+
+                    val descriptor = StoredObjectDescriptor(
+                        id,
+                        MimeType.WEBM,
+                        buf.size.toLong(),
+                        Bounds().addX(0, videoProbe.width).addY(0, videoProbe.height).addT(0, durationMillis.get())
+                    )
+                    objectStore.store(inStream, descriptor)
+
+                    //return
+                    descriptor
+
+                } catch (e: Exception) {
+                    logger.error("Error while creating canonical representation for ${rawDescriptor.mimeType}: ${e.localizedMessage}")
+                    rawDescriptor
+                }
+            }
+
             MimeType.CSS,
             MimeType.CSV,
             MimeType.HTML,
             MimeType.JS,
             MimeType.JSON,
-            MimeType.TEXT -> rawDescriptor
-        }
+            MimeType.YAML,
+            MimeType.TEXT -> {
+                val textStream = objectStore.get(rawDescriptor.id)!!.inputStream()
+                val buffer = textStream.readBytes()
 
+                val descriptor = StoredObjectDescriptor(
+                    rawDescriptor.id,
+                    rawDescriptor.mimeType,
+                    rawDescriptor.length,
+                    Bounds().addT(0, buffer.size)
+                )
+                objectStore.storeDescriptor(descriptor)
+
+                //return
+                descriptor
+            }
+
+            MimeType.PDF -> {
+                val pdfStream = objectStore.get(rawDescriptor.id)!!.inputStream()
+                val pdf = PDDocument.load(pdfStream)
+                val page = pdf.getPage(0)
+
+                val descriptor = StoredObjectDescriptor(
+                    rawDescriptor.id,
+                    rawDescriptor.mimeType,
+                    rawDescriptor.length,
+                    Bounds().addX(0, ptToMm(page.mediaBox.width)).addY(0, ptToMm(page.mediaBox.height)).addT(0, pdf.numberOfPages)
+                )
+                objectStore.storeDescriptor(descriptor)
+                pdf.close()
+
+                //return
+                descriptor
+            }
+            MimeType.OBJ -> {
+                val objStream = objectStore.get(rawDescriptor.id)!!.inputStream()
+                val obj = ObjReader.read(objStream)
+                val bounds = ObjUtil.computeBounds(obj)
+
+                val descriptor = StoredObjectDescriptor(
+                    rawDescriptor.id,
+                    rawDescriptor.mimeType,
+                    rawDescriptor.length,
+                    bounds
+                )
+                objectStore.storeDescriptor(descriptor)
+
+                //return
+                descriptor
+            }
+
+            MimeType.OCTET_STREAM -> rawDescriptor
+        }
     }
 
+    fun ptToMm(pt: Float): Float {
+        return pt * 25.4f / 72
+    }
 }

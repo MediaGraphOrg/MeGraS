@@ -5,6 +5,7 @@ plugins {
     id 'application'
     id 'org.jetbrains.kotlin.kapt' version '1.8.10'
     id 'antlr'
+    id 'org.openjfx.javafxplugin' version '0.0.14'
 }
 
 group 'org.megras'
@@ -31,6 +32,7 @@ dependencies {
     def jlineVersion = '3.21.0'
     def jacksonVersion = '2.14.2'
     def scrimageVersion = '4.0.31'
+    def batikVersion = '1.16'
     def twelvemonkeysVersion = '3.8.2'
     def cottontaildbDriverVerion='0.14.4-SNAPSHOT'
     def grpcVersion = '1.49.2'
@@ -55,6 +57,7 @@ dependencies {
     implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: log4jVersion
     implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: log4jVersion
     implementation group: 'org.apache.logging.log4j', name: 'log4j-jul', version: log4jVersion
+    implementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.6'
 
     /* Apache commons */
     implementation group: 'commons-codec', name: 'commons-codec', version: '1.15'
@@ -78,13 +81,43 @@ dependencies {
     implementation group: 'com.sksamuel.scrimage', name: 'scrimage-formats-extra', version: scrimageVersion
     implementation group: 'com.sksamuel.scrimage', name: 'scrimage-webp', version: scrimageVersion
 
+    /* SVG path parsing */
+    implementation group: 'org.apache.xmlgraphics', name: 'batik-parser', version: batikVersion
+    implementation group: 'org.apache.xmlgraphics', name: 'batik-ext', version: batikVersion
+
+    /* PDF */
+    implementation group: 'org.apache.pdfbox', name: 'pdfbox', version: '2.0.27'
+
+    /* Splines */
+    implementation group: 'org.tinyspline', name: 'tinyspline', version: '0.6.0-1'
+
+    /* FFmpeg wrapper */
+    implementation group: 'com.github.kokorin.jaffree', name: 'jaffree', version: '2022.06.03'
+
+    /* Wavefront OBJ wrapper */
+    implementation group: 'de.javagl', name: 'obj', version: '0.4.0'
+
+    /* Hilbert curve utilities */
+    implementation group: 'com.github.davidmoten', name: 'hilbert-curve', version: '0.2.2'
+
+    /* Interpolate java.awt.Shape objects */
+    implementation 'de.sciss:shapeinterpolator:0.1.0'
+
+    /* Evaluate equations */
+    implementation 'com.ezylang:EvalEx:3.0.5'
+
+    /* Constructive Solid Geometry */
+    implementation group: 'eu.mihosoft.vrl.jcsg', name: 'jcsg', version: '0.5.7'
+
     /* CSV */
     implementation group: 'com.github.doyaaaaaken', name: 'kotlin-csv-jvm', version: '1.9.0'
+
+    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.23.0'
 
     /* Image decoding */
     implementation group: 'com.twelvemonkeys.imageio',  name: 'imageio-jpeg',       version: twelvemonkeysVersion
     implementation group: 'com.twelvemonkeys.imageio',  name: 'imageio-batik',      version: twelvemonkeysVersion
-    implementation group: 'org.apache.xmlgraphics',     name: 'batik-transcoder',   version: '1.14'
+    implementation group: 'org.apache.xmlgraphics',     name: 'batik-transcoder',   version: batikVersion
     implementation group: 'com.twelvemonkeys.imageio',  name: 'imageio-tiff',       version: twelvemonkeysVersion
 
     /* CottontailDB Driver */
@@ -114,6 +147,11 @@ dependencies {
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+}
+
+javafx {
+    version = "19"
+    modules = [ 'javafx.graphics' ]
 }
 
 //generateGrammarSource {

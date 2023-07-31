@@ -14,13 +14,13 @@ class CanonicalObjectRequestHandler(private val quads: QuadSet, private val obje
 
     override fun get(ctx: Context) {
 
-        val rawId = quads.filter(
+        val canonicalId = quads.filter(
             setOf(ObjectId(ctx.pathParam("objectId"))),
             setOf(MeGraS.CANONICAL_ID.uri),
             null
         ).firstOrNull()?.`object` as? StringValue ?: throw RestErrorStatus.notFound
 
-        val osId = StoredObjectId.of(rawId.value) ?: throw RestErrorStatus.notFound
+        val osId = StoredObjectId.of(canonicalId.value) ?: throw RestErrorStatus.notFound
 
         RawObjectRequestHandler.streamObject(osId, objectStore, ctx)
 

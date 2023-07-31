@@ -1,8 +1,7 @@
 package org.megras.api.rest
 
 import io.javalin.Javalin
-import io.javalin.apibuilder.ApiBuilder.get
-import io.javalin.apibuilder.ApiBuilder.post
+import io.javalin.apibuilder.ApiBuilder.*
 import io.javalin.openapi.plugin.OpenApiPlugin
 import io.javalin.openapi.plugin.OpenApiPluginConfiguration
 import io.javalin.openapi.plugin.swagger.SwaggerConfiguration
@@ -29,6 +28,7 @@ object RestApi {
         val aboutObjectRequestHandler = AboutObjectRequestHandler(quadSet, objectStore)
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
+        val addQuadRequestHandler = AddQuadRequestHandler(quadSet)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
         val subjectQueryHandler = SubjectQueryHandler(quadSet)
@@ -37,6 +37,7 @@ object RestApi {
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
+        val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
 
 
         javalin = Javalin.create {
@@ -80,11 +81,21 @@ object RestApi {
         }.routes {
             get("/raw/{objectId}", rawObjectRequestHandler::get)
             get("/{objectId}", canonicalObjectRequestHandler::get)
-            get("/{objectId}/about", aboutObjectRequestHandler::get)
-            get("/{objectId}/preview", objectPreviewRequestHandler::get)
-            get("/{objectId}/c/{segmentId}", cachedSegmentRequestHandler::get)
-            get("/{objectId}/segment/{segmentation}/<segmentDefinition>", canonicalSegmentRequestHandler::get)
+            get("/<objectId>/about", aboutObjectRequestHandler::get)
+            get("/<objectId>/preview", objectPreviewRequestHandler::get)
+            get("/{objectId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/<tail>", canonicalSegmentRequestHandler::get)
+            get("/{objectId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}", canonicalSegmentRequestHandler::get)
+            get("/{objectId}/segment/{segmentation}/{segmentDefinition}", canonicalSegmentRequestHandler::get)
+            get("/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/<tail>", canonicalSegmentRequestHandler::get)
+            get("/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}", canonicalSegmentRequestHandler::get)
+            get("/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}", canonicalSegmentRequestHandler::get)
+            get("/{objectId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}", canonicalSegmentRequestHandler::intersection)
+            get("/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}", canonicalSegmentRequestHandler::intersection)
+            get("/{objectId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}", canonicalSegmentRequestHandler::union)
+            get("/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}", canonicalSegmentRequestHandler::union)
+            get("/{objectId}/c/{segmentId}*", cachedSegmentRequestHandler::get)
             post("/add/file", addFileRequestHandler::post)
+            post("/add/quads", addQuadRequestHandler::post)
             post("/query/quads", basicQueryHandler::post)
             post("/query/text", textQueryHandler::post)
             post("/query/subject", subjectQueryHandler::post)
@@ -93,6 +104,7 @@ object RestApi {
             post("/query/knn", knnQueryHandler::post)
             post("/query/path", pathQueryHandler::post)
             get("/query/sparql", sparqlQueryHandler::get)
+            delete("/<objectId>", deleteObjectRequestHandler::delete)
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

@@ -15,13 +15,13 @@ class CachedSegmentRequestHandler(private val quads: QuadSet, private val object
     // /{objectId}/c/{segmentId}
     override fun get(ctx: Context) {
 
-        val rawId = quads.filter(
+        val canonicalId = quads.filter(
             setOf(LocalQuadValue(ctx.path().replaceFirst("/", ""))),
-            setOf(MeGraS.RAW_ID.uri),
+            setOf(MeGraS.CANONICAL_ID.uri),
             null
         ).firstOrNull()?.`object` as? StringValue ?: throw RestErrorStatus.notFound
 
-        val osId = StoredObjectId.of(rawId.value) ?: throw RestErrorStatus.notFound
+        val osId = StoredObjectId.of(canonicalId.value) ?: throw RestErrorStatus.notFound
 
         RawObjectRequestHandler.streamObject(osId, objectStore, ctx)
     }

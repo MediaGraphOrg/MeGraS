@@ -101,10 +101,10 @@ dependencies {
     implementation group: 'com.github.davidmoten', name: 'hilbert-curve', version: '0.2.2'
 
     /* Interpolate java.awt.Shape objects */
-    implementation 'de.sciss:shapeinterpolator:0.1.0'
+    implementation group: 'de.sciss', name: 'shapeinterpolator', version: '0.1.0' //GPL V2 with classpath exception
 
     /* Evaluate equations */
-    implementation 'com.ezylang:EvalEx:3.0.5'
+    implementation group: 'com.ezylang', name: 'EvalEx', version: '3.0.5'
 
     /* Constructive Solid Geometry */
     implementation group: 'eu.mihosoft.vrl.jcsg', name: 'jcsg', version: '0.5.7'

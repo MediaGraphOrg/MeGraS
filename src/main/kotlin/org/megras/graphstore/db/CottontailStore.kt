@@ -268,6 +268,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                         Query(name).select("*").where(Expression("value", "in", v))
                     )
                 }
+
+                VectorValue.Type.Float -> {
+                    val v = vectors.map { (it as FloatVectorValue).vector }
+                    client.query(
+                        Query(name).select("*").where(Expression("value", "in", v))
+                    )
+                }
             }
 
             while (result.hasNext()) {
@@ -276,6 +283,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 val value = when (properties.first) {
                     VectorValue.Type.Double -> DoubleVectorValue(tuple.asDoubleVector("value")!!)
                     VectorValue.Type.Long -> LongVectorValue(tuple.asLongVector("value")!!)
+                    VectorValue.Type.Float -> FloatVectorValue(tuple.asFloatVector("value")!!)
                 }
                 val pair = (-entityId + VECTOR_ID_OFFSET) to id
                 returnMap[value] = pair
@@ -374,6 +382,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                             when (properties.first) {
                                 VectorValue.Type.Double -> (it as DoubleVectorValue).vector
                                 VectorValue.Type.Long -> (it as LongVectorValue).vector
+                                VectorValue.Type.Float -> (it as FloatVectorValue).vector
                             }
                         )
                     ) { "could not add value to batch, try reducing batch size" }
@@ -531,6 +540,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             val value = when (properties.second) {
                 VectorValue.Type.Double -> DoubleVectorValue(tuple.asDoubleVector("value")!!)
                 VectorValue.Type.Long -> LongVectorValue(tuple.asLongVector("value")!!)
+                VectorValue.Type.Float -> FloatVectorValue(tuple.asFloatVector("value")!!)
             }
 //            vectorValueValueCache.put(value, pair)
 //            vectorValueIdCache.put(pair, value)

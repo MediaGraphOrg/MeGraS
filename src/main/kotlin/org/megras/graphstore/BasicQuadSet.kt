@@ -54,20 +54,31 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
         val queue = FixedSizePriorityQueue(count, DistancePairComparator<Pair<Double, VectorValue>>())
         val dist = distance.distance()
 
-        if (`object` is DoubleVectorValue) {
-            val v = `object`.vector
-            vectors.forEach {
-                val vv = (it as DoubleVectorValue).vector
-                val d = dist.distance(v, vv)
-                queue.add(d to it)
+
+        when(`object`) {
+            is DoubleVectorValue -> {
+                val v = `object`.vector
+                vectors.forEach {
+                    val vv = (it as DoubleVectorValue).vector
+                    val d = dist.distance(v, vv)
+                    queue.add(d to it)
+                }
             }
-        } else {
-            `object` as LongVectorValue
-            val v = `object`.vector
-            vectors.forEach {
-                val vv = (it as LongVectorValue).vector
-                val d = dist.distance(v, vv)
-                queue.add(d to it)
+            is LongVectorValue -> {
+                val v = `object`.vector
+                vectors.forEach {
+                    val vv = (it as LongVectorValue).vector
+                    val d = dist.distance(v, vv)
+                    queue.add(d to it)
+                }
+            }
+            is FloatVectorValue -> {
+                val v = `object`.vector
+                vectors.forEach {
+                    val vv = (it as FloatVectorValue).vector
+                    val d = dist.distance(v, vv)
+                    queue.add(d to it)
+                }
             }
         }
 

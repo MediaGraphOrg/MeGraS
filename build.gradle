@@ -34,9 +34,9 @@ dependencies {
     def scrimageVersion = '4.1.1'
     def batikVersion = '1.17'
     def twelvemonkeysVersion = '3.8.2'
-    def cottontaildbDriverVerion='0.14.4-SNAPSHOT'
-    def grpcVersion = '1.49.2'
-    def protobufVersion = '3.21.7'
+    def cottontaildbDriverVerion='0.16.5'
+    def grpcVersion = '1.60.0'
+    def protobufVersion = '3.25.1'
     def exposedVersion = '0.40.1'
 //    def antlrVersion = '4.13.0'
     def jenaVersion = '5.0.0'
@@ -121,9 +121,9 @@ dependencies {
     implementation group: 'com.twelvemonkeys.imageio',  name: 'imageio-tiff',       version: twelvemonkeysVersion
 
     /* CottontailDB Driver */
-    implementation group: 'org.vitrivr', name: 'cottontaildb-proto', version: cottontaildbDriverVerion
-    implementation group: 'io.grpc', name: 'grpc-all', version: grpcVersion
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: protobufVersion
+    implementation group: 'org.vitrivr', name: 'cottontaildb-client', version: cottontaildbDriverVerion
+//    implementation group: 'io.grpc', name: 'grpc-all', version: grpcVersion
+//    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: protobufVersion
 
     /* Guava */
     implementation group: 'com.google.guava', name: 'guava', version: '31.1-jre'

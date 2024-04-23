@@ -1,6 +1,5 @@
 package org.megras.data.graph
 
-import org.vitrivr.cottontail.client.language.basics.Type
 import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
@@ -162,17 +161,17 @@ abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Seria
 
     enum class Type(val byte: Byte) {
         Double(0) {
-            override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.DOUBLE_VECTOR
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.DoubleVector(length)
         },
         Long(1) {
-            override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.LONG_VECTOR
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.LongVector(length)
         },
         Float(2) {
-            override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.FLOAT_VECTOR
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.FloatVector(length)
         }
         ;
 
-        abstract fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type
+        abstract fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*>
 
         companion object {
             fun fromByte(byte: Byte) = when(byte) {

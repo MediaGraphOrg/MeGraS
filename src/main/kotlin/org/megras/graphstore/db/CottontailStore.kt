@@ -6,12 +6,12 @@ import io.grpc.StatusRuntimeException
 import org.megras.data.graph.*
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.*
-import org.megras.util.extensions.toBase64
 import org.vitrivr.cottontail.client.SimpleClient
 import org.vitrivr.cottontail.client.language.basics.Direction
-import org.vitrivr.cottontail.client.language.basics.Type
+import org.vitrivr.cottontail.client.language.basics.expression.Column
+import org.vitrivr.cottontail.client.language.basics.expression.ValueList
 import org.vitrivr.cottontail.client.language.basics.predicate.And
-import org.vitrivr.cottontail.client.language.basics.predicate.Expression
+import org.vitrivr.cottontail.client.language.basics.predicate.Compare
 import org.vitrivr.cottontail.client.language.basics.predicate.Or
 import org.vitrivr.cottontail.client.language.basics.predicate.Predicate
 import org.vitrivr.cottontail.client.language.ddl.CreateEntity
@@ -21,8 +21,9 @@ import org.vitrivr.cottontail.client.language.dml.BatchInsert
 import org.vitrivr.cottontail.client.language.dml.Delete
 import org.vitrivr.cottontail.client.language.dml.Insert
 import org.vitrivr.cottontail.client.language.dql.Query
+import org.vitrivr.cottontail.core.database.Name
+import org.vitrivr.cottontail.core.types.Types
 import org.vitrivr.cottontail.grpc.CottontailGrpc
-import java.nio.ByteBuffer
 
 typealias QuadValueId = Pair<Int, Long>
 
@@ -50,90 +51,207 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             }
         }
 
-        catchExists { client.create(CreateSchema("megras")) }
+        client.create(CreateSchema("megras").ifNotExists())
+
+
+        client.create(
+            CreateEntity("megras.quads")
+                .column(Name.ColumnName.create("id"), Types.Long, autoIncrement = true)
+                .column(Name.ColumnName.create("s_type"), Types.Int)
+                .column(Name.ColumnName.create("s"), Types.Long)
+                .column(Name.ColumnName.create("p_type"), Types.Int)
+                .column(Name.ColumnName.create("p"), Types.Long)
+                .column(Name.ColumnName.create("o_type"), Types.Int)
+                .column(Name.ColumnName.create("o"), Types.Long)
+                .column(Name.ColumnName.create("hash"), Types.String)
+                .ifNotExists()
+        )
 
         catchExists {
             client.create(
-                CreateEntity("megras.quads")
-                    .column("id", Type.LONG, autoIncrement = true)
-                    .column("s_type", Type.INTEGER)
-                    .column("s", Type.LONG)
-                    .column("p_type", Type.INTEGER)
-                    .column("p", Type.LONG)
-                    .column("o_type", Type.INTEGER)
-                    .column("o", Type.LONG)
-                    .column("hash", Type.STRING)
+                CreateIndex(
+                    Name.EntityName.create("megras", "quads"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("id")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "quads"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("s")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "quads"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("p")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "quads"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("o")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "quads"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("hash")
             )
         }
 
-        catchExists { client.create(CreateIndex("megras.quads", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-//        catchExists { client.create(CreateIndex("megras.quads", "s_type", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.quads", "s", CottontailGrpc.IndexType.BTREE)) }
-//        catchExists { client.create(CreateIndex("megras.quads", "p_type", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.quads", "p", CottontailGrpc.IndexType.BTREE)) }
-//        catchExists { client.create(CreateIndex("megras.quads", "o_type", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.quads", "o", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.quads", "hash", CottontailGrpc.IndexType.BTREE_UQ)) }
+
+        client.create(
+            CreateEntity("megras.literal_string")
+                .column(Name.ColumnName.create("id"), Types.Long, autoIncrement = true)
+                .column(Name.ColumnName.create("value"), Types.String)
+                .ifNotExists()
+        )
+
 
         catchExists {
             client.create(
-                CreateEntity("megras.literal_string")
-                    .column("id", Type.LONG, autoIncrement = true)
-                    .column("value", Type.STRING)
+                CreateIndex(
+                    Name.EntityName.create("megras", "literal_string"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("id")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "literal_string"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("value")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "literal_string"),
+                    CottontailGrpc.IndexType.LUCENE
+                ).column("value")
             )
         }
 
-        catchExists { client.create(CreateIndex("megras.literal_string", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-        catchExists { client.create(CreateIndex("megras.literal_string", "value", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.literal_string", "value", CottontailGrpc.IndexType.LUCENE)) }
+
+        client.create(
+            CreateEntity("megras.literal_double")
+                .column(Name.ColumnName.create("id"), Types.Long, autoIncrement = true)
+                .column(Name.ColumnName.create("value"), Types.Double)
+                .ifNotExists()
+        )
+
 
         catchExists {
             client.create(
-                CreateEntity("megras.literal_double")
-                    .column("id", Type.LONG, autoIncrement = true)
-                    .column("value", Type.DOUBLE)
+                CreateIndex(
+                    Name.EntityName.create("megras", "literal_double"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("id")
             )
         }
-
-        catchExists { client.create(CreateIndex("megras.literal_double", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-        catchExists { client.create(CreateIndex("megras.literal_double", "value", CottontailGrpc.IndexType.BTREE)) }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "literal_double"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("value")
+            )
+        }
 
         catchExists {
             client.create(
                 CreateEntity("megras.entity_prefix")
-                    .column("id", Type.INTEGER, autoIncrement = true)
-                    .column("prefix", Type.STRING)
+                    .column(Name.ColumnName.create("id"), Types.Int, autoIncrement = true)
+                    .column(Name.ColumnName.create("prefix"), Types.String)
             )
         }
-
-        catchExists { client.create(CreateIndex("megras.entity_prefix", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-        catchExists { client.create(CreateIndex("megras.entity_prefix", "prefix", CottontailGrpc.IndexType.BTREE)) }
 
         catchExists {
             client.create(
-                CreateEntity("megras.entity")
-                    .column("id", Type.LONG, autoIncrement = true)
-                    .column("value", Type.STRING)
+                CreateIndex(
+                    Name.EntityName.create("megras", "entity_prefix"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("id")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "entity_prefix"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("prefix")
             )
         }
 
-        catchExists { client.create(CreateIndex("megras.entity", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-        catchExists { client.create(CreateIndex("megras.entity", "value", CottontailGrpc.IndexType.BTREE)) }
+        client.create(
+            CreateEntity("megras.entity")
+                .column(Name.ColumnName.create("id"), Types.Long, autoIncrement = true)
+                .column(Name.ColumnName.create("value"), Types.String)
+                .ifNotExists()
+        )
 
 
         catchExists {
             client.create(
-                CreateEntity("megras.vector_types")
-                    .column("id", Type.INTEGER, autoIncrement = true)
-                    .column("type", Type.INTEGER)
-                    .column("length", Type.INTEGER)
+                CreateIndex(
+                    Name.EntityName.create("megras", "entity"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("id")
             )
-
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "entity"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("value")
+            )
         }
 
-        catchExists { client.create(CreateIndex("megras.vector_types", "id", CottontailGrpc.IndexType.BTREE_UQ)) }
-        catchExists { client.create(CreateIndex("megras.vector_types", "type", CottontailGrpc.IndexType.BTREE)) }
-        catchExists { client.create(CreateIndex("megras.vector_types", "length", CottontailGrpc.IndexType.BTREE)) }
+
+        client.create(
+            CreateEntity("megras.vector_types")
+                .column(Name.ColumnName.create("id"), Types.Int, autoIncrement = true)
+                .column(Name.ColumnName.create("type"), Types.Int)
+                .column(Name.ColumnName.create("length"), Types.Int)
+                .ifNotExists()
+        )
+
+
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "vector_types"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("id")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "vector_types"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("type")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "vector_types"),
+                    CottontailGrpc.IndexType.BTREE
+                ).column("length")
+            )
+        }
 
 
     }
@@ -145,7 +263,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val result = client.query(
             Query("megras.literal_double").select("*").where(
-                Expression("value", "in", doubleValues.map { it.value })
+                Compare(
+                    "value",
+                    "in",
+                    doubleValues.map { it.value }.toDoubleArray()
+                )
             )
         )
 
@@ -172,7 +294,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         val result = client.query(
             Query("megras.literal_string")
                 .select("*")
-                .where(Expression("value", "in", stringValues.map { it.value }))
+                .where(
+                    Compare(
+                        Column("value"),
+                        Compare.Operator.IN,
+                        ValueList(stringValues.map { it.value })
+                    )
+                )
         )
 
         val returnMap = HashMap<StringValue, QuadValueId>(stringValues.size)
@@ -196,7 +324,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val result = client.query(
             Query("megras.entity_prefix").select("*").where(
-                Expression("prefix", "in", prefixValues)
+                Compare(
+                    Column("prefix"),
+                    Compare.Operator.IN,
+                    ValueList(prefixValues.toList())
+                )
+
+
             )
         )
 
@@ -221,7 +355,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val result = client.query(
             Query("megras.entity").select("*").where(
-                Expression("value", "in", suffixValues)
+                Compare(
+                    Column("value"),
+                    Compare.Operator.IN,
+                    ValueList(suffixValues.toList())
+                )
             )
         )
 
@@ -258,21 +396,52 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 VectorValue.Type.Double -> {
                     val v = vectors.map { (it as DoubleVectorValue).vector }
                     client.query(
-                        Query(name).select("*").where(Expression("value", "in", v))
+                        Query(name).select("*").where(
+                            Compare(
+                                Column("value"),
+                                Compare.Operator.IN,
+                                ValueList(v)
+                            )
+                        )
                     )
                 }
 
                 VectorValue.Type.Long -> {
                     val v = vectors.map { (it as LongVectorValue).vector }
                     client.query(
-                        Query(name).select("*").where(Expression("value", "in", v))
+                        Query(name).select("*").where(
+                            Compare(
+                                Column("value"),
+                                Compare.Operator.IN,
+                                ValueList(v)
+                            )
+                        )
                     )
                 }
 
                 VectorValue.Type.Float -> {
                     val v = vectors.map { (it as FloatVectorValue).vector }
                     client.query(
-                        Query(name).select("*").where(Expression("value", "in", v))
+                        Query(name).select("*").where(
+                            Compare(
+                                Column("value"),
+                                Compare.Operator.IN,
+                                ValueList(v)
+                            )
+                        )
+                    )
+                }
+
+                VectorValue.Type.Float -> {
+                    val v = vectors.map { (it as FloatVectorValue).vector }
+                    client.query(
+                        Query(name).select("*").where(
+                            Compare(
+                                Column("value"),
+                                Compare.Operator.IN,
+                                ValueList(v)
+                            )
+                        )
                     )
                 }
             }
@@ -302,7 +471,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val batchInsert = BatchInsert("megras.literal_double").columns("value")
         doubleValues.forEach {
-            require(batchInsert.append(it.value)) { "could not add value to batch, try reducing batch size" }
+            require(batchInsert.any(it.value)) { "could not add value to batch, try reducing batch size" }
         }
 
         client.insert(batchInsert)
@@ -319,7 +488,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val batchInsert = BatchInsert("megras.literal_string").columns("value")
         stringValues.forEach {
-            require(batchInsert.append(it.value)) { "could not add value to batch, try reducing batch size" }
+            require(batchInsert.any(it.value)) { "could not add value to batch, try reducing batch size" }
         }
         client.insert(batchInsert)
 
@@ -335,7 +504,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val batchInsert = BatchInsert("megras.entity_prefix").columns("prefix")
         prefixValues.forEach { value ->
-            require(batchInsert.append(value)) { "could not add value to batch, try reducing batch size" }
+            require(batchInsert.any(value)) { "could not add value to batch, try reducing batch size" }
         }
         client.insert(batchInsert)
 
@@ -351,7 +520,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val batchInsert = BatchInsert("megras.entity").columns("value")
         suffixValues.forEach { value ->
-            require(batchInsert.append(value)) { "could not add value to batch, try reducing batch size" }
+            require(batchInsert.any(value)) { "could not add value to batch, try reducing batch size" }
         }
 
         client.insert(batchInsert)
@@ -378,7 +547,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 val insert = BatchInsert(name).columns("value")
                 vectors.forEach {
                     require(
-                        insert.append(
+                        insert.any(
                             when (properties.first) {
                                 VectorValue.Type.Double -> (it as DoubleVectorValue).vector
                                 VectorValue.Type.Long -> (it as LongVectorValue).vector
@@ -397,7 +566,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
     }
 
 
-    override fun lookUpDoubleValues(ids: Set<Long>) : Map<QuadValueId, DoubleValue> {
+    override fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue> {
 
         if (ids.isEmpty()) {
             return emptyMap()
@@ -406,7 +575,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         val result = client.query(
             Query("megras.literal_double")
                 .select("*")
-                .where(Expression("id", "in", ids))
+                .where(
+                    Compare(
+                        Column("id"),
+                        Compare.Operator.IN,
+                        ValueList(ids.toList())
+                    )
+                )
         )
 
         val returnMap = HashMap<QuadValueId, DoubleValue>(ids.size)
@@ -422,7 +597,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
     }
 
-    override fun lookUpStringValues(ids: Set<Long>) : Map<QuadValueId, StringValue> {
+    override fun lookUpStringValues(ids: Set<Long>): Map<QuadValueId, StringValue> {
 
         if (ids.isEmpty()) {
             return emptyMap()
@@ -431,7 +606,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         val result = client.query(
             Query("megras.literal_string")
                 .select("*")
-                .where(Expression("id", "in", ids))
+                .where(
+                    Compare(
+                        Column("id"),
+                        Compare.Operator.IN,
+                        ValueList(ids.toList())
+                    )
+                )
         )
 
         val returnMap = HashMap<QuadValueId, StringValue>(ids.size)
@@ -447,7 +628,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
     }
 
-    override fun lookUpVectorValues(ids: Set<QuadValueId>) : Map<QuadValueId, VectorValue> {
+    override fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue> {
 
         if (ids.isEmpty()) {
             return emptyMap()
@@ -476,7 +657,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         val result = client.query(
             Query("megras.entity_prefix")
                 .select("*")
-                .where(Expression("id", "in", ids))
+                .where(
+                    Compare(
+                        Column("id"),
+                        Compare.Operator.IN,
+                        ValueList(ids.toList())
+                    )
+                )
         )
 
         val map = HashMap<Int, String>(ids.size)
@@ -499,7 +686,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val result = client.query(
             Query("megras.entity").select("*").where(
-                Expression("id", "in", ids)
+                Compare(
+                    Column("id"),
+                    Compare.Operator.IN,
+                    ValueList(ids.toList())
+                )
             )
         )
 
@@ -514,8 +705,6 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         return map
     }
-
-
 
 
     private fun getVectorQuadValue(type: Int, id: Long): VectorValue? {
@@ -533,7 +722,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val name = "megras.vector_values_${internalId}"
 
-        val result = client.query(Query(name).select("value").where(Expression("id", "=", id)))
+        val result = client.query(Query(name).select("value").where(Compare("id", "=", id)))
 
         if (result.hasNext()) {
             val tuple = result.next()
@@ -562,8 +751,8 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 .select("id")
                 .where(
                     And(
-                        Expression("length", "=", length),
-                        Expression("type", "=", type.byte.toInt())
+                        Compare("length", "=", length),
+                        Compare("type", "=", type.byte.toInt())
                     )
                 )
         )
@@ -592,7 +781,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             Query("megras.vector_types")
                 .select("*")
                 .where(
-                    Expression("id", "=", type)
+                    Compare("id", "=", type)
                 )
         )
 
@@ -614,7 +803,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         fun createEntity(): Int {
 
             val result = client.insert(
-                Insert("megras.vector_types").values("length" to length, "type" to type.byte.toInt())
+                Insert("megras.vector_types").any("length" to length, "type" to type.byte.toInt())
             )
 
 
@@ -628,12 +817,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
             client.create(
                 CreateEntity(name)
-                    .column("id", Type.LONG, autoIncrement = true)
-                    .column("value", type.cottontailType(), length = length)
+                    .column(Name.ColumnName.create("id"), Types.Long, autoIncrement = true)
+                    .column(Name.ColumnName.create("value"), type.cottontailType(length))
 
             )
 
-            client.create(CreateIndex(name, "id", CottontailGrpc.IndexType.BTREE_UQ))
+            client.create(CreateIndex(name, CottontailGrpc.IndexType.BTREE_UQ).column("id"))
 
             return id
 
@@ -644,13 +833,17 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
     }
 
     private fun filterExpression(column: String, type: Int, id: Long) = And(
-        Expression("${column}_type", "=", type),
-        Expression(column, "=", id)
+        Compare("${column}_type", "=", type),
+        Compare(column, "=", id)
     )
 
     private fun filterExpression(column: String, type: Int, ids: Collection<Long>) = And(
-        Expression("${column}_type", "=", type),
-        Expression(column, "in", ids)
+        Compare("${column}_type", "=", type),
+        Compare(
+            Column(column),
+            Compare.Operator.IN,
+            ValueList(ids.toList())
+        )
     )
 
     private fun subjectFilterExpression(type: Int, id: Long) = filterExpression("s", type, id)
@@ -663,7 +856,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             Query("megras.quads")
                 .select("id")
                 .where(
-                    Expression(
+                    Compare(
                         "hash",
                         "=",
                         quadHash(
@@ -683,17 +876,19 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         return null
     }
 
-    override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long = insert(s.first, s.second, p.first, p.second, o.first, o.second)
+    override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long =
+        insert(s.first, s.second, p.first, p.second, o.first, o.second)
+
     private fun insert(sType: Int, s: Long, pType: Int, p: Long, oType: Int, o: Long): Long {
         val result = client.insert(
             Insert("megras.quads")
-                .value("s_type", sType)
-                .value("s", s)
-                .value("p_type", pType)
-                .value("p", p)
-                .value("o_type", oType)
-                .value("o", o)
-                .value("hash", quadHash(sType, s, pType, p, oType, o))
+                .any("s_type", sType)
+                .any("s", s)
+                .any("p_type", pType)
+                .any("p", p)
+                .any("o_type", oType)
+                .any("o", o)
+                .any("hash", quadHash(sType, s, pType, p, oType, o))
         )
         if (result.hasNext()) {
             val id = result.next().asLong("id")
@@ -705,15 +900,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
     }
 
 
-
-
-
     override fun getId(id: Long): Quad? {
 
         val result = client.query(
             Query("megras.quads")
                 .select("*")
-                .where(Expression("id", "=", id))
+                .where(Compare("id", "=", id))
         )
 
         if (!result.hasNext()) {
@@ -734,7 +926,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         val result = client.query(
             Query("megras.quads")
                 .select("*")
-                .where(Expression("id", "in", ids))
+                .where(
+                    Compare(
+                        Column("id"),
+                        Compare.Operator.IN,
+                        ValueList(ids.toList())
+                    )
+                )
         )
 
         if (!result.hasNext()) {
@@ -911,8 +1109,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         fun predicate(column: String, ids: Collection<QuadValueId>?) = ids?.groupBy { it.first }
             ?.map { (type, ids) ->
                 And(
-                    Expression("${column}_type", "=", type),
-                    Expression(column, "in", ids.map { it.second })
+                    Compare("${column}_type", "=", type),
+                    Compare(
+                        Column(column),
+                        Compare.Operator.IN,
+                        ValueList(ids.map { it.second })
+                    )
                 ) as Predicate
             }?.reduce { acc, pred -> Or(acc, pred) }
 
@@ -984,8 +1186,9 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 .distance(
                     "value",
                     when (`object`) {
-                        is DoubleVectorValue -> `object`.vector
-                        is LongVectorValue -> `object`.vector
+                        is DoubleVectorValue -> org.vitrivr.cottontail.core.values.DoubleVectorValue(`object`.vector)
+                        is LongVectorValue -> org.vitrivr.cottontail.core.values.LongVectorValue(`object`.vector)
+                        is FloatVectorValue -> org.vitrivr.cottontail.core.values.FloatVectorValue(`object`.vector)
                         else -> error("unknown vector value type")
                     }, distance.cottontail(), "distance"
                 )
@@ -1014,9 +1217,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                     And(
                         And(
                             predicateFilterExpression(predId.first!!, predId.second!!),
-                            Expression("o_type", "=", vectorId)
+                            Compare("o_type", "=", vectorId)
                         ),
-                        Expression("o", "in", distances.keys)
+                        Compare(
+                            Column("o"),
+                            Compare.Operator.IN,
+                            ValueList(distances.keys.toList())
+                        )
                     )
                 )
         )
@@ -1096,15 +1303,11 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         get() = 0 //TODO
 
 
-
-
-
     override fun isEmpty(): Boolean = this.size == 0
 
     override fun iterator(): MutableIterator<Quad> {
         TODO("Not yet implemented")
     }
-
 
 
     override fun addAll(elements: Collection<Quad>): Boolean {
@@ -1133,7 +1336,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         val result = client.query(
             Query("megras.quads")
                 .select("hash")
-                .where(Expression("hash", "in", quadIdMap.keys))
+                .where(
+                    Compare(
+                        Column("hash"),
+                        Compare.Operator.IN,
+                        ValueList(quadIdMap.keys.toList())
+                    )
+                )
         )
 
         while (result.hasNext()) {
@@ -1152,7 +1361,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             val s = valueIdMap[it.value.subject]!!
             val p = valueIdMap[it.value.predicate]!!
             val o = valueIdMap[it.value.`object`]!!
-            batchInsert.append(s.first, s.second, p.first, p.second, o.first, o.second, it.key)
+            batchInsert.any(s.first, s.second, p.first, p.second, o.first, o.second, it.key)
         }
 
         client.insert(batchInsert)
@@ -1168,7 +1377,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         fun delete(quadId: Long) {
             client.delete(
-                Delete("megras.quads").where(Expression("id", "=", quadId))
+                Delete("megras.quads").where(Compare("id", "=", quadId))
             )
         }
 

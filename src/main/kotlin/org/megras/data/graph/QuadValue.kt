@@ -37,6 +37,7 @@ sealed class QuadValue : Serializable {
                     DoubleVectorValue.parse(value)
                 }
                 value.endsWith("]^^LongVector") -> LongVectorValue.parse(value)
+                value.endsWith("]^^FloatVector") -> FloatVectorValue.parse(value)
                 else -> StringValue(value) //not a valid vector after all
 
             }

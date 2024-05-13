@@ -80,7 +80,8 @@ object AddFileUtil {
 
         return when (rawDescriptor.mimeType) {
 
-            MimeType.PNG -> {
+            MimeType.PNG, //png is the default canonical image format
+            MimeType.JPEG_I -> { //we make an exception for jpg to not generate too much bloat
                 val imageStream = objectStore.get(rawDescriptor.id)!!.inputStream()
                 val image = ImageIO.read(imageStream)
 
@@ -95,11 +96,10 @@ object AddFileUtil {
                 //return
                 descriptor
             }
-            MimeType.JPEG_I,
             MimeType.BMP,
             MimeType.GIF,
             MimeType.SVG,
-            MimeType.TIFF -> {
+            MimeType.TIFF -> { //everything else gets transformed to png
 
                 try {
                     val buffered = ImageIO.read(objectStore.get(rawDescriptor.id)!!.inputStream())

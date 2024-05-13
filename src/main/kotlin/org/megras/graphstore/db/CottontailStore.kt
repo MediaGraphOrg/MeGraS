@@ -1312,6 +1312,10 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
     override fun addAll(elements: Collection<Quad>): Boolean {
 
+        if (elements.isEmpty()) {
+            return true
+        }
+
         val values = elements.flatMap {
             sequenceOf(
                 it.subject, it.predicate, it.`object`

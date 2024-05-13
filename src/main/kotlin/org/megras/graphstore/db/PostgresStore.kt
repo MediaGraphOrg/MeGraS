@@ -446,6 +446,10 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
 
     override fun addAll(elements: Collection<Quad>): Boolean {
 
+        if (elements.isEmpty()) {
+            return true
+        }
+
         val values = elements.flatMap {
             sequenceOf(
                 it.subject, it.predicate, it.`object`

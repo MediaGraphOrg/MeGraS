@@ -36,7 +36,7 @@ class KnnQueryHandler(private val quads: QuadSet) : PostRequestHandler {
         }
 
         val predicate = QuadValue.of(query.predicate)
-        val `object` = QuadValue.of(query.`object`)
+        val `object` = QuadValue.of(query.`object`.map { it.toFloat() })
         val count = query.count
         if (count < 1) {
             throw RestErrorStatus(400, "invalid query: count smaller than one")

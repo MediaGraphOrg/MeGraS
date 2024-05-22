@@ -20,6 +20,7 @@ sealed class QuadValue : Serializable {
             is String -> of(value)
             is DoubleArray -> of(value)
             is LongArray -> of(value)
+            is FloatArray -> of(value)
             else -> of(value.toString())
         }
 
@@ -50,6 +51,8 @@ sealed class QuadValue : Serializable {
         fun of(value: List<Double>) = DoubleVectorValue(value)
         fun of(value: LongArray) = LongVectorValue(value)
         fun of(value: List<Long>) = LongVectorValue(value)
+        fun of(value: List<Float>) = FloatVectorValue(value)
+        fun of(value: FloatArray) = FloatVectorValue(value)
 
 
     }

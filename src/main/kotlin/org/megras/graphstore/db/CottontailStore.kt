@@ -636,13 +636,20 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val returnMap = HashMap<QuadValueId, VectorValue>(ids.size)
 
-        //TODO batch by type
-        ids.forEach {
-            val value = getVectorQuadValue(it.first, it.second)
-            if (value != null) {
-                returnMap[it] = value
+        ids.groupBy { it.first }.forEach { ids ->
+            val values = getVectorQuadValues(ids.key, ids.value.map { it.second })
+            values.forEach {
+                returnMap[ids.key to it.key] = it.value
             }
         }
+
+//        //TODO batch by type
+//        ids.forEach {
+//            val value = getVectorQuadValue(it.first, it.second)
+//            if (value != null) {
+//                returnMap[it] = value
+//            }
+//        }
 
         return returnMap
 
@@ -737,6 +744,50 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         }
 
         return null
+    }
+
+    private fun getVectorQuadValues(type: Int, ids: List<Long>): Map<Long, VectorValue> {
+
+        val internalId = -type + VECTOR_ID_OFFSET
+
+        val properties = getVectorProperties(internalId) ?: return emptyMap()
+
+        val name = "megras.vector_values_${internalId}"
+
+        val result = client.query(Query(name).select("id").select("value").where(
+            Compare(
+                Column("id"),
+                Compare.Operator.IN,
+                ValueList(ids.toList())
+            )
+        )
+        )
+
+        val map = mutableMapOf<Long, VectorValue>()
+
+        when(properties.second) {
+            VectorValue.Type.Double -> {
+                while (result.hasNext()) {
+                    val tuple = result.next()
+                    map[tuple.asLong("id")!!] = DoubleVectorValue(tuple.asDoubleVector("value")!!)
+                }
+            }
+            VectorValue.Type.Long -> {
+                while (result.hasNext()) {
+                    val tuple = result.next()
+                    map[tuple.asLong("id")!!] = LongVectorValue(tuple.asLongVector("value")!!)
+                }
+            }
+            VectorValue.Type.Float -> {
+                while (result.hasNext()) {
+                    val tuple = result.next()
+                    map[tuple.asLong("id")!!] = FloatVectorValue(tuple.asFloatVector("value")!!)
+                }
+            }
+        }
+
+        return map
+
     }
 
     private fun getVectorEntity(type: VectorValue.Type, length: Int): Int? {

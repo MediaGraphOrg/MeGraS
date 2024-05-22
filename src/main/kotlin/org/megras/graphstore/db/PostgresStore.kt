@@ -82,6 +82,9 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     override fun setup() {
         transaction {
             SchemaUtils.create(QuadsTable, StringLiteralTable, DoubleLiteralTable, EntityPrefixTable, EntityTable)
+            //TODO add this in a more idiomatic exposed way
+            exec("ALTER TABLE megras.literal_string ADD COLUMN IF NOT EXISTS ts tsvector GENERATED ALWAYS AS (to_tsvector('english', value)) STORED;")
+            exec("CREATE INDEX IF NOT EXISTS ts_idx ON megras.literal_string USING GIN (ts);")
         }
     }
 
@@ -410,6 +413,16 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         return BasicQuadSet() //FIXME currently unsupported
     }
 
+    private class FullTextSearch(
+        private val q: String,
+    ) : Op<Boolean>() {
+        override fun toQueryBuilder(queryBuilder: QueryBuilder): Unit = queryBuilder.run {
+            append("ts @@ phraseto_tsquery('english', ")
+            append(stringLiteral(q))
+            append(")")
+        }
+    }
+
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet {
 
         val predicatePair = getQuadValueId(predicate)
@@ -418,10 +431,15 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
             return BasicQuadSet()
         }
 
-        val textIds = transaction {
-            StringLiteralTable.slice(StringLiteralTable.id).select { StringLiteralTable.value like "%${objectFilterText}%" }
-                .map { it[StringLiteralTable.id] }
-        }
+       val textIds = transaction {
+           StringLiteralTable.slice(StringLiteralTable.id).select(FullTextSearch(objectFilterText)).map { it[StringLiteralTable.id] }
+       }
+
+
+//        val textIds = transaction {
+//            StringLiteralTable.slice(StringLiteralTable.id).select { StringLiteralTable.value like "%${objectFilterText}%" }
+//                .map { it[StringLiteralTable.id] }
+//        }
 
         val quadIds = transaction {
             QuadsTable.slice(QuadsTable.id).select { (QuadsTable.pType eq predicatePair.first!!) and (QuadsTable.p eq predicatePair.second!!) and (QuadsTable.oType eq STRING_LITERAL_TYPE) and (QuadsTable.o inList textIds) }

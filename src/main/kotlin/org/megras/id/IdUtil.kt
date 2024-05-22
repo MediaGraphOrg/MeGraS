@@ -27,7 +27,7 @@ object IdUtil {
 
         return ObjectId(
             when (mediaType) {
-                MediaType.TEXT -> TODO()
+                MediaType.TEXT -> {"${MediaType.TEXT.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
                 MediaType.IMAGE -> {
 
                     //computing simple perceptual hash
@@ -56,7 +56,10 @@ object IdUtil {
                     MediaType.IMAGE.prefix + (bytes + HashUtil.hash(file.inputStream())).toBase64()
 
                 }
-                MediaType.AUDIO -> TODO()
+                MediaType.AUDIO -> {"${MediaType.AUDIO.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
+                MediaType.VIDEO -> {"${MediaType.VIDEO.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
+                MediaType.DOCUMENT -> {"${MediaType.DOCUMENT.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
+                MediaType.MESH -> {"${MediaType.MESH.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
                 MediaType.UNKNOWN -> "${MediaType.UNKNOWN.prefix}${HashUtil.hashToBase64(file.inputStream())}"
             }.trim())
     }

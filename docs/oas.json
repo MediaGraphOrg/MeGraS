@@ -541,9 +541,12 @@
           "maxDepth" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "reverse" : {
+            "type" : "boolean"
           }
         },
-        "required" : [ "maxDepth" ]
+        "required" : [ "maxDepth", "reverse" ]
       },
       "ApiQuad" : {
         "type" : "object",

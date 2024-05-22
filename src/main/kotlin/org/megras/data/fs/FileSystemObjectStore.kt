@@ -1,8 +1,8 @@
 package org.megras.data.fs
 
-import kotlinx.serialization.json.Json
 import org.megras.data.fs.file.PseudoFile
 import org.megras.data.mime.MimeType
+import org.megras.segmentation.Bounds
 import org.megras.util.HashUtil
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -46,7 +46,7 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
 
     override fun store(file: PseudoFile): StoredObjectDescriptor {
         val id = idFromStream(file.inputStream())
-        val descriptor = StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length())
+        val descriptor = StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length(), Bounds())
 
         store(file.inputStream(), descriptor)
 
@@ -57,7 +57,8 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
         val id = idFromStream(file.inputStream())
         val target = storageFile(id)
         if(target.exists()) {
-            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length())
+            // Bounds is not correct, but does not matter for current use case
+            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length(), Bounds())
         }
         return null
     }
@@ -85,7 +86,7 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
             return null
         }
 
-        val descriptor = Json.decodeFromString(StoredObjectDescriptor.serializer(), descriptorFile.readText(Charsets.UTF_8))
+        val descriptor = formatter.decodeFromString(StoredObjectDescriptor.serializer(), descriptorFile.readText(Charsets.UTF_8))
 
         return ObjectStoreResult(descriptor, target)
 
@@ -100,4 +101,13 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
 
     override fun descriptorFile(id: StoredObjectId): File = File(storageFile(id).parentFile, "${id}.meta")
 
+    override fun remove(id: StoredObjectId): Boolean {
+        val storageFile = storageFile(id)
+        val descriptorFile = descriptorFile(id)
+        return storageFile.delete() && descriptorFile.delete()
+    }
+
+    override fun removeAll(ids: Collection<StoredObjectId>): Boolean {
+        return ids.all { remove(it) }
+    }
 }

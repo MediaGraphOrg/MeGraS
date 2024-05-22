@@ -49,7 +49,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
 
         tsvReader.open(inputStream) {
 
-            val buffer = ArrayList<Quad>(1000)
+            val buffer = ArrayList<Quad>(10000)
 
             readAllWithHeaderAsSequence().forEach {
                 buffer.add(
@@ -59,7 +59,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
                         QuadValue.of(it["object"]!!)
                     )
                 )
-                if (buffer.size >= 1000) {
+                if (buffer.size >= 10000) {
                     cache.addAll(buffer)
                     buffer.clear()
                 }
@@ -67,8 +67,10 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
                     print('.')
                 }
             }
-            cache.addAll(buffer)
+            cache.addAllUnindexed(buffer)
         }
+
+        cache.rebuildIndex()
 
         print("done")
         lastStoreTime = System.currentTimeMillis()

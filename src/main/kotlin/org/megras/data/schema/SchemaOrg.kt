@@ -4,7 +4,8 @@ import org.megras.data.graph.URIValue
 
 enum class SchemaOrg(private val suffix: String) {
 
-    SAME_AS("sameAs")
+    SAME_AS("sameAs"),
+    SHA256("sha256")
 
     ;
     companion object {

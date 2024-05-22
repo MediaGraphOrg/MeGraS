@@ -67,7 +67,7 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
             BasicQuadSet(set)
         } else {
             (objects ?: emptyList()).flatMapTo(set){ quads ->
-                sIndex[quads].filter { sFilter(it) && pFilter(it) }
+                oIndex[quads].filter { sFilter(it) && pFilter(it) }
             }
             BasicQuadSet(set)
         }
@@ -113,13 +113,15 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
         if (quads.addAll(elements)) {
             elements.groupBy { it.subject }.forEach { (qv, q) -> if(qv is URIValue) sIndex.putAll(qv, q) }
             elements.groupBy { it.predicate }.forEach { (qv, q) -> if(qv is URIValue) pIndex.putAll(qv, q) }
-            elements.groupBy { it.`object` }.forEach { (qv, q) -> if(qv is URIValue) oIndex.putAll(qv, q) }
+            elements.groupBy { it.`object` }.forEach { (qv, q) -> oIndex.putAll(qv, q) }
             System.gc()
             return true
         }
         return false
 
     }
+
+    fun addAllUnindexed(elements: Collection<Quad>): Boolean = this.quads.addAll(elements)
 
     override fun clear() {
         quads.clear()
@@ -128,12 +130,29 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
         oIndex.clear()
     }
 
+    fun rebuildIndex() {
+        sIndex.clear()
+        pIndex.clear()
+        oIndex.clear()
+        quads.groupBy { it.subject }.forEach { (qv, q) -> if(qv is URIValue) sIndex.putAll(qv, q) }
+        quads.groupBy { it.predicate }.forEach { (qv, q) -> if(qv is URIValue) pIndex.putAll(qv, q) }
+        quads.groupBy { it.`object` }.forEach { (qv, q) -> oIndex.putAll(qv, q) }
+    }
+
     override fun remove(element: Quad): Boolean {
-        TODO("Not yet implemented")
+        if (quads.remove(element)) {
+            rebuildIndex() // TODO: more efficient way
+            return true
+        }
+        return false
     }
 
     override fun removeAll(elements: Collection<Quad>): Boolean {
-        TODO("Not yet implemented")
+        if (quads.removeAll(elements.toSet())) {
+            rebuildIndex()
+            return true
+        }
+        return false
     }
 
     override fun retainAll(elements: Collection<Quad>): Boolean {

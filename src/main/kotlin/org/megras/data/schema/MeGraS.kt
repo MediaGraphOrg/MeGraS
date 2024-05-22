@@ -6,10 +6,15 @@ enum class MeGraS(suffix: String) {
 
     RAW_ID("rawId"),
     MEDIA_TYPE("mediaType"),
-    MIME_TYPE("mimeType"),
+    RAW_MIME_TYPE("rawMimeType"),
     CANONICAL_ID("canonicalId"), //raw id of canonical representation
+    CANONICAL_MIME_TYPE("canonicalMimeType"),
     FILE_NAME("fileName"),
+    BOUNDS("bounds"),
     SEGMENT_OF("segmentOf"),
+    SEGMENT_TYPE("segmentType"),
+    SEGMENT_DEFINITION("segmentDefinition"),
+    SEGMENT_BOUNDS("segmentBounds"),
     QUERY_DISTANCE("queryDistance"),
     PREVIEW_ID("previewId") //raw id of object preview
     ;

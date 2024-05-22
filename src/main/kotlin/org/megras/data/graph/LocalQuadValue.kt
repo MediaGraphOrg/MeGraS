@@ -16,7 +16,7 @@ open class LocalQuadValue(public override val uri: String, infix: String = "") :
         }
 
         val defaultPrefix: String
-            get() = "http://localhost/"
+            get() = "http://localhost:8080/"
     }
 
 
@@ -24,6 +24,8 @@ open class LocalQuadValue(public override val uri: String, infix: String = "") :
     override fun suffix() = uri
 
     override fun toString() = "<${defaultPrefix}${uri}>"
+
+    fun toPath() = "${defaultPrefix}${uri}"
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

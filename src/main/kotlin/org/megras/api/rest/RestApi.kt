@@ -1,11 +1,9 @@
 package org.megras.api.rest
 
 import io.javalin.Javalin
-import io.javalin.apibuilder.ApiBuilder.get
-import io.javalin.apibuilder.ApiBuilder.post
+import io.javalin.apibuilder.ApiBuilder.*
+import io.javalin.openapi.OpenApiLicense
 import io.javalin.openapi.plugin.OpenApiPlugin
-import io.javalin.openapi.plugin.OpenApiPluginConfiguration
-import io.javalin.openapi.plugin.swagger.SwaggerConfiguration
 import io.javalin.openapi.plugin.swagger.SwaggerPlugin
 import org.megras.api.rest.handlers.*
 import org.megras.data.fs.FileSystemObjectStore
@@ -29,6 +27,7 @@ object RestApi {
         val aboutObjectRequestHandler = AboutObjectRequestHandler(quadSet, objectStore)
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
+        val addQuadRequestHandler = AddQuadRequestHandler(quadSet)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
         val subjectQueryHandler = SubjectQueryHandler(quadSet)
@@ -36,61 +35,103 @@ object RestApi {
         val objectQueryHandler = ObjectQueryHandler(quadSet)
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
+        val sparqlQueryHandler = SparqlQueryHandler(quadSet)
+        val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
 
 
         javalin = Javalin.create {
 
             it.http.maxRequestSize = 10 * 1024L * 1024L //10MB
 
-            it.plugins.enableCors { cors ->
-                cors.add { corsPluginConfig ->
-                    corsPluginConfig.anyHost()
-                }
-                cors.add {corsPluginConfig ->
+            it.bundledPlugins.enableCors { cors ->
+                cors.addRule { corsPluginConfig ->
                     corsPluginConfig.reflectClientOrigin = true
+                    corsPluginConfig.allowCredentials = true
                 }
             }
+
             it.showJavalinBanner = false
 
-            it.plugins.register(
-                OpenApiPlugin(
-                    OpenApiPluginConfiguration()
-                        .withDocumentationPath("/swagger-docs")
-                        .withDefinitionConfiguration { _, u ->
-                            u.withOpenApiInfo { t ->
-                                t.title = "MeGraS API"
-                                t.version = "0.01"
-                                t.description = "API for MediaGraphStore 0.01"
-                            }
+
+
+            it.registerPlugin(
+                OpenApiPlugin { oapConfig ->
+                    oapConfig
+                        .withDocumentationPath("/openapi.json")
+                        .withDefinitionConfiguration { _, openApiDef ->
+                            openApiDef
+                                .withInfo { info ->
+                                    info.title = "MeGraS API"
+                                    info.version = "0.01"
+                                    info.description = "API for MediaGraphStore 0.01"
+                                    val license = OpenApiLicense()
+                                    license.name = "MIT"
+                                    info.license = license
+                                }
                         }
-                )
+                }
             )
 
-            it.plugins.register(
-                SwaggerPlugin(
-                    SwaggerConfiguration().apply {
-                        //this.version = "4.10.3"
-                        this.documentationPath = "/swagger-docs"
-                        this.uiPath = "/swagger-ui"
-                    }
-                )
-            )
+            it.registerPlugin(SwaggerPlugin { swaggerConfig ->
+                swaggerConfig.documentationPath = "/openapi.json"
+                swaggerConfig.uiPath = "/swagger-ui"
+            })
 
-        }.routes {
-            get("/raw/{objectId}", rawObjectRequestHandler::get)
-            get("/{objectId}", canonicalObjectRequestHandler::get)
-            get("/{objectId}/about", aboutObjectRequestHandler::get)
-            get("/{objectId}/preview", objectPreviewRequestHandler::get)
-            get("/{objectId}/c/{segmentId}", cachedSegmentRequestHandler::get)
-            get("/{objectId}/segment/{segmentation}/<segmentDefinition>", canonicalSegmentRequestHandler::get)
-            post("/add/file", addFileRequestHandler::post)
-            post("/query/quads", basicQueryHandler::post)
-            post("/query/text", textQueryHandler::post)
-            post("/query/subject", subjectQueryHandler::post)
-            post("/query/predicate", predicateQueryHandler::post)
-            post("/query/object", objectQueryHandler::post)
-            post("/query/knn", knnQueryHandler::post)
-            post("/query/path", pathQueryHandler::post)
+            it.router.apiBuilder {
+                get("/raw/{objectId}", rawObjectRequestHandler::get)
+                get("/{objectId}", canonicalObjectRequestHandler::get)
+                get("/<objectId>/about", aboutObjectRequestHandler::get)
+                get("/<objectId>/preview", objectPreviewRequestHandler::get)
+                get(
+                    "/{objectId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/<tail>",
+                    canonicalSegmentRequestHandler::get
+                )
+                get(
+                    "/{objectId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}",
+                    canonicalSegmentRequestHandler::get
+                )
+                get("/{objectId}/segment/{segmentation}/{segmentDefinition}", canonicalSegmentRequestHandler::get)
+                get(
+                    "/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/<tail>",
+                    canonicalSegmentRequestHandler::get
+                )
+                get(
+                    "/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}",
+                    canonicalSegmentRequestHandler::get
+                )
+                get(
+                    "/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}",
+                    canonicalSegmentRequestHandler::get
+                )
+                get(
+                    "/{objectId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}",
+                    canonicalSegmentRequestHandler::intersection
+                )
+                get(
+                    "/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}",
+                    canonicalSegmentRequestHandler::intersection
+                )
+                get(
+                    "/{objectId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}",
+                    canonicalSegmentRequestHandler::union
+                )
+                get(
+                    "/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}",
+                    canonicalSegmentRequestHandler::union
+                )
+                get("/{objectId}/c/{segmentId}*", cachedSegmentRequestHandler::get)
+                post("/add/file", addFileRequestHandler::post)
+                post("/add/quads", addQuadRequestHandler::post)
+                post("/query/quads", basicQueryHandler::post)
+                post("/query/text", textQueryHandler::post)
+                post("/query/subject", subjectQueryHandler::post)
+                post("/query/predicate", predicateQueryHandler::post)
+                post("/query/object", objectQueryHandler::post)
+                post("/query/knn", knnQueryHandler::post)
+                post("/query/path", pathQueryHandler::post)
+                get("/query/sparql", sparqlQueryHandler::get)
+                delete("/<objectId>", deleteObjectRequestHandler::delete)
+            }
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)

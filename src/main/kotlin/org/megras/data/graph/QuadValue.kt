@@ -126,8 +126,8 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
                 val parsedUri = URI(cleaned)
                 val host = parsedUri.host ?: ""
                 parsedUri.userInfo
-                val suffix = uri.substringAfter(host)
-                val prefix = uri.substringBefore(suffix)
+                val suffix = cleaned.substringAfter(host)
+                val prefix = cleaned.substringBefore(suffix)
                 prefix to suffix
             }catch (e: URISyntaxException) {
                 "" to cleaned
@@ -139,7 +139,9 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
     private constructor(pair: Pair<String, String>) : this(pair.first, pair.second)
     constructor(uri: String) : this(estimatePrefix(uri))
 
-    override fun toString() = "<${prefix}${uri}>"
+    val value: String
+        get() = "${prefix}${uri}"
+    override fun toString() = "<$value>"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -161,9 +163,14 @@ abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Seria
     enum class Type(val byte: Byte) {
         Double(0) {
             override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.DOUBLE_VECTOR
-        }, Long(1) {
+        },
+        Long(1) {
             override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.LONG_VECTOR
-        };
+        },
+        Float(2) {
+            override fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type = org.vitrivr.cottontail.client.language.basics.Type.FLOAT_VECTOR
+        }
+        ;
 
         abstract fun cottontailType(): org.vitrivr.cottontail.client.language.basics.Type
 
@@ -171,6 +178,7 @@ abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Seria
             fun fromByte(byte: Byte) = when(byte) {
                 0.toByte() -> Double
                 1.toByte() -> Long
+                2.toByte() -> Float
                 else -> throw IllegalArgumentException()
             }
         }
@@ -201,7 +209,6 @@ class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vect
     }
 
     constructor(values: List<Double>) : this(values.toDoubleArray())
-//    constructor(values: List<Float>) : this(DoubleArray(values.size) { i -> values[i].toDouble() })
     constructor(values: FloatArray) : this(DoubleArray(values.size) { i -> values[i].toDouble() })
 
     override fun equals(other: Any?): Boolean {
@@ -218,6 +225,47 @@ class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vect
 
     override fun toString(): String {
         return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^DoubleVector")
+    }
+}
+
+class FloatVectorValue(val vector: FloatArray) : VectorValue(Type.Float, vector.size), Serializable {
+
+    companion object {
+        fun parse(string: String): FloatVectorValue {
+
+            var s = string.trim()
+            s = if (s.startsWith("[")) s.substringAfter('[') else s
+            s = if (s.endsWith("^^FloatVector")) s.substringBefore("^^FloatVector") else s
+            s = if (s.endsWith("]")) s.substringBefore("]") else s
+
+            val numbers = s.split(',').map { it.trim().toFloatOrNull() }
+
+            if (numbers.any { it == null }) {
+                return FloatVectorValue(FloatArray(0))
+            }
+
+            return FloatVectorValue(numbers.filterNotNull().toFloatArray())
+
+        }
+    }
+
+    constructor(values: List<Float>) : this(values.toFloatArray())
+    constructor(values: DoubleArray) : this(FloatArray(values.size) { i -> values[i].toFloat() })
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as FloatVectorValue
+
+        return vector.contentEquals(other.vector)
+    }
+
+    private val hashCode = vector.contentHashCode()
+    override fun hashCode(): Int = hashCode
+
+    override fun toString(): String {
+        return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^FloatVector")
     }
 }
 
@@ -243,7 +291,6 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
     }
 
     constructor(values: List<Long>) : this(values.toLongArray())
-//    constructor(values: List<Int>) : this(LongArray(values.size) { i -> values[i].toLong() })
     constructor(values: IntArray) : this(LongArray(values.size) { i -> values[i].toLong() })
 
     override fun equals(other: Any?): Boolean {

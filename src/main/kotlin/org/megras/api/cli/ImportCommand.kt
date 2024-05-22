@@ -37,7 +37,7 @@ class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "im
 
         file.forEachLine { raw ->
 
-            if (skip-- >= 0) {
+            if (skip-- > 0) {
                 return@forEachLine
             }
 

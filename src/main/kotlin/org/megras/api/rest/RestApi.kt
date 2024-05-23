@@ -132,7 +132,7 @@ object RestApi {
                 post("/query/path", pathQueryHandler::post)
                 get("/query/sparql", sparqlQueryHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
-                post("/query/predicate", relevanceFeedbackQueryHandler::post)
+                post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
             }
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)

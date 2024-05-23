@@ -838,7 +838,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         if (result.hasNext()) {
             val tuple = result.next()
-            val pair = tuple.asInt("length")!! to VectorValue.Type.fromByte(tuple.asByte("type")!!)
+            val pair = tuple.asInt("length")!! to VectorValue.Type.fromByte(tuple.asInt("type")!!.toByte())
             vectorEntityCache.put(pair, type)
             vectorPropertyCache.put(type, pair)
             return pair

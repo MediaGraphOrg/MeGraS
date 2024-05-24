@@ -56,6 +56,7 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
         val distance = Distance.valueOf(query.distance.toString())
 
         // TODO: SVM
+
         /*val `object` = DoubleVectorValue() // normal vector of hyperplane
 
         val results = quads.farthestNeighbor(

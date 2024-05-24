@@ -46,21 +46,21 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
     override fun toSet(): Set<Quad> = quads
 
     override fun plus(other: QuadSet): QuadSet = BasicQuadSet(quads + other.toSet())
-    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
 
+    private fun findNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, nearest: Boolean): QuadSet {
         val quads = this.filter{ it.predicate == predicate && it.`object` is VectorValue && it.`object`.length == `object`.length && it.`object`.type == `object`.type }
         val vectors = quads.mapNotNull { it.`object` as? VectorValue }.toSet()
 
         val queue = FixedSizePriorityQueue(count, DistancePairComparator<Pair<Double, VectorValue>>())
         val dist = distance.distance()
-
+        val order = if (nearest) 1 else -1
 
         when(`object`) {
             is DoubleVectorValue -> {
                 val v = `object`.vector
                 vectors.forEach {
                     val vv = (it as DoubleVectorValue).vector
-                    val d = dist.distance(v, vv)
+                    val d = order * dist.distance(v, vv)
                     queue.add(d to it)
                 }
             }
@@ -68,7 +68,7 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
                 val v = `object`.vector
                 vectors.forEach {
                     val vv = (it as LongVectorValue).vector
-                    val d = dist.distance(v, vv)
+                    val d = order * dist.distance(v, vv)
                     queue.add(d to it)
                 }
             }
@@ -76,7 +76,7 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
                 val v = `object`.vector
                 vectors.forEach {
                     val vv = (it as FloatVectorValue).vector
-                    val d = dist.distance(v, vv)
+                    val d = order * dist.distance(v, vv)
                     queue.add(d to it)
                 }
             }
@@ -95,6 +95,14 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
         }
 
         return ret
+    }
+
+    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
+        return findNeighbor(predicate, `object`, count, distance, false)
+    }
+
+    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
+        return findNeighbor(predicate, `object`, count, distance, true)
     }
 
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = BasicQuadSet(quads.filter { it.predicate == predicate && it.`object` is StringValue && it.`object`.value.contains(objectFilterText) }.toSet())

@@ -82,6 +82,8 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = this.filterPredicate(predicate).nearestNeighbor(predicate, `object`, count, distance)
 
+    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = this.filterPredicate(predicate).farthestNeighbor(predicate, `object`, count, distance)
+
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = filterPredicate(predicate).textFilter(predicate, objectFilterText)
 
     override val size: Int

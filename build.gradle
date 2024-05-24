@@ -142,6 +142,9 @@ dependencies {
     implementation group: 'org.apache.jena', name: 'jena-core', version: jenaVersion
     implementation group: 'org.apache.jena', name: 'jena-arq', version: jenaVersion
 
+    /* SMILE */
+    implementation group: 'com.github.haifengl', name: 'smile-kotlin', version: '3.0.0'
+
 
 
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'

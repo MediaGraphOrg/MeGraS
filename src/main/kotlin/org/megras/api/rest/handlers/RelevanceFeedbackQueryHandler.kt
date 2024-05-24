@@ -8,11 +8,14 @@ import org.megras.api.rest.RestErrorStatus
 import org.megras.api.rest.data.ApiQuad
 import org.megras.api.rest.data.ApiQueryResult
 import org.megras.api.rest.data.ApiRelevanceFeedbackQuery
+import org.megras.data.graph.DoubleVectorValue
 import org.megras.data.graph.QuadValue
-import org.megras.graphstore.MutableQuadSet
+import org.megras.data.graph.VectorValue
+import org.megras.graphstore.Distance
+import org.megras.graphstore.QuadSet
 
 
-class RelevanceFeedbackQueryHandler(val positives: MutableQuadSet, val negatives: MutableQuadSet) : PostRequestHandler {
+class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
     @OpenApi(
         summary = "Queries the Graph for quads based on positive and negative examples.",
@@ -35,13 +38,33 @@ class RelevanceFeedbackQueryHandler(val positives: MutableQuadSet, val negatives
             throw RestErrorStatus(400, "invalid query")
         }
 
-        val positives = QuadValue.of(query.positives)
-        val negatives = QuadValue.of(query.negatives)
+        val predicate = QuadValue.of(query.predicate)
+        val positives = quads.filterSubject(
+            QuadValue.of(query.positives)
+        ).filterPredicate(
+            predicate
+        ).map { ApiQuad(it) }
+        val negatives = quads.filterSubject(
+            QuadValue.of(query.negatives)
+        ).filterPredicate(
+            predicate
+        ).map { ApiQuad(it) }
+        val count = query.count
+        if (count < 1) {
+            throw RestErrorStatus(400, "invalid query: count smaller than one")
+        }
+        val distance = Distance.valueOf(query.distance.toString())
 
         // TODO: SVM
+        /*val `object` = DoubleVectorValue() // normal vector of hyperplane
 
-        //val results =
+        val results = quads.farthestNeighbor(
+            predicate,
+            `object`,
+            count,
+            distance
+        ).map { ApiQuad(it) }
 
-        //ctx.json(ApiQueryResult(results))
+        ctx.json(ApiQueryResult(results))*/
     }
 }

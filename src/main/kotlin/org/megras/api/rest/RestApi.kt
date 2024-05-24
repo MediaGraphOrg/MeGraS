@@ -37,7 +37,7 @@ object RestApi {
         val pathQueryHandler = PathQueryHandler(quadSet)
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
-        val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet, quadSet)
+        val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
 
 
         javalin = Javalin.create {

@@ -38,16 +38,15 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
             throw RestErrorStatus(400, "invalid query")
         }
 
-        val predicate = QuadValue.of(query.predicate)
-        val positives = quads.filterSubject(
-            QuadValue.of(query.positives)
-        ).filterPredicate(
-            predicate
+        val positives = quads.filter(
+            subjects = query.positives.map{QuadValue.of(it)},
+            predicates = query.predicate.map{QuadValue.of(it)},
+            objects = null
         ).map { ApiQuad(it) }
-        val negatives = quads.filterSubject(
-            QuadValue.of(query.negatives)
-        ).filterPredicate(
-            predicate
+        val negatives = quads.filter(
+            subjects = query.negatives.map{QuadValue.of(it)},
+            predicates = query.predicate.map{QuadValue.of(it)},
+            objects = null
         ).map { ApiQuad(it) }
         val count = query.count
         if (count < 1) {

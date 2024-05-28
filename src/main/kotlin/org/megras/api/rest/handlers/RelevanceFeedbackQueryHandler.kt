@@ -10,9 +10,10 @@ import org.megras.api.rest.data.ApiQueryResult
 import org.megras.api.rest.data.ApiRelevanceFeedbackQuery
 import org.megras.data.graph.DoubleVectorValue
 import org.megras.data.graph.QuadValue
-import org.megras.data.graph.VectorValue
 import org.megras.graphstore.Distance
 import org.megras.graphstore.QuadSet
+import smile.classification.svm
+import smile.math.kernel.LinearKernel
 
 
 class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHandler {
@@ -55,6 +56,16 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
         val distance = Distance.valueOf(query.distance.toString())
 
         // TODO: SVM
+        val x = positives.map {
+            DoubleVectorValue.parse(it.o).vector
+        }.plus(
+            negatives.map {
+                DoubleVectorValue.parse(it.o).vector
+            }
+        ).toTypedArray()
+        val y = IntArray(positives.size){1}.plus(IntArray(negatives.size){-1})
+        val kernel = LinearKernel()
+        val model = svm(x, y, kernel, 5.0)
 
         /*val `object` = DoubleVectorValue() // normal vector of hyperplane
 

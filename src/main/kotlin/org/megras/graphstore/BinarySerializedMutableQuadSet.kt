@@ -96,6 +96,8 @@ class BinarySerializedMutableQuadSet private constructor(
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = quads.nearestNeighbor(predicate, `object`, count, distance)
 
+    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = quads.farthestNeighbor(predicate, `object`, count, distance)
+
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = quads.textFilter(predicate, objectFilterText)
 
     override val size: Int

@@ -413,6 +413,10 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         return BasicQuadSet() //FIXME currently unsupported
     }
 
+    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
+        return BasicQuadSet() //FIXME currently unsupported
+    }
+
     private class FullTextSearch(
         private val q: String,
     ) : Op<Boolean>() {

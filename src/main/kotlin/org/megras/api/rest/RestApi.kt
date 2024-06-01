@@ -37,6 +37,7 @@ object RestApi {
         val pathQueryHandler = PathQueryHandler(quadSet)
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
+        val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
 
 
         javalin = Javalin.create {
@@ -131,6 +132,7 @@ object RestApi {
                 post("/query/path", pathQueryHandler::post)
                 get("/query/sparql", sparqlQueryHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
+                post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
             }
         }.exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)

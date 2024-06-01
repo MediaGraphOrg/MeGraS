@@ -1192,7 +1192,14 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
     }
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
+        return findNeighbor(predicate, `object`, count, distance, Direction.ASC)
+    }
 
+    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
+        return findNeighbor(predicate, `object`, count, distance, Direction.DESC)
+    }
+
+    private fun findNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, direction: Direction): QuadSet {
         val predId = getQuadValueId(predicate)
 
         if (predId.first == null || predId.second == null) {
@@ -1244,7 +1251,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                     }, distance.cottontail(), "distance"
                 )
                 .limit(count.toLong())
-                .order("distance", Direction.ASC)
+                .order("distance", direction)
 
         )
 

@@ -30,6 +30,8 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = knn.nearestNeighbor(predicate, `object`, count, distance)
 
+    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet = knn.farthestNeighbor(predicate, `object`, count, distance)
+
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = base.textFilter(predicate, objectFilterText)
 
     override val size: Int

@@ -5,9 +5,9 @@ import io.javalin.http.Context
 import io.javalin.openapi.*
 import org.megras.api.rest.PostRequestHandler
 import org.megras.api.rest.RestErrorStatus
+import org.megras.api.rest.data.ApiKnnQuery
 import org.megras.api.rest.data.ApiQuad
 import org.megras.api.rest.data.ApiQueryResult
-import org.megras.api.rest.data.ApiKnnQuery
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.Distance
 import org.megras.graphstore.QuadSet

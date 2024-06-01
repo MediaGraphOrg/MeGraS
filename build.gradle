@@ -142,6 +142,8 @@ dependencies {
     implementation group: 'org.apache.jena', name: 'jena-core', version: jenaVersion
     implementation group: 'org.apache.jena', name: 'jena-arq', version: jenaVersion
 
+    /* LibSVM */
+    implementation group: 'tw.edu.ntu.csie', name: 'libsvm', version: '3.31'
 
 
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'

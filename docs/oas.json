@@ -2,14 +2,55 @@
   "openapi" : "3.0.3",
   "info" : {
     "title" : "MeGraS API",
-    "summary" : null,
+    "version" : "0.01",
     "description" : "API for MediaGraphStore 0.01",
-    "termsOfService" : null,
-    "contact" : null,
-    "license" : null,
-    "version" : "0.01"
+    "license" : {
+      "name" : "MIT"
+    }
   },
   "paths" : {
+    "/add/quads" : {
+      "post" : {
+        "tags" : [ "Addition" ],
+        "summary" : "Adds new quads to the graph.",
+        "operationId" : "postAddQuads",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiAddQuad"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/query/knn" : {
       "post" : {
         "tags" : [ "Query" ],
@@ -270,6 +311,109 @@
         "security" : [ ]
       }
     },
+    "/query/relevancefeedback" : {
+      "post" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph for quads based on positive and negative examples.",
+        "operationId" : "postQueryRelevancefeedback",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiRelevanceFeedbackQuery"
+              }
+            }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiQueryResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/query/sparql" : {
+      "get" : {
+        "tags" : [ "Query" ],
+        "summary" : "Queries the Graph using SPARQL.",
+        "operationId" : "getQuerySparql",
+        "parameters" : [ {
+          "name" : "query",
+          "in" : "query",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiSparqlResult"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/query/subject" : {
       "post" : {
         "tags" : [ "Query" ],
@@ -474,6 +618,19 @@
         },
         "required" : [ "statusCode", "message" ]
       },
+      "ApiAddQuad" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "quads" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ApiQuad"
+            }
+          }
+        },
+        "required" : [ "quads" ]
+      },
       "ApiBasicQuery" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -565,7 +722,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "id", "s", "p", "o" ]
+        "required" : [ "s", "p", "o" ]
       },
       "ApiQuadValueQuery" : {
         "type" : "object",
@@ -590,6 +747,32 @@
         },
         "required" : [ "results" ]
       },
+      "ApiRelevanceFeedbackQuery" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "positives" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "negatives" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "predicate" : {
+            "type" : "string"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "positives", "negatives", "predicate", "count" ]
+      },
       "ApiTextQuery" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -606,6 +789,67 @@
       "Distance" : {
         "type" : "string",
         "enum" : [ "COSINE" ]
+      },
+      "ApiSparqlResult" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "head" : {
+            "$ref" : "#/components/schemas/ApiSparqlResultHead"
+          },
+          "results" : {
+            "$ref" : "#/components/schemas/ApiSparqlResultBody"
+          }
+        },
+        "required" : [ "head", "results" ]
+      },
+      "ApiSparqlResultBody" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "bindings" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/ApiSparqlResultValue"
+            }
+          }
+        },
+        "required" : [ "bindings" ]
+      },
+      "ApiSparqlResultHead" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "vars" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "link" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "vars" ]
+      },
+      "ApiSparqlResultValue" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "value" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "datatype" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "value", "type" ]
       }
     },
     "securitySchemes" : { }

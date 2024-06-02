@@ -59,7 +59,7 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
         val negatives = toSVMNodes(queryQuads.filter(subjects = negativeIds, predicates = null, objects = null))
 
         val x = positives + negatives
-        val y = DoubleArray(positives.size) { 1.0 } + DoubleArray(negatives.size) { 2.0 }
+        val y = DoubleArray(positives.size) { 1.0 } + DoubleArray(negatives.size) { -1.0 }
 
 
         // train an SVM with libSVM on x, y
@@ -91,7 +91,30 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
         val model = svm.svm_train(prob, param)
 
         // Extract the hyperplane (normal vector of the hyperplane)
-        val hyperplane = FloatVectorValue(model.sv_coef[0])
+
+        val supportVectors = model.SV
+        val coefs = model.sv_coef[0]
+
+        val w = FloatArray(positives[0].size - 1){ 0f }
+
+        for (idx in supportVectors.indices) {
+            val support = supportVectors[idx]
+            val coef = coefs[idx].toFloat()
+            for (i in support.indices) {
+                val s = support[i]
+                if (s.index > 0) {
+                    w[s.index - 1] += s.value.toFloat() * coef
+                }
+            }
+        }
+
+        if (model.label[0] < 0) {
+            for (i in w.indices) {
+                w[i] *= -1f
+            }
+        }
+
+        val hyperplane = FloatVectorValue(w)
 
         val results = quads.nearestNeighbor(
             predicate,

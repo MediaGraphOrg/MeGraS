@@ -59,7 +59,7 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
         val negatives = toSVMNodes(queryQuads.filter(subjects = negativeIds, predicates = null, objects = null))
 
         val x = positives + negatives
-        val y = DoubleArray(positives.size) { 1.0 } + DoubleArray(negatives.size) { -1.0 }
+        val y = DoubleArray(positives.size) { 1.0 } + DoubleArray(negatives.size) { 2.0 }
 
 
         // train an SVM with libSVM on x, y
@@ -74,6 +74,17 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
         val param = svm_parameter().apply {
             svm_type = svm_parameter.C_SVC
             kernel_type = svm_parameter.LINEAR
+            degree = positives[0].size - 1
+            gamma = 0.0
+            coef0 = 0.0
+            nu = 0.5
+            cache_size = 100.0
+            C = 1.0
+            eps = 1e-3
+            p = 0.1
+            shrinking = 0
+            probability = 1
+            nr_weight = 0
         }
 
         // Train the SVM model
@@ -98,30 +109,36 @@ class RelevanceFeedbackQueryHandler(private val quads: QuadSet) : PostRequestHan
     private fun toSVMNodes(quads: QuadSet): Array<Array<svm_node>> = quads.mapNotNull { quad ->
         when (quad.`object` as? VectorValue) {
             is DoubleVectorValue -> {
-                (quad.`object` as DoubleVectorValue).vector.mapIndexed { index, d ->
+                val list = (quad.`object` as DoubleVectorValue).vector.mapIndexed { index, d ->
                     svm_node().also { node ->
                         node.index = index + 1
                         node.value = d
                     }
-                }.toTypedArray()
+                }.toMutableList()
+                list.add(svm_node().also { it.index = -1 })
+                list.toTypedArray()
             }
 
             is FloatVectorValue -> {
-                (quad.`object` as FloatVectorValue).vector.mapIndexed { index, d ->
+                val list = (quad.`object` as FloatVectorValue).vector.mapIndexed { index, d ->
                     svm_node().also { node ->
                         node.index = index + 1
                         node.value = d.toDouble()
                     }
-                }.toTypedArray()
+                }.toMutableList()
+                list.add(svm_node().also { it.index = -1 })
+                list.toTypedArray()
             }
 
             is LongVectorValue -> {
-                (quad.`object` as LongVectorValue).vector.mapIndexed { index, d ->
+                val list = (quad.`object` as LongVectorValue).vector.mapIndexed { index, d ->
                     svm_node().also { node ->
                         node.index = index + 1
                         node.value = d.toDouble()
                     }
-                }.toTypedArray()
+                }.toMutableList()
+                list.add(svm_node().also { it.index = -1 })
+                list.toTypedArray()
             }
 
             null -> null

@@ -6,19 +6,52 @@ import org.megras.data.graph.StringValue
 import org.megras.data.graph.VectorValue
 
 class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: MutableQuadSet) : MutableQuadSet {
+
+    companion object {
+        private val knownVectorPredicates = setOf(
+            QuadValue.of("<http://lsc.dcu.ie/feature#mmr>"),
+            QuadValue.of("<http://lsc.dcu.ie/feature#openclip>"),
+            QuadValue.of("<http://lsc.dcu.ie/feature#openai_embed>")
+        )
+    }
+
     override fun getId(id: Long): Quad? = base.getId(id)
 
-    override fun filterSubject(subject: QuadValue): QuadSet = base.filterSubject(subject)
+    override fun filterSubject(subject: QuadValue): QuadSet{
+        return base.filterSubject(subject) + knn.filter(setOf(subject), knownVectorPredicates, null)
+    }
 
-    override fun filterPredicate(predicate: QuadValue): QuadSet = base.filterPredicate(predicate)
+    override fun filterPredicate(predicate: QuadValue): QuadSet {
+        return if (predicate in knownVectorPredicates) knn.filterPredicate(predicate) else base.filterPredicate(predicate)
+    }
 
-    override fun filterObject(`object`: QuadValue): QuadSet = base.filterObject(`object`)
+    override fun filterObject(`object`: QuadValue): QuadSet {
+        return base.filterObject(`object`) + knn.filter(null, knownVectorPredicates, setOf(`object`))
+    }
 
     override fun filter(
         subjects: Collection<QuadValue>?,
         predicates: Collection<QuadValue>?,
         objects: Collection<QuadValue>?
-    ): QuadSet = base.filter(subjects, predicates, objects)
+    ): QuadSet {
+
+        if (predicates == null) {
+            return base.filter(subjects, predicates, objects) + knn.filter(subjects, predicates, objects)
+        }
+
+        val basePredicates = predicates - knownVectorPredicates
+        val knnPredicates = predicates intersect knownVectorPredicates
+
+        if (basePredicates.isEmpty()) {
+            return knn.filter(subjects, knnPredicates, objects)
+        }
+
+        if (knnPredicates.isEmpty()) {
+            return base.filter(subjects, basePredicates, objects)
+        }
+
+        return base.filter(subjects, basePredicates, objects) + knn.filter(subjects, knnPredicates, objects)
+    }
 
     override fun toMutable(): MutableQuadSet = this
 
@@ -44,13 +77,13 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
     override fun iterator(): MutableIterator<Quad> = base.iterator()
 
     override fun add(element: Quad): Boolean {
-        return base.add(element) or if(element.subject is VectorValue || element.`object` is VectorValue || element.subject is StringValue || element.`object` is StringValue) {
+        return base.add(element) or if(element.subject is VectorValue || element.`object` is VectorValue /*|| element.subject is StringValue || element.`object` is StringValue*/) {
             knn.add(element)
         } else false
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {
-        return base.addAll(elements) or knn.addAll(elements.filter { it.subject is VectorValue || it.`object` is VectorValue || it.subject is StringValue || it.`object` is StringValue})
+        return base.addAll(elements) or knn.addAll(elements.filter { it.subject is VectorValue || it.`object` is VectorValue /*|| it.subject is StringValue || it.`object` is StringValue*/})
     }
 
     override fun clear() {

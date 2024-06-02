@@ -1191,13 +1191,10 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         TODO("Not yet implemented")
     }
 
-    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
-        return findNeighbor(predicate, `object`, count, distance, Direction.ASC)
+    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean): QuadSet {
+        return findNeighbor(predicate, `object`, count, distance, if (invert) Direction.DESC else Direction.ASC)
     }
 
-    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
-        return findNeighbor(predicate, `object`, count, distance, Direction.DESC)
-    }
 
     private fun findNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, direction: Direction): QuadSet {
         val predId = getQuadValueId(predicate)

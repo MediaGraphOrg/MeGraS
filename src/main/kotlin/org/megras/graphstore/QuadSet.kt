@@ -38,9 +38,7 @@ interface QuadSet : Set<Quad> {
 
     operator fun plus(other: QuadSet): QuadSet
 
-    fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet
-
-    fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet
+    fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean = false): QuadSet
 
     fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet
 

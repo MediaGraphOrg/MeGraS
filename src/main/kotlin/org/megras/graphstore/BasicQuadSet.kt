@@ -97,12 +97,8 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
         return ret
     }
 
-    override fun farthestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
-        return findNeighbor(predicate, `object`, count, distance, false)
-    }
-
-    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance): QuadSet {
-        return findNeighbor(predicate, `object`, count, distance, true)
+    override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean): QuadSet {
+        return findNeighbor(predicate, `object`, count, distance, !invert)
     }
 
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = BasicQuadSet(quads.filter { it.predicate == predicate && it.`object` is StringValue && it.`object`.value.contains(objectFilterText) }.toSet())

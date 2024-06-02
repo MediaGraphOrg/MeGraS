@@ -6,9 +6,15 @@ import org.vitrivr.cottontail.client.language.basics.Distances
 
 enum class Distance {
 
-    COSINE{
+    COSINE {
         override fun cottontail() = Distances.COSINE
         override fun distance(): Distance = CosineDistance
+    },
+    DOTPRODUCT {
+        override fun cottontail() = Distances.DOTP
+        override fun distance(): Distance {
+            TODO("Not yet implemented")
+        }
     }
 
     ;

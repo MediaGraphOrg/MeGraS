@@ -23,17 +23,17 @@ object MeGraS {
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 
-        //val postgresStore = PostgresStore()
+        val postgresStore = PostgresStore(host = "localhost:5432/lifegraph4")
         val cottontailStore = CottontailStore()
 
-        //val quadSet = HybridMutableQuadSet(postgresStore, cottontailStore)
+        val quadSet = HybridMutableQuadSet(postgresStore, cottontailStore)
 
-        //postgresStore.setup()
+        postgresStore.setup()
         cottontailStore.setup()
 
-        RestApi.init(config, objectStore, cottontailStore)
+        RestApi.init(config, objectStore, quadSet)
 
-        Cli.init(cottontailStore, objectStore)
+        Cli.init(quadSet, objectStore)
 
         Cli.loop()
 

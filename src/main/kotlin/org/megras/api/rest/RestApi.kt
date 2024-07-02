@@ -53,34 +53,8 @@ object RestApi {
 
             it.showJavalinBanner = false
 
-
-
-            it.registerPlugin(
-                OpenApiPlugin { oapConfig ->
-                    oapConfig
-                        .withDocumentationPath("/openapi.json")
-                        .withDefinitionConfiguration { _, openApiDef ->
-                            openApiDef
-                                .withInfo { info ->
-                                    info.title = "MeGraS API"
-                                    info.version = "0.01"
-                                    info.description = "API for MediaGraphStore 0.01"
-                                    val license = OpenApiLicense()
-                                    license.name = "MIT"
-                                    info.license = license
-                                }
-                        }
-                }
-            )
-
-            it.registerPlugin(SwaggerPlugin { swaggerConfig ->
-                swaggerConfig.documentationPath = "/openapi.json"
-                swaggerConfig.uiPath = "/swagger-ui"
-            })
-
             it.router.apiBuilder {
                 get("/raw/{objectId}", rawObjectRequestHandler::get)
-                get("/{objectId}", canonicalObjectRequestHandler::get)
                 get("/<objectId>/about", aboutObjectRequestHandler::get)
                 get("/<objectId>/preview", objectPreviewRequestHandler::get)
                 get(
@@ -134,11 +108,38 @@ object RestApi {
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
             }
-        }.exception(RestErrorStatus::class.java) { e, ctx ->
+
+            it.registerPlugin(
+                OpenApiPlugin { openApiConfig ->
+                    openApiConfig
+                        .withDocumentationPath("/openapi.json")
+                        .withDefinitionConfiguration { version, openApiDefinition ->
+                            openApiDefinition
+                                .withInfo { openApiInfo ->
+                                    openApiInfo
+                                        .title("MeGraS API")
+                                        .version("0.01")
+                                        .description("API for MediaGraphStore 0.01")
+                                        .license("MIT")
+                                }
+                        }
+                }
+            )
+
+            it.registerPlugin(SwaggerPlugin { swaggerConfig ->
+                swaggerConfig.documentationPath = "/openapi.json"
+                swaggerConfig.uiPath = "/swagger-ui"
+            })
+
+        }.get( //needs to be added last in order to not interfere with any other paths
+            "/{objectId}", canonicalObjectRequestHandler::get
+        ).exception(RestErrorStatus::class.java) { e, ctx ->
             ctx.status(e.statusCode)
             ctx.result(e.message)
         }.exception(Exception::class.java) { e, ctx ->
             e.printStackTrace()
+            ctx.status(500)
+            ctx.result(e.message ?: e.javaClass.name)
         }.start(config.httpPort)
     }
 

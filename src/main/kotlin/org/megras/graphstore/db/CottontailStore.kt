@@ -974,6 +974,10 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
     private fun getIds(ids: Collection<Long>): BasicQuadSet {
 
+        if (ids.isEmpty()) {
+            return BasicQuadSet()
+        }
+
         val result = client.query(
             Query("megras.quads")
                 .select("*")

@@ -8,28 +8,76 @@ import org.megras.graphstore.db.CottontailStore
 import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
+import org.slf4j.LoggerFactory
 import java.io.File
+import kotlin.concurrent.thread
 
 object MeGraS {
 
     @JvmStatic
     fun main(args: Array<String>) {
 
-        val config = if (args.isNotEmpty()) {
-            Config.read(File(args[0]))
-        } else {
-            null
-        } ?: Config()
+        val logger = LoggerFactory.getLogger(MeGraS::class.java)
+
+        val config = Config.read(
+            if (args.isNotEmpty()) {
+                File(args[0])
+            } else {
+                logger.info("no config file specified, trying ./config.json as a default")
+                File("config.json")
+            }
+        ) ?: Config().also {
+            logger.info("using default config")
+        }
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 
-        val postgresStore = PostgresStore(host = "localhost:5432/lifegraph4")
-        val cottontailStore = CottontailStore()
+        val quadSet = when (config.backend) {
+            Config.StorageBackend.FILE -> {
+                val set = TSVMutableQuadSet(config.fileStore!!.filename, config.fileStore.compression)
+                // ensure that latest state of quads is persisted on shutdown
+                Runtime.getRuntime().addShutdownHook(thread(start = false) {
+                    set.store()
+                })
+                set
+            }
 
-        val quadSet = HybridMutableQuadSet(postgresStore, cottontailStore)
+            Config.StorageBackend.COTTONTAIL -> {
+                val cottontailStore = CottontailStore(
+                    config.cottontailConnection!!.host, config.cottontailConnection.port
+                )
+                cottontailStore.setup()
+                cottontailStore
+            }
 
-        postgresStore.setup()
-        cottontailStore.setup()
+            Config.StorageBackend.POSTGRES -> {
+                val postgresStore = PostgresStore(
+                    "${config.postgresConnection!!.host}:${config.postgresConnection.port}/${config.postgresConnection.database}",
+                    config.postgresConnection.user,
+                    config.postgresConnection.password
+                )
+                postgresStore.setup()
+                postgresStore
+            }
+
+            Config.StorageBackend.HYBRID -> {
+                val cottontailStore = CottontailStore(
+                    config.cottontailConnection!!.host, config.cottontailConnection.port
+                )
+                cottontailStore.setup()
+
+                val postgresStore = PostgresStore(
+                    "${config.postgresConnection!!.host}:${config.postgresConnection.port}/${config.postgresConnection.database}",
+                    config.postgresConnection.user,
+                    config.postgresConnection.password
+                )
+                postgresStore.setup()
+
+                HybridMutableQuadSet(postgresStore, cottontailStore)
+
+            }
+        }
+
 
         RestApi.init(config, objectStore, quadSet)
 

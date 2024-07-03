@@ -10,7 +10,7 @@ import org.megras.data.graph.QuadValue
 import org.megras.graphstore.MutableQuadSet
 import java.io.File
 
-class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "import", help = "imports a TSV file in triple format") {
+class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "import", help = "imports a TSV file in triple format", printHelpOnEmptyArgs = true) {
 
     private val fileName: String by option("-f", "--File", help = "Path of TSV file to be read for import")
         .required()

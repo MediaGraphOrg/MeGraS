@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.imageio.ImageIO
 
-class AddFileCommand(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : CliktCommand(name = "add") {
+class AddFileCommand(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : CliktCommand(name = "add", printHelpOnEmptyArgs = true, help = "Adds a media file as a graph node") {
 
     private val fileNames: List<String> by option("-f", "--File", help = "Path of file or folder to be added").multiple(required = true)
 

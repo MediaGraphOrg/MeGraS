@@ -137,7 +137,7 @@ class GeneralCutSegmentation(override val expression: Expression, override val a
         for (x in 0 until mask.width) {
             for (y in 0 until mask.height) {
                 val res = expression.with("x", x).with("y", y).evaluate()
-                val positive = res.numberValue >= BigDecimal.ZERO
+                val positive = res.numberValue > BigDecimal.ZERO
                 if (positive == above) {
                     mask.setRGB(x, mask.height - 1 - y, Color.WHITE.rgb)
                 } else {
@@ -145,7 +145,6 @@ class GeneralCutSegmentation(override val expression: Expression, override val a
                 }
             }
         }
-        ImageIO.write(mask, "png", File("test.png"))
         return ImageMask(mask)
     }
 }

@@ -4,7 +4,7 @@ import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationType
 
 abstract class ReductionSegmentation(val selection: List<String>) : Segmentation {
-    override var bounds: Bounds = Bounds()
+    override var bounds: Bounds = Bounds.EVERYTHING
 
     override fun equivalentTo(rhs: Segmentation): Boolean {
         if (rhs !is ReductionSegmentation) return false

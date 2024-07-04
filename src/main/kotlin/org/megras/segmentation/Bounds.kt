@@ -4,32 +4,48 @@ import kotlinx.serialization.Serializable
 import java.awt.Shape
 
 @Serializable
-class Bounds {
+open class Bounds(private val bounds: DoubleArray = DoubleArray(8) { Double.NaN }) {
 
-    private var bounds = DoubleArray(8) { Double.NaN }
-    var dimensions = 0
+    companion object {
+        val EVERYTHING = object : Bounds(
+            doubleArrayOf(
+                Double.NEGATIVE_INFINITY,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY,
+                Double.POSITIVE_INFINITY
+            )
+        ) {
+            override fun contains(rhs: Bounds): Boolean = true
+            override fun overlaps(rhs: Bounds): Boolean = true
+        }
+    }
 
-    constructor()
+    var dimensions: Int = (bounds.count { !it.isNaN() } / 2)
+        private set
 
-    constructor(boundString: String) {
-        bounds = boundString.split(",").map {
+
+    constructor(boundString: String) : this(
+        boundString.split(",").map {
             if (it == "-") {
                 Double.NaN
             } else {
                 it.toDouble()
             }
         }.toDoubleArray()
-    }
+    )
 
-    constructor(shape: Shape) {
-        this.bounds = doubleArrayOf(
+    constructor(shape: Shape) : this(
+        doubleArrayOf(
             shape.bounds.minX, shape.bounds.maxX,
             shape.bounds.minY, shape.bounds.maxY,
             Double.NaN, Double.NaN,
             Double.NaN, Double.NaN
         )
-        dimensions = 2
-    }
+    )
 
     fun addX(min: Number, max: Number): Bounds {
         this.bounds[0] = min.toDouble()
@@ -64,7 +80,7 @@ class Bounds {
         return this.dimensions == other.dimensions && this.bounds.contentEquals(other.bounds)
     }
 
-    fun contains(rhs: Bounds): Boolean {
+    open fun contains(rhs: Bounds): Boolean {
         if (this.dimensions > rhs.dimensions) return false
         if (this.hasX() && (this.bounds[0] > rhs.bounds[0] || this.bounds[1] < rhs.bounds[1])) return false
         if (this.hasY() && (this.bounds[2] > rhs.bounds[2] || this.bounds[3] < rhs.bounds[3])) return false
@@ -73,25 +89,25 @@ class Bounds {
         return true
     }
 
-    fun overlaps(rhs: Bounds): Boolean {
+    open fun overlaps(rhs: Bounds): Boolean {
         // if unbounded, it is not possible to confirm overlap
         if ((this.bounds.all { b -> b.isNaN() } || rhs.bounds.all { b -> b.isNaN() })) return false
 
         return (
-            (this.hasX() && rhs.hasX() && this.bounds[0] <= rhs.bounds[1] && this.bounds[1] >= rhs.bounds[0]) ||
-            (this.hasY() && rhs.hasY() && this.bounds[2] <= rhs.bounds[3] && this.bounds[3] >= rhs.bounds[2]) ||
-            (this.hasZ() && rhs.hasZ() && this.bounds[4] <= rhs.bounds[5] && this.bounds[5] >= rhs.bounds[4]) ||
-            (this.hasT() && rhs.hasT() && this.bounds[6] <= rhs.bounds[7] && this.bounds[7] >= rhs.bounds[6])
-        )
+                (this.hasX() && rhs.hasX() && this.bounds[0] <= rhs.bounds[1] && this.bounds[1] >= rhs.bounds[0]) ||
+                        (this.hasY() && rhs.hasY() && this.bounds[2] <= rhs.bounds[3] && this.bounds[3] >= rhs.bounds[2]) ||
+                        (this.hasZ() && rhs.hasZ() && this.bounds[4] <= rhs.bounds[5] && this.bounds[5] >= rhs.bounds[4]) ||
+                        (this.hasT() && rhs.hasT() && this.bounds[6] <= rhs.bounds[7] && this.bounds[7] >= rhs.bounds[6])
+                )
     }
 
     fun orthogonalTo(rhs: Bounds): Boolean {
         return !(
-            (this.hasX() && rhs.hasX()) ||
-            (this.hasY() && rhs.hasY()) ||
-            (this.hasZ() && rhs.hasZ()) ||
-            (this.hasT() && rhs.hasT())
-        )
+                (this.hasX() && rhs.hasX()) ||
+                        (this.hasY() && rhs.hasY()) ||
+                        (this.hasZ() && rhs.hasZ()) ||
+                        (this.hasT() && rhs.hasT())
+                )
     }
 
     fun hasX(): Boolean = !this.bounds[0].isNaN() && !this.bounds[1].isNaN()

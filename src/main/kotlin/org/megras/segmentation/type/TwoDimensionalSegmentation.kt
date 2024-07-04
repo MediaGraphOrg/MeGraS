@@ -18,6 +18,7 @@ import java.io.ByteArrayOutputStream
 import java.io.StringReader
 import java.util.*
 import javax.imageio.ImageIO
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 abstract class TwoDimensionalSegmentation : Segmentation {
@@ -251,7 +252,7 @@ class BezierSpline(private val points: List<Pair<Double, Double>>) : TwoDimensio
     override lateinit var shape: Shape
     override lateinit var bounds: Bounds
 
-    override val isRelative = points.all { it.first in 0.0..1.0 && it.second in 0.0..1.0 }
+    override val isRelative = points.all { abs(it.first) in 0.0..1.0 && abs(it.second) in 0.0..1.0 }
 
     init {
         val flattenedControlPoints = points.flatMap { listOf(it.first, it.second) }

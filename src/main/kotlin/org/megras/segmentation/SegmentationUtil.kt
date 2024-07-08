@@ -75,9 +75,14 @@ object SegmentationUtil {
 
             SegmentationType.MASK -> {
                 try {
-                    val decoded = Base64.getUrlDecoder().decode(segmentDefinition)
-                    val maskImage = ImageIO.read(ByteArrayInputStream(decoded))
-                    ImageMask(maskImage)
+                    if (segmentDefinition.all { it == '0' || it == '1' }) {
+                        TODO()
+                    } else {
+                        val decoded = Base64.getUrlDecoder().decode(segmentDefinition)
+                        val maskImage = ImageIO.read(ByteArrayInputStream(decoded))
+                        ImageMask(maskImage)
+                    }
+
                 } catch (e: Exception) {
                     null
                 }
@@ -159,15 +164,16 @@ object SegmentationUtil {
              */
             SegmentationType.CUT -> {
                 val parts = segmentDefinition.split(",")
-                if (parts.size == 2) {
-                    GeneralCutSegmentation(Expression(parts[0].trim()), parts[1] == "above")
-                } else {
-                    when (parts.size) {
-                        4 -> LinearCutSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), 0.0, parts[3] == "above")
-                        5 -> LinearCutSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), parts[3].toDouble(), parts[4] == "above")
-                        else -> null
-                    }
+
+                when (parts.size) {
+                    1 -> GeneralCutSegmentation(Expression(parts[0].trim()), true)
+                    2 -> GeneralCutSegmentation(Expression(parts[0].trim()), parts[1] == "above")
+                    4 -> LinearCutSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), 0.0, parts[3] == "above")
+                    5 -> LinearCutSegmentation(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble(), parts[3].toDouble(), parts[4] == "above")
+
+                    else -> null
                 }
+
             }
 
             /**

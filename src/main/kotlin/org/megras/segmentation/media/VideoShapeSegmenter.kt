@@ -20,7 +20,8 @@ class VideoShapeSegmenter(
     val segmentation: Segmentation,
     val frameRate: Int,
     val width: Int,
-    val height: Int
+    val height: Int,
+    val copyAudio: Boolean
 ) {
 
     fun execute(): ByteArray {
@@ -44,10 +45,22 @@ class VideoShapeSegmenter(
 
         val xBounds = segmentation.bounds.getXBounds()
         val yBounds = segmentation.bounds.getYBounds()
-        val tBounds = if(segmentation.bounds.hasT()) {segmentation.bounds.getTBounds()} else {null}
+        val tBounds = if (segmentation.bounds.hasT()) {
+            segmentation.bounds.getTBounds()
+        } else {
+            null
+        }
 
-        val frameWidth = if (xBounds[0].isNaN()) {width} else {(xBounds[1] - xBounds[0]).toInt()}
-        val frameHeight = if (yBounds[0].isNaN()) {height} else {(yBounds[1] - yBounds[0]).toInt()}
+        val frameWidth = if (xBounds[0].isNaN()) {
+            width
+        } else {
+            (xBounds[1] - xBounds[0]).toInt()
+        }
+        val frameHeight = if (yBounds[0].isNaN()) {
+            height
+        } else {
+            (yBounds[1] - yBounds[0]).toInt()
+        }
 
         val frameProducer = createFrameProducer(frameIterator, tBounds?.get(0) ?: 0.0, frameWidth, frameHeight)
 
@@ -71,9 +84,15 @@ class VideoShapeSegmenter(
             .setOverwriteOutput(true)
             .addOutput(
                 ChannelOutput.toChannel("", out)
-                .setFormat("webm")
-                .addMap(0, StreamType.VIDEO)
-                .addMap(1, StreamType.AUDIO)
+                    .setFormat("webm")
+                    .addMap(0, StreamType.VIDEO)
+                    .let {
+                        if (copyAudio) {
+                            it.addMap(1, StreamType.AUDIO)
+                        }
+                        it
+                    }
+
             )
             .setContextName("output")
             .execute()
@@ -81,7 +100,12 @@ class VideoShapeSegmenter(
         return out.array()
     }
 
-    private fun createFrameProducer(frameIterator: FrameIterator, shift: Double, width: Int, height: Int): FrameProducer {
+    private fun createFrameProducer(
+        frameIterator: FrameIterator,
+        shift: Double,
+        width: Int,
+        height: Int
+    ): FrameProducer {
         return object : FrameProducer {
             private val shiftTimecode = shift.toLong()
             private val videoFrameDuration = (1000 / frameRate).toLong()
@@ -128,7 +152,8 @@ class VideoShapeSegmenter(
                 } ?: return null
 
 
-                val segmentedImage = ImageSegmenter.segment(videoFrame.image, seg) ?: throw RestErrorStatus.invalidSegmentation
+                val segmentedImage =
+                    ImageSegmenter.segment(videoFrame.image, seg) ?: throw RestErrorStatus.invalidSegmentation
                 val result: Frame = Frame.createVideoFrame(0, nextVideoFrameTimecode, segmentedImage)
                 nextVideoFrameTimecode += videoFrameDuration
                 return result

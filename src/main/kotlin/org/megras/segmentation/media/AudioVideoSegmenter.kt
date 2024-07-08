@@ -81,7 +81,8 @@ object AudioVideoSegmenter {
             segmentation,
             frameRate,
             videoProbe.width,
-            videoProbe.height
+            videoProbe.height,
+            hasStreamType(stream, StreamType.AUDIO)
         ).execute()
 
         val width = if (segmentation.bounds.hasX()) {

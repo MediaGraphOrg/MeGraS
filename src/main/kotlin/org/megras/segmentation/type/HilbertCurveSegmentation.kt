@@ -6,6 +6,9 @@ import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationType
 import java.awt.Color
 import java.awt.image.BufferedImage
+import java.io.File
+import javax.imageio.ImageIO
+import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.roundToLong
 
@@ -51,10 +54,11 @@ class Hilbert(private val order: Int, private var intervals: List<Interval>) : S
         for (x in 0 until width) {
             for (y in 0 until height) {
                 if (isIncluded(x.toDouble() / width, y.toDouble() / height)) {
-                    mask.setRGB(x, y, Color.WHITE.rgb)
+                    mask.setRGB(x, height - y - 1, Color.WHITE.rgb)
                 }
             }
         }
+        //ImageIO.write(mask, "png", File("test.png"))
         return ImageMask(mask)
     }
 
@@ -63,7 +67,7 @@ class Hilbert(private val order: Int, private var intervals: List<Interval>) : S
         for (x in 0 until width) {
             for (y in 0 until height) {
                 if (isIncluded(x.toDouble() / width, y.toDouble() / height, relativeTime)) {
-                    mask.setRGB(x, y, Color.WHITE.rgb)
+                    mask.setRGB(x, height - y - 1, Color.WHITE.rgb)
                 }
             }
         }
@@ -83,7 +87,7 @@ class Hilbert(private val order: Int, private var intervals: List<Interval>) : S
     private fun isIncluded(vararg relativeCoords: Double): Boolean {
 
         // Translate to hilbert space
-        val hilbertCoords = relativeCoords.map { (it * dimensionSize).roundToLong() }.toMutableList()
+        val hilbertCoords = relativeCoords.map { floor(it * (dimensionSize + 1)).toLong() }.toMutableList()
 
         val hilbertIndex = hilbertCurve.index(*hilbertCoords.toLongArray())
         val found = intervals.find { i -> i.low <= hilbertIndex && hilbertIndex <= i.high }

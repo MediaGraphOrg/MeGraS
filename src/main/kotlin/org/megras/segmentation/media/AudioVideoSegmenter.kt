@@ -6,6 +6,7 @@ import com.github.kokorin.jaffree.ffprobe.FFprobe
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.ObjectStoreResult
+import org.megras.data.model.MediaType
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
 import org.slf4j.LoggerFactory
@@ -26,6 +27,7 @@ object AudioVideoSegmenter {
             is TwoDimensionalSegmentation,
             is ThreeDimensionalSegmentation,
             is ColorChannel -> segmentPerFrame(storedObject, segmentation)
+
             is StreamChannel -> segmentChannel(storedObject, segmentation)
             is Time -> segmentTime(storedObject, segmentation)
             is Frequency -> segmentFrequency(storedObject, segmentation)
@@ -188,21 +190,25 @@ object AudioVideoSegmenter {
             )
             .setOverwriteOutput(true)
 
+        val audioOnly = storedObject.descriptor.mimeType in MediaType.AUDIO.mimeTypes
+
         if (time.intervals.size > 1) {
             val discard = time.getIntervalsToDiscard()
+            if (!audioOnly) {
+                // The video between segments is turned black (need shifting because beginning might be cut away)
+                // TODO: figure out how to make it transparent instead of black
+                val blackFilters =
+                    discard.map { "drawbox=t=fill:c=black:enable='between(t,${(it.low - firstPoint) / 1000},${(it.high - firstPoint) / 1000})'" }
+                ffmpeg.addArguments("-vf", '"' + blackFilters.joinToString(", ") + '"')
 
-            // The video between segments is turned black (need shifting because beginning might be cut away)
-            // TODO: figure out how to make it transparent instead of black
-            val blackFilters = discard.map { "drawbox=t=fill:c=black:enable='between(t,${(it.low - firstPoint) / 1000},${(it.high - firstPoint) / 1000})'" }
-            ffmpeg.addArguments("-vf", '"' + blackFilters.joinToString(", ") + '"')
-
+            }
             // The audio between segments is muted (need shifting because beginning might be cut away)
-            val muteFilters = discard.map { "volume=enable='between(t,${(it.low - firstPoint) / 1000},${(it.high - firstPoint) / 1000})':volume=0" }
+            val muteFilters =
+                discard.map { "volume=enable='between(t,${(it.low - firstPoint) / 1000},${(it.high - firstPoint) / 1000})':volume=0" }
             ffmpeg.addArguments("-af", '"' + muteFilters.joinToString(", ") + '"')
         }
 
-        ffmpeg.addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat))
-            .execute()
+        ffmpeg.addOutput(ChannelOutput.toChannel("", out).setFormat(outputFormat)).execute()
 
         val bounds = storedObject.descriptor.bounds
         bounds.addT(0, time.bounds.getTDimension())

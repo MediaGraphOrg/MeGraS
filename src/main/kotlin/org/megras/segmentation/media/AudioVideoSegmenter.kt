@@ -6,11 +6,14 @@ import com.github.kokorin.jaffree.ffprobe.FFprobe
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.ObjectStoreResult
+import org.megras.data.model.Config
 import org.megras.data.model.MediaType
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
 import org.slf4j.LoggerFactory
 import java.nio.channels.SeekableByteChannel
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
@@ -20,6 +23,14 @@ object AudioVideoSegmenter {
     private const val outputFormat = "webm"
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
+
+    private var ffmpegPath: Path? = null
+    private var ffprobePath: Path? = null
+
+    fun setConfig(config: Config) {
+        ffmpegPath = config.ffmpeg.ffmpegPath?.let { Paths.get(it) }
+        ffprobePath = config.ffmpeg.ffprobePath?.let { Paths.get(it) }
+    }
 
     fun segment(storedObject: ObjectStoreResult, segmentation: Segmentation): SegmentationResult? = try {
         when (segmentation) {
@@ -48,7 +59,7 @@ object AudioVideoSegmenter {
         }
 
         val out = SeekableInMemoryByteChannel()
-        FFmpeg.atPath()
+        FFmpeg.atPath(ffmpegPath)
             .addInput(ChannelInput.fromChannel(stream))
             .setFilter(StreamType.VIDEO, "crop=w=${rect.width}:h=${rect.height}:x=${rect.xmin}:y=${rect.ymin}")
             .setOverwriteOutput(true)
@@ -72,7 +83,7 @@ object AudioVideoSegmenter {
         val frameRate = videoProbe.rFrameRate.toInt()
 
         val totalDuration = AtomicLong()
-        FFmpeg.atPath()
+        FFmpeg.atPath(ffmpegPath)
             .addInput(ChannelInput.fromChannel(stream))
             .addOutput(NullOutput())
             .setProgressListener { progress -> totalDuration.set(progress.timeMillis) }
@@ -115,7 +126,7 @@ object AudioVideoSegmenter {
         val stream = storedObject.byteChannel()
         val out = SeekableInMemoryByteChannel()
         val ffmpeg = FFmpeg
-            .atPath()
+            .atPath(ffmpegPath)
             .addInput(ChannelInput.fromChannel(stream))
             .setOverwriteOutput(true)
 
@@ -166,7 +177,7 @@ object AudioVideoSegmenter {
         }
 
         val out = SeekableInMemoryByteChannel()
-        FFmpeg.atPath()
+        FFmpeg.atPath(ffmpegPath)
             .addInput(ChannelInput.fromChannel(stream))
             .setOverwriteOutput(true)
             .addArguments("-filter:a", "highpass=f=${frequency.interval.low}, lowpass=f=${frequency.interval.high}")
@@ -183,7 +194,7 @@ object AudioVideoSegmenter {
         val firstPoint = time.intervals.first().low
         val lastPoint = time.intervals.last().high
 
-        val ffmpeg = FFmpeg.atPath()
+        val ffmpeg = FFmpeg.atPath(ffmpegPath)
             .addInput(
                 ChannelInput.fromChannel(stream).setPosition(firstPoint, TimeUnit.MILLISECONDS)
                     .setDuration(lastPoint - firstPoint, TimeUnit.MILLISECONDS)
@@ -216,7 +227,7 @@ object AudioVideoSegmenter {
     }
 
     private fun probeStream(stream: SeekableByteChannel): List<com.github.kokorin.jaffree.ffprobe.Stream> {
-        val probe = FFprobe.atPath().setShowStreams(true).setInput(stream).execute()
+        val probe = FFprobe.atPath(ffprobePath).setShowStreams(true).setInput(stream).execute()
         return probe.streams
     }
 

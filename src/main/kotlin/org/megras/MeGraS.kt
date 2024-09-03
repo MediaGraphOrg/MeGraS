@@ -8,6 +8,7 @@ import org.megras.graphstore.db.CottontailStore
 import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
+import org.megras.segmentation.media.AudioVideoSegmenter
 import org.slf4j.LoggerFactory
 import java.io.File
 import kotlin.concurrent.thread
@@ -29,6 +30,8 @@ object MeGraS {
         ) ?: Config().also {
             logger.info("using default config")
         }
+
+        AudioVideoSegmenter.setConfig(config)
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 

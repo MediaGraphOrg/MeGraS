@@ -11,6 +11,7 @@ data class Config(
     val httpPort: Int = 8080,
     val backend: StorageBackend = StorageBackend.FILE,
     val fileStore: FileGraphStorage? = FileGraphStorage(),
+    val ffmpeg: FfmpegConfig = FfmpegConfig(),
     val cottontailConnection: CottontailConnection? = null,
     val postgresConnection: PostgresConnection? = null
 ) {
@@ -74,6 +75,12 @@ data class Config(
         val database: String = "megras",
         val user: String,
         val password: String
+    )
+
+    @Serializable
+    data class FfmpegConfig(
+        val ffmpegPath: String? = null,
+        val ffprobePath: String? = null
     )
 
 }

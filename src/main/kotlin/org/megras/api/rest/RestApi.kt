@@ -2,7 +2,6 @@ package org.megras.api.rest
 
 import io.javalin.Javalin
 import io.javalin.apibuilder.ApiBuilder.*
-import io.javalin.openapi.OpenApiLicense
 import io.javalin.openapi.plugin.OpenApiPlugin
 import io.javalin.openapi.plugin.swagger.SwaggerPlugin
 import org.megras.api.rest.handlers.*
@@ -43,6 +42,9 @@ object RestApi {
         javalin = Javalin.create {
 
             it.http.maxRequestSize = 10 * 1024L * 1024L //10MB
+            it.jetty.modifyHttpConfiguration { httpConfig ->
+                httpConfig.requestHeaderSize = 65535 //64kb
+            }
 
             it.bundledPlugins.enableCors { cors ->
                 cors.addRule { corsPluginConfig ->

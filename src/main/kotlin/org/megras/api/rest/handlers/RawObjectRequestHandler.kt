@@ -5,6 +5,7 @@ import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.StoredObjectId
+import org.megras.data.mime.MimeType
 
 class RawObjectRequestHandler(private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
@@ -20,7 +21,12 @@ class RawObjectRequestHandler(private val objectStore: FileSystemObjectStore) : 
         fun streamObject(id: StoredObjectId, objectStore: FileSystemObjectStore, ctx: Context) {
             val result = objectStore.get(id) ?: throw RestErrorStatus.notFound
             ctx.header("Cache-Control", "max-age=31622400")
-            ctx.writeSeekableStream(result.inputStream(), result.descriptor.mimeType.mimeString)
+            val contentType = if (result.descriptor.mimeType == MimeType.TEXT) {
+                "text/plain; charset=utf-8"
+            } else {
+                result.descriptor.mimeType.mimeString
+            }
+            ctx.writeSeekableStream(result.inputStream(), contentType)
 
         }
     }

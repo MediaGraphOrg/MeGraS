@@ -15,7 +15,7 @@ object TextSegmenter {
 
     fun segment(text: InputStream, segmentation: Segmentation): SegmentationResult? = try {
         if (segmentation is Character) {
-            val textString = IOUtils.toString(text, Charset.defaultCharset())
+            val textString = IOUtils.toString(text, Charsets.UTF_8)
             val charList = textString.toCharArray()
 
             val lower = segmentation.bounds.getMinT()

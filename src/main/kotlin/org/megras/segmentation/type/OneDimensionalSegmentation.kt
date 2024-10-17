@@ -188,5 +188,5 @@ class Frequency(val interval: Interval) : OneDimensionalSegmentation(listOf(inte
         return rhs !is Frequency
     }
 
-    override fun getDefinition(): String = "$interval.low-$interval.high"
+    override fun getDefinition(): String = "${interval.low}-${interval.high}"
 }

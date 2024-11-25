@@ -37,13 +37,14 @@ object RestApi {
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
+        val deleteQuadRequestHandler = DeleteQuadRequestHandler(quadSet)
 
 
         javalin = Javalin.create {
 
             it.http.maxRequestSize = 10 * 1024L * 1024L //10MB
             it.jetty.modifyHttpConfiguration { httpConfig ->
-                httpConfig.requestHeaderSize = 65535 //64kb
+                httpConfig.requestHeaderSize = 65535 * 3 // 192KB
             }
 
             it.bundledPlugins.enableCors { cors ->
@@ -109,6 +110,7 @@ object RestApi {
                 get("/query/sparql", sparqlQueryHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
+                post("/delete/quads", deleteQuadRequestHandler::post)
             }
 
             it.registerPlugin(

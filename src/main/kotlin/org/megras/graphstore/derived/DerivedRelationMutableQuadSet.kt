@@ -1,14 +1,23 @@
 package org.megras.graphstore.derived
 
+import org.megras.data.graph.DoubleValue
+import org.megras.data.graph.DoubleVectorValue
+import org.megras.data.graph.FloatVectorValue
+import org.megras.data.graph.LongVectorValue
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
 import org.megras.data.graph.VectorValue
+import org.megras.data.schema.MeGraS
+import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
+import org.megras.util.knn.DistancePairComparator
+import org.megras.util.knn.FixedSizePriorityQueue
+import kotlin.collections.contains
 
 class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<DerivedRelationHandler<*>>) :
     MutableQuadSet {
@@ -137,7 +146,77 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         distance: Distance,
         invert: Boolean
     ): QuadSet {
-        TODO("Not yet implemented")
+
+        val existing = this.base.nearestNeighbor(predicate, `object`, count, distance, invert)
+
+        val handler = this.handlers[predicate] ?: return existing
+
+        val subjects = getAllBySubject()
+
+        val derived = subjects.flatMap { (subject, quads) ->
+            if (!handler.canDerive(subject)) {
+                return@flatMap emptyList()
+            }
+            if (quads.any { it.predicate == predicate }) { //already exists
+                return@flatMap emptyList()
+            }
+            handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
+        }
+
+        if (derived.isNotEmpty()) {
+            base.addAll(derived)
+        }
+
+        val queue = FixedSizePriorityQueue(count, DistancePairComparator<Pair<Double, VectorValue>>())
+        val order = if (invert) -1 else 1
+        val dist = distance.distance()
+
+        val vectors = existing.map { it.`object` as VectorValue }
+        val derivedVectors = derived.mapNotNull { it.`object` as? VectorValue }.toSet()
+
+        val candidates = vectors.asSequence() + derivedVectors.asSequence()
+
+        when(`object`) {
+            is DoubleVectorValue -> {
+                val v = `object`.vector
+                candidates.forEach {
+                    val vv = (it as DoubleVectorValue).vector
+                    val d = order * dist.distance(v, vv)
+                    queue.add(d to it)
+                }
+            }
+            is LongVectorValue -> {
+                val v = `object`.vector
+                candidates.forEach {
+                    val vv = (it as LongVectorValue).vector
+                    val d = order * dist.distance(v, vv)
+                    queue.add(d to it)
+                }
+            }
+            is FloatVectorValue -> {
+                val v = `object`.vector
+                candidates.forEach {
+                    val vv = (it as FloatVectorValue).vector
+                    val d = order * dist.distance(v, vv)
+                    queue.add(d to it)
+                }
+            }
+        }
+
+        val relevantVectors = mutableSetOf<VectorValue>()
+        val ret = BasicMutableQuadSet()
+        queue.forEach {
+            relevantVectors.add(it.second)
+            ret.add(Quad(it.second, MeGraS.QUERY_DISTANCE.uri, DoubleValue(it.first)))
+        }
+        existing.forEach {
+            if (it.`object` in relevantVectors) {
+                ret.add(it)
+            }
+        }
+
+        return ret
+
     }
 
     override fun textFilter(
@@ -206,7 +285,14 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
     override fun containsAll(elements: Collection<Quad>): Boolean = elements.all { contains(it) }
 
     override fun isEmpty(): Boolean {
-        TODO("Not yet implemented")
+        if (!this.base.isEmpty()) {
+            return false
+        }
+        if (this.handlers.isEmpty()) {
+            return true
+        }
+        //TODO check if there are any candidates to derive relations from
+        return false
     }
 
     override fun add(element: Quad): Boolean = this.base.add(element)

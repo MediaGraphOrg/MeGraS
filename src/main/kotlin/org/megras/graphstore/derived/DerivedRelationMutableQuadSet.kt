@@ -27,19 +27,14 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         val relevantHandlers = handlers.values.filter { handler -> handler.canDerive(subject) }
 
-        val derived = relevantHandlers.mapNotNull { handler ->
+        val derived = relevantHandlers.flatMap { handler ->
             //check if already present
             if (existing.filterPredicate(handler.predicate)
                     .isNotEmpty()
             ) { //TODO a hasPredicate method would be more efficient
-                return@mapNotNull null
+                return@flatMap emptyList()
             }
-            val obj = handler.derive(subject)
-            if (obj != null) {
-                Quad(subject, handler.predicate, obj)
-            } else {
-                null
-            }
+            handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
         }
 
         //store derived values for future use
@@ -67,19 +62,14 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         val subjects = getAllBySubject()
 
-        val derived = subjects.mapNotNull { (subject, quads) ->
+        val derived = subjects.flatMap { (subject, quads) ->
             if (!handler.canDerive(subject)) {
-                return@mapNotNull null
+                return@flatMap emptyList()
             }
             if (quads.any { it.predicate == predicate }) { //already exists
-                return@mapNotNull null
+                return@flatMap emptyList()
             }
-            val obj = handler.derive(subject)
-            if (obj != null) {
-                Quad(subject, handler.predicate, obj)
-            } else {
-                null
-            }
+            handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
         }
 
         //store derived values for future use
@@ -89,7 +79,6 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         }
 
         return existing
-
 
     }
 
@@ -113,19 +102,14 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         val subs = (subjects ?: existing.map { it.subject }.toSet()).filterIsInstance<URIValue>()
         val derived = subs.flatMap { subject ->
             val present = existing.filterSubject(subject)
-            relevantHandlers.mapNotNull { handler ->
+            relevantHandlers.flatMap { handler ->
                 if (present.filterPredicate(handler.predicate).isNotEmpty()) {
-                    return@mapNotNull null
+                    return@flatMap emptyList()
                 }
                 if (!handler.canDerive(subject)) {
-                    return@mapNotNull null
+                    return@flatMap emptyList()
                 }
-                val obj = handler.derive(subject)
-                if (obj != null) {
-                    Quad(subject, handler.predicate, obj)
-                } else {
-                    null
-                }
+                handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
             }
         }
 
@@ -167,18 +151,15 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         val subjects = getAllBySubject()
 
-        val derived = subjects.mapNotNull { (subject, quads) ->
+        val derived = subjects.flatMap { (subject, quads) ->
             if (!handler.canDerive(subject)) {
-                return@mapNotNull null
+                return@flatMap emptyList()
             }
             if (quads.any { it.predicate == predicate }) { //already exists
-                return@mapNotNull null
+                return@flatMap emptyList()
             }
-            val obj = handler.derive(subject)
-            if (obj != null) {
+            handler.derive(subject).map { obj ->
                 Quad(subject, handler.predicate, obj)
-            } else {
-                null
             }
         }
 
@@ -208,15 +189,18 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         if (!handler.canDerive(element.subject)) {
             return false
         }
-        val obj = handler.derive(element.subject)
-        if (obj == null) {
+        val objs = handler.derive(element.subject)
+        if (objs.isEmpty()) {
             return false
         }
-        if (element.`object` == obj) {
-            this.base.add(element)
-            return true
-        }
-        return false
+
+        this.base.addAll(
+            objs.map {
+                Quad(element.subject, element.predicate, it)
+            }
+        )
+
+        return objs.contains(element.`object`)
     }
 
     override fun containsAll(elements: Collection<Quad>): Boolean = elements.all { contains(it) }

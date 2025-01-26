@@ -9,6 +9,6 @@ interface DerivedRelationHandler<T : QuadValue> {
 
     fun canDerive(subject: URIValue): Boolean
 
-    fun derive(subject: URIValue): T?
+    fun derive(subject: URIValue): Collection<T>
 
 }

@@ -8,6 +8,7 @@ import org.megras.api.rest.handlers.*
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.model.Config
 import org.megras.graphstore.MutableQuadSet
+import org.megras.lang.sparql.FunctionRegistrar
 
 object RestApi {
 
@@ -37,6 +38,8 @@ object RestApi {
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
+
+        FunctionRegistrar.register()
 
 
         javalin = Javalin.create {

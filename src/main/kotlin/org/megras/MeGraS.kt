@@ -8,6 +8,7 @@ import org.megras.graphstore.db.CottontailStore
 import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
+import org.megras.lang.sparql.FunctionRegistrar
 import org.megras.segmentation.media.AudioVideoSegmenter
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -83,6 +84,8 @@ object MeGraS {
 
 
         RestApi.init(config, objectStore, quadSet)
+
+        FunctionRegistrar.register()
 
         Cli.init(quadSet, objectStore)
 

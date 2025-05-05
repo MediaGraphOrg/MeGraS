@@ -173,5 +173,5 @@ gradle-app.setting
 .idea
 /store/
 src/main/kotlin/org/megras/Playground.kt
-quads.tsv
+*.tsv
 src/main/resources/sandbox.html

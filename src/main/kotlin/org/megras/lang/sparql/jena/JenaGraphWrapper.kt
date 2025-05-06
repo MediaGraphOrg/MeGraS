@@ -19,6 +19,17 @@ class JenaGraphWrapper(private val quads: QuadSet) : GraphBase() {
         val p = toQuadValue(triplePattern.predicate)
         val o = toQuadValue(triplePattern.`object`)
 
+        // Temporary fix ...
+        if (s == null && p == null && o == null) {
+            return QuadSetIterator(this.quads)
+        }
+        if (p != null) {
+            return QuadSetIterator(
+                this.quads.filterPredicate(p)
+            )
+        }
+        // ... since there is a bug here where no results are returned if the subject is null
+        // TODO: Fix this properly
         val quadset = this.quads.filter(
             if (s != null) {
                 listOf(s)

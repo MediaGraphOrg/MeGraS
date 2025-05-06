@@ -147,6 +147,12 @@ dependencies {
     /* LibSVM */
     implementation group: 'tw.edu.ntu.csie', name: 'libsvm', version: '3.31'
 
+    /* DJL */
+    implementation group: 'ai.djl', name: 'api', version: '0.32.0'
+    implementation group: 'ai.djl', name: 'model-zoo', version: '0.32.0'
+    implementation group: 'ai.djl.pytorch', name: 'pytorch-engine', version: '0.32.0'
+    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo', version: '0.32.0'
+    implementation group: 'ai.djl.huggingface', name: 'tokenizers', version: '0.32.0'
 
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'

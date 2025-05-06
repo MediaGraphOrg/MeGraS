@@ -72,7 +72,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
 
         cache.rebuildIndex()
 
-        print("done")
+        print("done\n")
         lastStoreTime = System.currentTimeMillis()
 
     }

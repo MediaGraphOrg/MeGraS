@@ -4,8 +4,11 @@ import org.megras.data.graph.URIValue
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
+import org.megras.util.Constants
 
-class NearDuplicateHandler(override val predicate: URIValue) : ImplicitRelationHandler{
+class NearDuplicateHandler() : ImplicitRelationHandler{
+
+    override val predicate: URIValue = URIValue("${Constants.IMPLICIT_PREFIX}/nearDuplicate")
 
     override fun init(quadSet: ImplicitRelationMutableQuadSet) {
 

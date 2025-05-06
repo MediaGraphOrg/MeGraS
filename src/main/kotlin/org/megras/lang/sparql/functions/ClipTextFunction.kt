@@ -7,7 +7,7 @@ import ai.djl.repository.zoo.ZooModel
 import ai.djl.inference.Predictor
 import ai.djl.huggingface.translator.TextEmbeddingTranslatorFactory
 
-class CLIP_TEXT : FunctionBase1() {
+class ClipTextFunction : FunctionBase1() {
 
     private fun calculateTextEmbedding(text: String): FloatArray {
         val criteria: Criteria<String, FloatArray> = Criteria.builder()

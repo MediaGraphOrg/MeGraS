@@ -16,7 +16,9 @@ open class LocalQuadValue(public override val uri: String, infix: String = "") :
         }
 
         val defaultPrefix: String
-            get() = "http://localhost:8080/"
+            get() = "http://localhost:norealportnumber/"
+            // TODO: return to this after the bug is fixed
+            //"http://localhost:8080/"
     }
 
 

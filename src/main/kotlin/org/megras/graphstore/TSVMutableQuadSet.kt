@@ -13,7 +13,7 @@ import java.io.FileOutputStream
 
 class TSVMutableQuadSet(private val tsvFileName : String, private val useCompression: Boolean = false) : MutableQuadSet, PersistableQuadSet {
 
-    private val cache = BasicMutableQuadSet()//IndexedMutableQuadSet()
+    private val cache = IndexedMutableQuadSet()
     private var lastStoreTime = 0L
 
     private val tsvReader = csvReader {
@@ -67,11 +67,10 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
                     print('.')
                 }
             }
-            //cache.addAllUnindexed(buffer)
-            cache.addAll(buffer)
+            cache.addAllUnindexed(buffer)
         }
 
-        //cache.rebuildIndex()
+        cache.rebuildIndex()
 
         print("done\n")
         lastStoreTime = System.currentTimeMillis()

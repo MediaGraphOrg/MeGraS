@@ -44,8 +44,9 @@
 		  </ul>	
           <form class="navbar-form navbar-right">
             <div class="input-group">
-				<span class="input-group-addon">SPARQL Endpoint</span>
-				<input size="50" class="form-control mr-sm-2" name="endpoint" id="endpoint" onchange="changeEndpoint();" />		
+				<!--<span class="input-group-addon">SPARQL Endpoint</span>
+				<input size="50" class="form-control mr-sm-2" name="endpoint" id="endpoint" onchange="changeEndpoint();" />-->
+				<span name="endpoint" id="endpoint"></span>
             </div>
           </form>
         </div><!--/.navbar-collapse -->
@@ -81,7 +82,7 @@
 						<input id="export-xml" type="button" class="btn btn-info" value="Export XML" />
 						<input id="generate-permalink" type="button" class="btn btn-secondary" value="Get Permalink" />
 						<input id="enter-fullscreen" type="button" class="btn btn-dark" value="Fullscreen Mode" />
-						<input id="show-prefixes" type="button" class="btn btn-light" value="Show Prefixes" />
+						<!--<input id="show-prefixes" type="button" class="btn btn-light" value="Show Prefixes" />-->
 					</div>
 				</div>
 				
@@ -91,12 +92,13 @@
 				<h4>SPARQL Examples:</h4>
 				<div class="panel panel-default">
 				  <div class="panel-heading">
-						<div class="input-group">
-							<input type="text" class="form-control" id="examples-repo" name="examples-repo" placeholder="Github Repositoty URL" onchange="changeExamplesRepo();">
+						<!--<div class="input-group">
+							<input type="text" class="form-control" id="examples-repo" name="examples-repo" placeholder="Github Repository URL" onchange="changeExamplesRepo();">
 							<div class="input-group-btn">
 								<button id="fetch" class="btn btn-primary"><i class="glyphicon glyphicon-refresh"></i></button>
 							</div>
-						</div>
+						</div>-->
+					  <span name="examples-repo" id="examples-repo"></span>
 				  </div>
 				  <div id="examplesMainBody" class="panel-body">
 						<!-- <form> -->
@@ -126,7 +128,7 @@
 	
 	<footer id="footer" class="footer navbar-fixed-bottom">
 	  <div class="container-fluid">
-		<p>Powered by <a id="poweredby" href="#">Snorql</a> - <a href="cookies.html">Cookie Policy</a></p>
+		<p>Powered by <a id="poweredby" href="https://github.com/ammar257ammar/Snorql-UI">Snorql</a><!-- - <a href="cookies.html">Cookie Policy</a></p>-->
 	  </div>
 	</footer>
 

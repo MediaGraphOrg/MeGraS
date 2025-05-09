@@ -1,5 +1,5 @@
-var _endpoint = "https://chemblmirror.rdf.bigcat-bioinformatics.org/sparql";
-var _examples_repo = "https://github.com/BiGCAT-UM/ChEMBL-SPARQL-Queries";
+var _endpoint = "http://localhost:8080/query/sparql";
+var _examples_repo = "https://github.com/floruo/MeGraS-SPARQL-Queries";
 var _defaultGraph = "";
 var _namespaces = snorql_namespacePrefixes;
 
@@ -214,6 +214,7 @@ function start(){
     if (ep != "") {
         _endpoint = ep;
         document.getElementById('endpoint').value = ep;
+        document.getElementById('endpoint').textContent = true;
     }else{
         document.getElementById('endpoint').value = _endpoint;
     }

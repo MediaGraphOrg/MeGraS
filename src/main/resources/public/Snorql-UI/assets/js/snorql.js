@@ -1,4 +1,4 @@
-var _endpoint = "http://localhost:8080/query/sparql";
+var _endpoint = "/query/sparql";
 var _examples_repo = "https://github.com/floruo/MeGraS-SPARQL-Queries";
 var _defaultGraph = "";
 var _namespaces = snorql_namespacePrefixes;

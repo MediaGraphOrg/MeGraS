@@ -35,6 +35,7 @@ object RestApi {
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
+        val sparqlUiHandler = SparqlUiHandler()
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
 
@@ -54,6 +55,11 @@ object RestApi {
             }
 
             it.showJavalinBanner = false
+
+            it.staticFiles.add { staticFiles ->
+                staticFiles.directory = "/public"  // Look for files in src/main/resources/public
+                staticFiles.location = io.javalin.http.staticfiles.Location.CLASSPATH
+            }
 
             it.router.apiBuilder {
                 get("/raw/{objectId}", rawObjectRequestHandler::get)
@@ -107,6 +113,7 @@ object RestApi {
                 post("/query/knn", knnQueryHandler::post)
                 post("/query/path", pathQueryHandler::post)
                 get("/query/sparql", sparqlQueryHandler::get)
+                get("/sparqlui", sparqlUiHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
             }

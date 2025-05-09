@@ -35,9 +35,9 @@ jQuery(document).ready(function() {
             var queryText = getPrefixes() + query;
 
             var queryEncoded = "?q="+encodeURIComponent(query);
-            var url = window.location.href.split('?')[0] + queryEncoded;
+            //var url = window.location.href.split('?')[0] + queryEncoded;
 
-            window.history.replaceState(null, "", url);
+            //window.history.replaceState(null, "", url);
 
             doQuery(jQuery("#endpoint").val(), query, function(json) { displayResult(json, "SPARQL results"); });
 

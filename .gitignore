@@ -175,3 +175,4 @@ gradle-app.setting
 src/main/kotlin/org/megras/Playground.kt
 *.tsv
 src/main/resources/sandbox.html
+/examples

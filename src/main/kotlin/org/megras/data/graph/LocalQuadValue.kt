@@ -2,7 +2,7 @@ package org.megras.data.graph
 
 import java.io.Serializable
 
-open class LocalQuadValue(public override val uri: String, infix: String = "") : URIValue("", if (infix.isNotEmpty()) "${infix.trim()}/${clean(uri)}" else clean(uri)), Serializable{
+open class LocalQuadValue(public override val uri: String, infix: String = "") : URIValue(if (infix.isNotEmpty()) "${infix.trim()}/${clean(uri)}" else clean(uri)), Serializable{
 
     companion object {
 

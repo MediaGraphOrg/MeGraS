@@ -5,6 +5,7 @@ import io.javalin.http.Context
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
+import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.mime.MimeType
@@ -217,7 +218,7 @@ private fun QuadValue.toHtml(): String {
         is org.megras.data.graph.URIValue -> {
             // Make URI values clickable by replacing angle brackets with HTML entities
             // and wrapping them in an anchor tag
-            val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;")
+            val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
             "<a href='$value/about'>$displayValue</a>"
         }
         is org.megras.data.graph.VectorValue -> {

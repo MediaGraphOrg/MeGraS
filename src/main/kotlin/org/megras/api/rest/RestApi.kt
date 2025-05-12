@@ -56,11 +56,6 @@ object RestApi {
 
             it.showJavalinBanner = false
 
-            it.staticFiles.add { staticFiles ->
-                staticFiles.directory = "/public"  // Look for files in src/main/resources/public
-                staticFiles.location = io.javalin.http.staticfiles.Location.CLASSPATH
-            }
-
             it.router.apiBuilder {
                 get("/raw/{objectId}", rawObjectRequestHandler::get)
                 get("/<objectId>/about", aboutObjectRequestHandler::get)

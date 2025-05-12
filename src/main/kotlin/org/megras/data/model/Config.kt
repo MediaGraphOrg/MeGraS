@@ -8,6 +8,7 @@ import java.io.File
 @Serializable
 data class Config(
     val objectStoreBase: String = "store",
+    val hostName: String = "localhost",
     val httpPort: Int = 8080,
     val backend: StorageBackend = StorageBackend.FILE,
     val fileStore: FileGraphStorage? = FileGraphStorage(),

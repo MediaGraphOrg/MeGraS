@@ -9,7 +9,7 @@ import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
 import org.megras.graphstore.derived.DerivedRelationMutableQuadSet
-import org.megras.graphstore.derived.handlers.AverageColorHandler
+import org.megras.graphstore.derived.DerivedRelationRegistrar
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.graphstore.implicit.ImplicitRelationRegistrar
 import org.megras.lang.sparql.FunctionRegistrar
@@ -88,9 +88,8 @@ object MeGraS {
 
         val implicitRelationRegistrar = ImplicitRelationRegistrar()
         quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers())
-        quadSet = DerivedRelationMutableQuadSet(quadSet, listOf(
-            AverageColorHandler(quadSet, objectStore)
-        ))
+        val derivedRelationRegistrar = DerivedRelationRegistrar(quadSet, objectStore)
+        quadSet = DerivedRelationMutableQuadSet(quadSet, derivedRelationRegistrar.getHandlers())
 
         RestApi.init(config, objectStore, quadSet)
 

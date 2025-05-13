@@ -1,6 +1,5 @@
 package org.megras.graphstore.implicit
 
-import org.megras.graphstore.implicit.handlers.NearDuplicateHandler
 import org.megras.graphstore.implicit.handlers.SamePrefixHandler
 
 class ImplicitRelationRegistrar {
@@ -8,7 +7,6 @@ class ImplicitRelationRegistrar {
 
     init {
         register(SamePrefixHandler())
-        register(NearDuplicateHandler())
     }
 
     private fun register(handler: ImplicitRelationHandler) {

@@ -8,6 +8,9 @@ import org.megras.graphstore.db.CottontailStore
 import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
+import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
+import org.megras.graphstore.implicit.ImplicitRelationRegistrar
+import org.megras.lang.sparql.FunctionRegistrar
 import org.megras.segmentation.media.AudioVideoSegmenter
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -35,7 +38,7 @@ object MeGraS {
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 
-        val quadSet = when (config.backend) {
+        var quadSet = when (config.backend) {
             Config.StorageBackend.FILE -> {
                 val set = TSVMutableQuadSet(config.fileStore!!.filename, config.fileStore.compression)
                 // ensure that latest state of quads is persisted on shutdown
@@ -81,8 +84,12 @@ object MeGraS {
             }
         }
 
+        val implicitRelationRegistrar = ImplicitRelationRegistrar()
+        quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers())
 
         RestApi.init(config, objectStore, quadSet)
+
+        FunctionRegistrar.register()
 
         Cli.init(quadSet, objectStore)
 

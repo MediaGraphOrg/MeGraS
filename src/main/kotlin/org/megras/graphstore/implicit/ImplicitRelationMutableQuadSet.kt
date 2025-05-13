@@ -17,10 +17,7 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         handlers.forEach { it.init(this) }
     }
 
-
     override fun getId(id: Long): Quad? = base.getId(id)
-
-
 
     override fun filterSubject(subject: QuadValue): QuadSet {
 

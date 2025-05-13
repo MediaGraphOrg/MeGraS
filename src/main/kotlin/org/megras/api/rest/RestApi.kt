@@ -35,6 +35,7 @@ object RestApi {
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
+        val sparqlUiHandler = SparqlUiHandler()
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
 
@@ -107,6 +108,7 @@ object RestApi {
                 post("/query/knn", knnQueryHandler::post)
                 post("/query/path", pathQueryHandler::post)
                 get("/query/sparql", sparqlQueryHandler::get)
+                get("/sparqlui", sparqlUiHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
             }

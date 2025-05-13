@@ -1,12 +1,12 @@
 package org.megras.graphstore.implicit
 
-import org.megras.graphstore.implicit.handlers.NearDuplicateHandler
+import org.megras.graphstore.implicit.handlers.SamePrefixHandler
 
 class ImplicitRelationRegistrar {
     private val handlers = mutableListOf<ImplicitRelationHandler>()
 
     init {
-        register(NearDuplicateHandler())
+        register(SamePrefixHandler())
     }
 
     private fun register(handler: ImplicitRelationHandler) {

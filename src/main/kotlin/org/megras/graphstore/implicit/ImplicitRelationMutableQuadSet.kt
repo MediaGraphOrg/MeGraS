@@ -8,6 +8,8 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
+import kotlin.collections.containsKey
+import kotlin.collections.get
 
 class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<ImplicitRelationHandler>) : MutableQuadSet {
 
@@ -20,7 +22,6 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
     override fun getId(id: Long): Quad? = base.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet {
-
         val existing = base.filterSubject(subject)
 
         if (subject !is URIValue) {
@@ -44,7 +45,6 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet {
-
         val existing = base.filterObject(`object`)
 
         if (`object` !is URIValue) {
@@ -64,14 +64,65 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         predicates: Collection<QuadValue>?,
         objects: Collection<QuadValue>?
     ): QuadSet {
-        TODO("Not yet implemented")
+        if (subjects.isNullOrEmpty() && objects.isNullOrEmpty() && predicates.isNullOrEmpty()) { //if subjects, predicates, and objects are null, do not filter
+                return base
+        }
+
+        // check if handlers contain any of the predicates
+        val implicitPredicates = predicates?.filter { handlers.containsKey(it) }?.toSet()
+        if (implicitPredicates.isNullOrEmpty()) {
+            return base.filter(subjects, predicates, objects)
+        }
+        val nonImplicitPredicates = predicates - implicitPredicates
+
+        val set = mutableSetOf<Quad>()
+        if (subjects.isNullOrEmpty() && objects.isNullOrEmpty()) {
+            // only filtering by predicates
+            implicitPredicates.forEach { predicate ->
+                val handler = handlers[predicate]!!
+                val quads = handler.findAll()
+                set.addAll(quads)
+            }
+        } else {
+            if (!subjects.isNullOrEmpty()) {
+                // only filtering by subjects
+                implicitPredicates.forEach { predicate ->
+                    val handler = handlers[predicate]!!
+                    subjects.forEach { subject ->
+                        // check if the subject is a URIValue
+                        if (subject is URIValue) {
+                            val iObjects = handler.findObjects(subject)
+                            iObjects.forEach { `object` ->
+                                set.add(Quad(subject, predicate, `object`))
+                            }
+                        }
+                    }
+                }
+            }
+            if (!objects.isNullOrEmpty()) {
+                // only filtering by objects
+                implicitPredicates.forEach { predicate ->
+                    val handler = handlers[predicate]!!
+                    objects.forEach { `object` ->
+                        // check if the subject is a URIValue
+                        if (`object` is URIValue) {
+                            val iSubjects = handler.findSubjects(`object`)
+                            iSubjects.forEach { subject ->
+                                set.add(Quad(subject, predicate, `object`))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val nonImplicitQuads = if (nonImplicitPredicates.isEmpty()) BasicQuadSet() else base.filter(subjects, nonImplicitPredicates, objects)
+        return BasicQuadSet(set) + nonImplicitQuads
     }
 
     override fun toMutable(): MutableQuadSet = this
 
-    override fun toSet(): Set<Quad> {
-        TODO("Not yet implemented")
-    }
+    override fun toSet(): Set<Quad> = base.toSet()
 
     override fun plus(other: QuadSet): QuadSet {
         TODO("Not yet implemented")

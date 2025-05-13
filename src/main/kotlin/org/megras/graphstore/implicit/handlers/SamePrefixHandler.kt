@@ -17,26 +17,27 @@ class SamePrefixHandler() : ImplicitRelationHandler{
         this.quadSet = quadSet
     }
 
-    override fun findObjects(subject: URIValue): Set<URIValue> {
-        val subjectPrefix = subject.value.substringBeforeLast("/")
-        return quadSet.filter { it.subject is URIValue }
+    // same function because relationship is symmetric
+    private fun findValues(value: URIValue): Set<URIValue> {
+        val prefix = value.value.substringBeforeLast("/")
+        return this.quadSet.filter { it.subject is URIValue }
             .map { it.subject as URIValue }
-            .filter { it.value.startsWith(subjectPrefix) }
+            .filter { it.value.startsWith(prefix) }
             .toSet()
     }
 
+    override fun findObjects(subject: URIValue): Set<URIValue> {
+        return findValues(subject)
+    }
+
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val objectPrefix = `object`.value.substringBeforeLast("/")
-        return quadSet.filter { it.`object` is URIValue }
-            .map { it.`object` as URIValue }
-            .filter { it.value.startsWith(objectPrefix) }
-            .toSet()
+        return findValues(`object`)
     }
 
     override fun findAll(): QuadSet {
         // find all quads where the subjects and objects have the same prefix
         return BasicQuadSet(
-            quadSet.filter { it.subject is URIValue && it.`object` is URIValue }
+            this.quadSet.filter { it.subject is URIValue && it.`object` is URIValue }
             .filter {
                 (it.subject as URIValue).value.substringBeforeLast("/") == (it.`object` as URIValue).value.substringBeforeLast("/")
             }

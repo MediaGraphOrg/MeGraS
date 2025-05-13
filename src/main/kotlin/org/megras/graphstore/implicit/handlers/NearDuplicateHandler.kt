@@ -10,8 +10,10 @@ class NearDuplicateHandler() : ImplicitRelationHandler{
 
     override val predicate: URIValue = URIValue("${Constants.IMPLICIT_PREFIX}/nearDuplicate")
 
-    override fun init(quadSet: ImplicitRelationMutableQuadSet) {
+    private lateinit var quadSet: ImplicitRelationMutableQuadSet
 
+    override fun init(quadSet: ImplicitRelationMutableQuadSet) {
+        this.quadSet = quadSet
     }
 
     override fun findObjects(subject: URIValue): Set<URIValue> {

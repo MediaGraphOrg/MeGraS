@@ -171,9 +171,7 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
 
     override fun clear() = base.clear()
 
-    override fun iterator(): MutableIterator<Quad> {
-        TODO("Not yet implemented")
-    }
+    override fun iterator(): MutableIterator<Quad> = base.iterator()
 
     override fun remove(element: Quad): Boolean = base.remove(element)
 

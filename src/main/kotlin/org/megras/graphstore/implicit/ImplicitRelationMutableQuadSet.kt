@@ -33,7 +33,12 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
             objects.map { Quad(subject, predicate, it) }
         }.toSet()
 
-        return existing + BasicQuadSet(implicit)
+        //store implicit values for future use
+        if (implicit.isNotEmpty()) {
+            base.addAll(implicit)
+        }
+
+        return existing + BasicQuadSet(implicit.toSet())
     }
 
     override fun filterPredicate(predicate: QuadValue): QuadSet {
@@ -56,7 +61,12 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
             subjects.map { Quad(it, predicate, `object`) }
         }.toSet()
 
-        return existing + BasicQuadSet(implicit)
+        //store implicit values for future use
+        if (implicit.isNotEmpty()) {
+            base.addAll(implicit)
+        }
+
+        return existing + BasicQuadSet(implicit.toSet())
     }
 
     override fun filter(
@@ -116,8 +126,13 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
             }
         }
 
+        //store implicit values for future use
+        if (set.isNotEmpty()) {
+            base.addAll(set)
+        }
+
         val nonImplicitQuads = if (nonImplicitPredicates.isEmpty()) BasicQuadSet() else base.filter(subjects, nonImplicitPredicates, objects)
-        return BasicQuadSet(set) + nonImplicitQuads
+        return BasicQuadSet(set.toSet()) + nonImplicitQuads
     }
 
     override fun toMutable(): MutableQuadSet = this

@@ -88,7 +88,6 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         }
 
         return existing
-
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet =
@@ -128,7 +127,6 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         }
 
         return existing
-
     }
 
     override fun toMutable(): MutableQuadSet = this
@@ -216,7 +214,6 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         }
 
         return ret
-
     }
 
     override fun textFilter(
@@ -251,7 +248,6 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
                 objectFilterText
             )
         }.toSet())
-
     }
 
     override val size: Int

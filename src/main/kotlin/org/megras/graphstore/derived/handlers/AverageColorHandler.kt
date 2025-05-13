@@ -47,11 +47,8 @@ class AverageColorHandler(private val quads: QuadSet, private val objectStore: F
                     r / a, g / a, b / a
                 )
             )
-
         }
-
     }
-
 
     override val predicate: URIValue = URIValue("${Constants.DERIVED_PREFIX}/averageColor")
 

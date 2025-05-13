@@ -10,5 +10,4 @@ interface DerivedRelationHandler<T : QuadValue> {
     fun canDerive(subject: URIValue): Boolean
 
     fun derive(subject: URIValue): Collection<T>
-
 }

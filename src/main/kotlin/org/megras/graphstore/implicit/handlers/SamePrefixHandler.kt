@@ -38,9 +38,7 @@ class SamePrefixHandler() : ImplicitRelationHandler{
         return BasicQuadSet(
             quadSet.filter { it.subject is URIValue && it.`object` is URIValue }
             .filter {
-                (it.subject as URIValue).value.substringBeforeLast("/") == (it.`object` as URIValue).value.substringBeforeLast(
-                    "/"
-                )
+                (it.subject as URIValue).value.substringBeforeLast("/") == (it.`object` as URIValue).value.substringBeforeLast("/")
             }
             .toSet())
     }

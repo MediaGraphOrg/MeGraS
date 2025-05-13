@@ -19,10 +19,10 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         handlers.forEach { it.init(this) }
     }
 
-    override fun getId(id: Long): Quad? = base.getId(id)
+    override fun getId(id: Long): Quad? = this.base.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet {
-        val existing = base.filterSubject(subject)
+        val existing = this.base.filterSubject(subject)
 
         if (subject !is URIValue) {
             return existing
@@ -40,12 +40,12 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         return if (handlers.containsKey(predicate)) {
             handlers[predicate]!!.findAll()
         } else {
-            base.filterPredicate(predicate)
+            this.base.filterPredicate(predicate)
         }
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet {
-        val existing = base.filterObject(`object`)
+        val existing = this.base.filterObject(`object`)
 
         if (`object` !is URIValue) {
             return existing
@@ -65,13 +65,13 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         objects: Collection<QuadValue>?
     ): QuadSet {
         if (subjects.isNullOrEmpty() && objects.isNullOrEmpty() && predicates.isNullOrEmpty()) { //if subjects, predicates, and objects are null, do not filter
-                return base
+                return this.base
         }
 
         // check if handlers contain any of the predicates
         val implicitPredicates = predicates?.filter { handlers.containsKey(it) }?.toSet()
         if (implicitPredicates.isNullOrEmpty()) {
-            return base.filter(subjects, predicates, objects)
+            return this.base.filter(subjects, predicates, objects)
         }
         val nonImplicitPredicates = predicates - implicitPredicates
 
@@ -122,7 +122,7 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
 
     override fun toMutable(): MutableQuadSet = this
 
-    override fun toSet(): Set<Quad> = base.toSet()
+    override fun toSet(): Set<Quad> = this.base.toSet()
 
     override fun plus(other: QuadSet): QuadSet {
         TODO("Not yet implemented")
@@ -146,7 +146,7 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
     }
 
     override val size: Int
-        get() = TODO("Not yet implemented")
+            = this.base.size // technically not correct, but actual size is unknown
 
     override fun contains(element: Quad): Boolean {
         TODO("Not yet implemented")
@@ -155,7 +155,14 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
     override fun containsAll(elements: Collection<Quad>): Boolean = elements.all { this.contains(it) }
 
     override fun isEmpty(): Boolean {
-        TODO("Not yet implemented")
+        if (!this.base.isEmpty()) {
+            return false
+        }
+        if (this.handlers.isEmpty()) {
+            return true
+        }
+        //TODO check if there are any candidates to imply relations from
+        return false
     }
 
     override fun add(element: Quad): Boolean {
@@ -165,17 +172,15 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         return this.base.add(element)
     }
 
-    override fun addAll(elements: Collection<Quad>): Boolean {
-        TODO("Not yet implemented")
-    }
+    override fun addAll(elements: Collection<Quad>): Boolean = this.base.addAll(elements)
 
-    override fun clear() = base.clear()
+    override fun clear() = this.base.clear()
 
-    override fun iterator(): MutableIterator<Quad> = base.iterator()
+    override fun iterator(): MutableIterator<Quad> = this.base.iterator()
 
-    override fun remove(element: Quad): Boolean = base.remove(element)
+    override fun remove(element: Quad): Boolean = this.base.remove(element)
 
-    override fun removeAll(elements: Collection<Quad>): Boolean = base.removeAll(elements)
+    override fun removeAll(elements: Collection<Quad>): Boolean = this.base.removeAll(elements)
 
-    override fun retainAll(elements: Collection<Quad>): Boolean = base.retainAll(elements)
+    override fun retainAll(elements: Collection<Quad>): Boolean = this.base.retainAll(elements)
 }

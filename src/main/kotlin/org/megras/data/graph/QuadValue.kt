@@ -3,6 +3,9 @@ package org.megras.data.graph
 import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 sealed class QuadValue : Serializable {
 
@@ -310,5 +313,40 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
 
     override fun toString(): String {
         return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^LongVector")
+    }
+}
+
+data class TemporalValue(val originalString: String) : Comparable<TemporalValue> {
+    private val dateTime: LocalDateTime
+    val value: String
+        get() = dateTime.toString()
+
+    init {
+        val value = if (originalString.contains("^^")) {
+            originalString.split("^^")[0]
+        } else {
+            originalString
+        }
+        dateTime = parseDateTime(value)
+    }
+
+    private fun parseDateTime(value: String): LocalDateTime {
+        return try {
+            LocalDateTime.parse(value)
+        } catch (e: DateTimeParseException) {
+            try {
+                LocalDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME)
+            } catch (e: DateTimeParseException) {
+                throw IllegalArgumentException("Invalid datetime format: $value", e)
+            }
+        }
+    }
+
+    override fun toString(): String {
+        return dateTime.toString()
+    }
+
+    override fun compareTo(other: TemporalValue): Int {
+        TODO("Not yet implemented")
     }
 }

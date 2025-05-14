@@ -37,38 +37,6 @@ class StartAccessor : FunctionBase1() {
         return getStart(subjectQuads)
     }
 
-    private fun parseTimeString(timeStr: String): NodeValue {
-        // Drop the ^^String, if present
-        val cleanTimeStr = timeStr.substringBefore("^^").trim()
-        // Try different date formats based on expected inputs
-        return try {
-            // Try ISO-8601 format first (most common)
-            if (cleanTimeStr.matches(Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*"))) {
-                NodeValue.makeDateTime(cleanTimeStr)
-            }
-            // Try 2019-01-02 09:20:29 (common in some databases)
-            else if (cleanTimeStr.matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"))) {
-                NodeValue.makeDateTime(cleanTimeStr.replace(" ", "T"))
-            }
-            // Try date only format
-            else if (cleanTimeStr.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
-                NodeValue.makeDate(cleanTimeStr)
-            }
-            // Try Unix timestamp (assuming milliseconds)
-            else if (cleanTimeStr.matches(Regex("\\d+"))) {
-                val instant = java.time.Instant.ofEpochMilli(cleanTimeStr.toLong())
-                val dateTime = java.time.format.DateTimeFormatter.ISO_INSTANT.format(instant)
-                NodeValue.makeDateTime(dateTime)
-            }
-            // Default attempt with Jena's parsing
-            else {
-                NodeValue.makeDateTime(cleanTimeStr)
-            }
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Unsupported time format")
-        }
-    }
-
     internal fun getStart(subjectQuads: MutableQuadSet): NodeValue {
         if (subjectQuads.isEmpty()) {
             throw IllegalArgumentException("No data found for subject")
@@ -86,7 +54,7 @@ class StartAccessor : FunctionBase1() {
                     // If it's already an XSDDateTime, use it directly
                     is XSDDateTime -> NodeValue.makeDateTime(startTimeValue.toString())
                     // Otherwise try to parse the string representation using common formats
-                    else -> parseTimeString(startTimeValue.toString())
+                    else -> ParseUtil.parseDateTimeString(startTimeValue.toString())
                 }
             } catch (e: Exception) {
                 throw IllegalArgumentException("Failed to parse start time")

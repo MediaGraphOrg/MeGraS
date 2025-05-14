@@ -23,6 +23,11 @@ class StartAccessor : FunctionBase1() {
         fun setQuads(quadSet: MutableQuadSet) {
             this.quadSet = quadSet
         }
+
+        fun getStart(subjectQuads: MutableQuadSet): NodeValue {
+            // Get the start time from the subject quads
+            return ParseUtil.getDateTime(subjectQuads, START_TIME_PREDICATES)
+        }
     }
 
     override fun exec(arg: NodeValue): NodeValue {
@@ -33,6 +38,6 @@ class StartAccessor : FunctionBase1() {
         // Find all quads with the given subject
         val subjectQuads = quadSet.filterSubject(subject) as MutableQuadSet
 
-        return ParseUtil.getDateTime(subjectQuads, START_TIME_PREDICATES)
+        return getStart(subjectQuads)
     }
 }

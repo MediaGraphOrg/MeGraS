@@ -23,6 +23,11 @@ class EndAccessor : FunctionBase1() {
         fun setQuads(quadSet: MutableQuadSet) {
             this.quadSet = quadSet
         }
+
+        fun getEnd(subjectQuads: MutableQuadSet): NodeValue {
+            // Get the end time from the subject quads
+            return ParseUtil.getDateTime(subjectQuads, END_TIME_PREDICATES)
+        }
     }
 
     override fun exec(arg: NodeValue): NodeValue {
@@ -33,6 +38,6 @@ class EndAccessor : FunctionBase1() {
         // Find all quads with the given subject
         val subjectQuads = quadSet.filterSubject(subject) as MutableQuadSet
 
-        return ParseUtil.getDateTime(subjectQuads, END_TIME_PREDICATES)
+        return getEnd(subjectQuads)
     }
 }

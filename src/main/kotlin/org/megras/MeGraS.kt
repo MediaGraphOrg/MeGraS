@@ -93,7 +93,7 @@ object MeGraS {
 
         RestApi.init(config, objectStore, quadSet)
 
-        FunctionRegistrar.register()
+        FunctionRegistrar.register(quadSet)
 
         Cli.init(quadSet, objectStore)
 

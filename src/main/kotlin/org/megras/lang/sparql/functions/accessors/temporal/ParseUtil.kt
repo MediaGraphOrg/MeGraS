@@ -40,7 +40,7 @@ object ParseUtil {
     }
 
     internal fun getDateTime(subject: URIValue, quadSet: MutableQuadSet, predicates: Collection<QuadValue>): NodeValue {
-        val subjectQuads = quadSet.filterSubject(subject) as MutableQuadSet
+        val subjectQuads = quadSet.filter(listOf(subject), null, null)
         if (subjectQuads.isEmpty()) {
             throw IllegalArgumentException("No data found for subject")
         }

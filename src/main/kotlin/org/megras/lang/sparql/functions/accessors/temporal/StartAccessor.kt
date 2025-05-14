@@ -24,20 +24,22 @@ class StartAccessor : FunctionBase1() {
             this.quadSet = quadSet
         }
 
-        fun getStart(subjectQuads: MutableQuadSet): NodeValue {
+        private fun getStart(subject: URIValue): NodeValue {
             // Get the start time from the subject quads
-            return ParseUtil.getDateTime(subjectQuads, START_TIME_PREDICATES)
+            return ParseUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES)
+        }
+
+        fun getStart(subject: URIValue, quadSet: MutableQuadSet): NodeValue {
+            // Get the start time from the subject quads
+            return ParseUtil.getDateTime(subject, quadSet, START_TIME_PREDICATES)
         }
     }
 
     override fun exec(arg: NodeValue): NodeValue {
         // Get the subject from the argument
-        val subject = SparqlUtil.toQuadValue(arg.asNode())
+        val subject = SparqlUtil.toQuadValue(arg.asNode()) as URIValue?
             ?: throw IllegalArgumentException("Invalid subject")
 
-        // Find all quads with the given subject
-        val subjectQuads = quadSet.filterSubject(subject) as MutableQuadSet
-
-        return getStart(subjectQuads)
+        return getStart(subject)
     }
 }

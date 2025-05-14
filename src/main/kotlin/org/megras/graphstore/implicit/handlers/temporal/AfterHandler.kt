@@ -4,7 +4,6 @@ import org.megras.data.graph.URIValue
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
-import org.megras.lang.sparql.functions.accessors.temporal.StartAccessor
 import org.megras.util.Constants
 
 class AfterHandler : ImplicitRelationHandler {

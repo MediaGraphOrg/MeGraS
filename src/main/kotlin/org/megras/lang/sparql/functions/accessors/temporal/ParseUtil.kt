@@ -3,6 +3,7 @@ package org.megras.lang.sparql.functions.accessors.temporal
 import org.apache.jena.datatypes.xsd.XSDDateTime
 import org.apache.jena.sparql.expr.NodeValue
 import org.megras.data.graph.QuadValue
+import org.megras.data.graph.URIValue
 import org.megras.graphstore.MutableQuadSet
 
 object ParseUtil {
@@ -38,7 +39,8 @@ object ParseUtil {
         }
     }
 
-    internal fun getDateTime(subjectQuads: MutableQuadSet, predicates: Collection<QuadValue>): NodeValue {
+    internal fun getDateTime(subject: URIValue, quadSet: MutableQuadSet, predicates: Collection<QuadValue>): NodeValue {
+        val subjectQuads = quadSet.filterSubject(subject) as MutableQuadSet
         if (subjectQuads.isEmpty()) {
             throw IllegalArgumentException("No data found for subject")
         }

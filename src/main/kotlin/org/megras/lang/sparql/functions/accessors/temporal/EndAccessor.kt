@@ -24,20 +24,22 @@ class EndAccessor : FunctionBase1() {
             this.quadSet = quadSet
         }
 
-        fun getEnd(subjectQuads: MutableQuadSet): NodeValue {
-            // Get the end time from the subject quads
-            return ParseUtil.getDateTime(subjectQuads, END_TIME_PREDICATES)
+        private fun getEnd(subject: URIValue): NodeValue {
+            // Get the start time from the subject quads
+            return ParseUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES)
+        }
+
+        fun getEnd(subject: URIValue, quadSet: MutableQuadSet): NodeValue {
+            // Get the start time from the subject quads
+            return ParseUtil.getDateTime(subject, quadSet, END_TIME_PREDICATES)
         }
     }
 
     override fun exec(arg: NodeValue): NodeValue {
         // Get the subject from the argument
-        val subject = SparqlUtil.toQuadValue(arg.asNode())
+        val subject = SparqlUtil.toQuadValue(arg.asNode()) as URIValue?
             ?: throw IllegalArgumentException("Invalid subject")
 
-        // Find all quads with the given subject
-        val subjectQuads = quadSet.filterSubject(subject) as MutableQuadSet
-
-        return getEnd(subjectQuads)
+        return getEnd(subject)
     }
 }

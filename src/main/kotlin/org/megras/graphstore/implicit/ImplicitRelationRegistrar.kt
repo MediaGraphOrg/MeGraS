@@ -10,7 +10,7 @@ class ImplicitRelationRegistrar {
     init {
         register(SamePrefixHandler())
         //register(NearDuplicateHandler())
-        register(AfterHandler())
+        //register(AfterHandler())
     }
 
     private fun register(handler: ImplicitRelationHandler) {

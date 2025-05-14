@@ -11,7 +11,7 @@ import org.megras.util.Constants
 class FunctionRegistrar {
 
     companion object {
-        fun register(quadset: MutableQuadSet) {
+        fun register(quadSet: MutableQuadSet) {
             // * Custom SPARQL functions
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#CLIP_TEXT", ClipTextFunction::class.java)
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#COSINE_SIM", CosineSimFunction::class.java)
@@ -19,9 +19,9 @@ class FunctionRegistrar {
             // * mm functions
             // ** Temporal accessors
             FunctionRegistry.get().put("${Constants.MM_PREFIX}#START", StartAccessor::class.java)
-            StartAccessor.setQuads(quadset)
+            StartAccessor.setQuads(quadSet)
             FunctionRegistry.get().put("${Constants.MM_PREFIX}#END", EndAccessor::class.java)
-            EndAccessor.setQuads(quadset)
+            EndAccessor.setQuads(quadSet)
         }
     }
 }

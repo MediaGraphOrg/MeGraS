@@ -28,11 +28,6 @@ class EndAccessor : FunctionBase1() {
             // Get the start time from the subject quads
             return ParseUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES)
         }
-
-        fun getEnd(subject: URIValue, quadSet: MutableQuadSet): NodeValue {
-            // Get the start time from the subject quads
-            return ParseUtil.getDateTime(subject, quadSet, END_TIME_PREDICATES)
-        }
     }
 
     override fun exec(arg: NodeValue): NodeValue {

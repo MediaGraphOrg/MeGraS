@@ -75,23 +75,21 @@ class StartAccessor : FunctionBase1() {
         }
 
         // Look for predicates related to start time
-        for (predicate in START_TIME_PREDICATES) {
-            val startTimeQuads = subjectQuads.filterPredicate(predicate)
-            if (startTimeQuads.isNotEmpty()) {
-                // Extract the start time value
-                val startTimeValue = startTimeQuads.first().`object`
+        val startTimeQuads = subjectQuads.filter(null, START_TIME_PREDICATES, null)
+        if (startTimeQuads.isNotEmpty()) {
+            // Extract the start time value
+            val startTimeValue = startTimeQuads.first().`object`
 
-                // Try to parse the time value based on its type
-                return try {
-                    when (startTimeValue) {
-                        // If it's already an XSDDateTime, use it directly
-                        is XSDDateTime -> NodeValue.makeDateTime(startTimeValue.toString())
-                        // Otherwise try to parse the string representation using common formats
-                        else -> parseTimeString(startTimeValue.toString())
-                    }
-                } catch (e: Exception) {
-                    throw IllegalArgumentException("Failed to parse start time: ${e.message}")
+            // Try to parse the time value based on its type
+            return try {
+                when (startTimeValue) {
+                    // If it's already an XSDDateTime, use it directly
+                    is XSDDateTime -> NodeValue.makeDateTime(startTimeValue.toString())
+                    // Otherwise try to parse the string representation using common formats
+                    else -> parseTimeString(startTimeValue.toString())
                 }
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Failed to parse start time")
             }
         }
 

@@ -4,6 +4,7 @@ import org.apache.jena.sparql.function.FunctionRegistry
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.functions.ClipTextFunction
 import org.megras.lang.sparql.functions.CosineSimFunction
+import org.megras.lang.sparql.functions.accessors.temporal.EndAccessor
 import org.megras.lang.sparql.functions.accessors.temporal.StartAccessor
 import org.megras.util.Constants
 
@@ -19,6 +20,8 @@ class FunctionRegistrar {
             // ** Temporal accessors
             FunctionRegistry.get().put("${Constants.MM_PREFIX}#START", StartAccessor::class.java)
             StartAccessor.setQuads(quadset)
+            FunctionRegistry.get().put("${Constants.MM_PREFIX}#END", EndAccessor::class.java)
+            EndAccessor.setQuads(quadset)
         }
     }
 }

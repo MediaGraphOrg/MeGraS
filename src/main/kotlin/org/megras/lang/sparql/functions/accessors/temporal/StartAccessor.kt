@@ -27,11 +27,11 @@ class StartAccessor : FunctionBase1() {
 
         private fun getStart(subject: URIValue): NodeValue {
             // Get the start time from the subject quads
-            return ParseUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES)
+            return NodeValue.makeDateTime(AccessorUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES).toString())
         }
 
         fun getStartQV(subject: URIValue): QuadValue? {
-            return SparqlUtil.toQuadValue(getStart(subject).asNode())
+            return AccessorUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES)
         }
     }
 

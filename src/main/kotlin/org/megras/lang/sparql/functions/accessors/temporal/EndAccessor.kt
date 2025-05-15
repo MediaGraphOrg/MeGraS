@@ -26,7 +26,7 @@ class EndAccessor : FunctionBase1() {
 
         private fun getEnd(subject: URIValue): NodeValue {
             // Get the start time from the subject quads
-            return ParseUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES)
+            return NodeValue.makeDateTime(AccessorUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES).toString())
         }
     }
 

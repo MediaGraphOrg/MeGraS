@@ -20,29 +20,36 @@ abstract class ImplicitTemporalHandler(
         this.quadSet = quadSet
     }
 
-    override fun findObjects(subject: URIValue): Set<URIValue> {
-        val start1 = AccessorUtil.getStart(subject)
-        val end1 = AccessorUtil.getEnd(subject)
+    private fun getTemporalCandidatesAndCaches(subject: URIValue): TemporalCandidatesResult {
+        val start = AccessorUtil.getStart(subject)
+        val end = AccessorUtil.getEnd(subject)
         val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject }
             .map { it.subject as URIValue }
             .toSet()
         val startCache = candidates.associateWith { AccessorUtil.getStart(it) }
         val endCache = candidates.associateWith { AccessorUtil.getEnd(it) }
+        return TemporalCandidatesResult(start, end, candidates, startCache, endCache)
+    }
+
+    private data class TemporalCandidatesResult(
+        val start: TemporalValue?,
+        val end: TemporalValue?,
+        val candidates: Set<URIValue>,
+        val startCache: Map<URIValue, TemporalValue?>,
+        val endCache: Map<URIValue, TemporalValue?>
+    )
+
+    override fun findObjects(subject: URIValue): Set<URIValue> {
+        val (start, end, candidates, startCache, endCache) = getTemporalCandidatesAndCaches(subject)
         return candidates.filter {
-            compare(start1, end1, startCache[it], endCache[it])
+            compare(start, end, startCache[it], endCache[it])
         }.toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val start2 = AccessorUtil.getStart(`object`)
-        val end2 = AccessorUtil.getEnd(`object`)
-        val candidates = quadSet.filter { it.subject is URIValue && it.subject != `object` }
-            .map { it.subject as URIValue }
-            .toSet()
-        val startCache = candidates.associateWith { AccessorUtil.getStart(it) }
-        val endCache = candidates.associateWith { AccessorUtil.getEnd(it) }
+        val (start, end, candidates, startCache, endCache) = getTemporalCandidatesAndCaches(`object`)
         return candidates.filter {
-            compare(startCache[it], endCache[it], start2, end2)
+            compare(startCache[it], endCache[it], start, end)
         }.toSet()
     }
 

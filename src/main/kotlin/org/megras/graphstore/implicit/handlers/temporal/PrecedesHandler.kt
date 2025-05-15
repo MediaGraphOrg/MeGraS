@@ -53,9 +53,10 @@ class PrecedesHandler : ImplicitRelationHandler {
         // and filter on the end and start times
         val pairs = mutableSetOf<Quad>()
         for (subject in subjects) {
+            val end = AccessorUtil.getEnd(subject)
             for (otherSubject in subjects) {
-                if (subject != otherSubject) {val start = AccessorUtil.getStart(otherSubject)
-                    val end = AccessorUtil.getEnd(subject)
+                if (subject != otherSubject) {
+                    val start = AccessorUtil.getStart(otherSubject)
                     if (start!! > end!!) {
                         pairs.add(Quad(subject, predicate, otherSubject))
                     }

@@ -23,12 +23,14 @@ class PrecedesHandler : ImplicitRelationHandler {
         if (end == null) {
             return emptySet()
         }
-        // find all subjects that are URI
-        // then get the start time of each subject and filter on it
-        return this.quadSet.filter { it.subject is URIValue && it.subject != subject }
+        val subjects = this.quadSet.filter { it.subject is URIValue && it.subject != subject }
             .map { it.subject as URIValue }
-            .filter { AccessorUtil.getStart(it) != null && AccessorUtil.getStart(it)!! > end }
             .toSet()
+
+        // Cache start times for all subjects
+        val subjectStarts = subjects.associateWith { AccessorUtil.getStart(it) }
+
+        return subjects.filter { subjectStarts[it] != null && subjectStarts[it]!! > end }.toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
@@ -36,27 +38,35 @@ class PrecedesHandler : ImplicitRelationHandler {
         if (start == null) {
             return emptySet()
         }
-        // find all subjects that are URI
-        // then get the end time of each subject and filter on it
-        return this.quadSet.filter { it.subject is URIValue && it.subject != `object` }
+        val subjects = this.quadSet.filter { it.subject is URIValue && it.subject != `object` }
             .map { it.subject as URIValue }
-            .filter { AccessorUtil.getEnd(it) != null && AccessorUtil.getEnd(it)!! < start }
             .toSet()
+
+        // Cache end times for all subjects
+        val subjectEnds = subjects.associateWith { AccessorUtil.getEnd(it) }
+
+        return subjects.filter { subjectEnds[it] != null && subjectEnds[it]!! < start }.toSet()
     }
 
     override fun findAll(): QuadSet {
-        val subjects = this.quadSet.filter { it.subject is URIValue}
+        val subjects = this.quadSet.filter { it.subject is URIValue }
             .map { it.subject as URIValue }
-            .filter { AccessorUtil.getEnd(it) != null && AccessorUtil.getStart(it) != null }
             .toSet()
-        // Create all possible pairs, except self combinations
-        // and filter on the end and start times
+
+        // Cache start and end times for all subjects
+        val subjectStarts = subjects.associateWith { AccessorUtil.getStart(it) }
+        val subjectEnds = subjects.associateWith { AccessorUtil.getEnd(it) }
+
+        // Filter subjects to only those with both start and end times
+        val filteredSubjects = subjects.filter { subjectEnds[it] != null && subjectStarts[it] != null }.toSet()
+
+        // Create all possible pairs, except self combinations, and filter on the end and start times
         val pairs = mutableSetOf<Quad>()
-        for (subject in subjects) {
-            val end = AccessorUtil.getEnd(subject)
-            for (otherSubject in subjects) {
+        for (subject in filteredSubjects) {
+            val end = subjectEnds[subject]
+            for (otherSubject in filteredSubjects) {
                 if (subject != otherSubject) {
-                    val start = AccessorUtil.getStart(otherSubject)
+                    val start = subjectStarts[otherSubject]
                     if (start!! > end!!) {
                         pairs.add(Quad(subject, predicate, otherSubject))
                     }

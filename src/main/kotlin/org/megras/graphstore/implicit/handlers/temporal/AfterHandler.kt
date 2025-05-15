@@ -1,79 +1,12 @@
 package org.megras.graphstore.implicit.handlers.temporal
 
-import org.megras.data.graph.Quad
+import org.megras.data.graph.TemporalValue
 import org.megras.data.graph.URIValue
-import org.megras.graphstore.BasicQuadSet
-import org.megras.graphstore.QuadSet
-import org.megras.graphstore.implicit.ImplicitRelationHandler
-import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
-import org.megras.lang.sparql.functions.accessors.temporal.AccessorUtil
 import org.megras.util.Constants
 
-class AfterHandler : ImplicitRelationHandler {
-    override val predicate: URIValue = URIValue("${Constants.TEMPORAL_PREFIX}/after")
-
-    private lateinit var quadSet: ImplicitRelationMutableQuadSet
-
-    override fun init(quadSet: ImplicitRelationMutableQuadSet) {
-        this.quadSet = quadSet
+class AfterHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/after"),
+    compare = { start1: TemporalValue?, _, _, end2: TemporalValue? ->
+        start1 != null && end2 != null && start1 >= end2
     }
-
-    override fun findObjects(subject: URIValue): Set<URIValue> {
-        val start = AccessorUtil.getStart(subject)
-        if (start == null) {
-            return emptySet()
-        }
-        val subjects = this.quadSet.filter { it.subject is URIValue && it.subject != subject }
-            .map { it.subject as URIValue }
-            .toSet()
-
-        // Cache end times for all subjects
-        val subjectEnds = subjects.associateWith { AccessorUtil.getEnd(it) }
-
-        return subjects.filter { subjectEnds[it] != null && subjectEnds[it]!! <= start }.toSet()
-    }
-
-    override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val end = AccessorUtil.getEnd(`object`)
-        if (end == null) {
-            return emptySet()
-        }
-
-        val subjects = this.quadSet.filter { it.subject is URIValue && it.subject != `object` }
-            .map { it.subject as URIValue }
-            .toSet()
-
-        // Cache start times for all subjects
-        val subjectStarts = subjects.associateWith { AccessorUtil.getStart(it) }
-
-        return subjects.filter { subjectStarts[it] != null && subjectStarts[it]!! >= end }.toSet()
-    }
-
-    override fun findAll(): QuadSet {
-        val subjects = this.quadSet.filter { it.subject is URIValue }
-            .map { it.subject as URIValue }
-            .toSet()
-
-        // Cache start and end times for all subjects
-        val subjectStarts = subjects.associateWith { AccessorUtil.getStart(it) }
-        val subjectEnds = subjects.associateWith { AccessorUtil.getEnd(it) }
-
-        // Filter subjects to only those with both start and end times
-        val filteredSubjects = subjects.filter { subjectEnds[it] != null && subjectStarts[it] != null }.toSet()
-
-        // Create all possible pairs, except self combinations, and filter on the end and start times
-        val pairs = mutableSetOf<Quad>()
-        for (subject in filteredSubjects) {
-            val start = subjectStarts[subject]
-            for (otherSubject in filteredSubjects) {
-                if (subject != otherSubject) {
-                    val end = subjectEnds[otherSubject]
-                    if (start!! >= end!!) {
-                        pairs.add(Quad(subject, predicate, otherSubject))
-                    }
-                }
-            }
-        }
-        return BasicQuadSet(pairs)
-    }
-}
+)

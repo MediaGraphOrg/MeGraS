@@ -360,6 +360,10 @@ data class TemporalValue(val originalString: String) : Comparable<TemporalValue>
     }
 
     override fun compareTo(other: TemporalValue): Int {
-        TODO("Not yet implemented")
+        return dateTime.compareTo(other.dateTime)
+    }
+
+    operator fun compareTo(other: LocalDateTime): Int {
+        return dateTime.compareTo(other)
     }
 }

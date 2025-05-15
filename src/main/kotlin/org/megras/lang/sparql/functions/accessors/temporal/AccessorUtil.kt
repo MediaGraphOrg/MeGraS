@@ -7,7 +7,7 @@ import org.megras.data.graph.URIValue
 import org.megras.graphstore.MutableQuadSet
 
 object AccessorUtil {
-    internal fun getDateTime(subject: URIValue, quadSet: MutableQuadSet, predicates: Collection<QuadValue>): TemporalValue {
+    internal fun getDateTime(subject: URIValue, quadSet: MutableQuadSet, predicates: Collection<QuadValue>): TemporalValue? {
         val subjectQuads = quadSet.filter(listOf(subject), null, null)
         if (subjectQuads.isEmpty()) {
             throw IllegalArgumentException("No data found for subject")
@@ -32,6 +32,7 @@ object AccessorUtil {
         }
 
         // If we got here, we didn't find any recognized time
-        throw IllegalArgumentException("No time found for subject")
+        //throw IllegalArgumentException("No time found for subject")
+        return null
     }
 }

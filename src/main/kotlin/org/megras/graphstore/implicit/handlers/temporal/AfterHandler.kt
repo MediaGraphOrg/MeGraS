@@ -19,28 +19,28 @@ class AfterHandler : ImplicitRelationHandler {
     }
 
     override fun findObjects(subject: URIValue): Set<URIValue> {
-        val end = AccessorUtil.getEnd(subject)
-        if (end == null) {
-            return emptySet()
-        }
-        // find all subjects that are URI
-        // then get the start time of each subject and filter on it
-        return this.quadSet.filter { it.subject is URIValue && it.subject != subject }
-            .map { it.subject as URIValue }
-            .filter { AccessorUtil.getStart(it) != null && AccessorUtil.getStart(it)!! >= end }
-            .toSet()
-    }
-
-    override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val start = AccessorUtil.getStart(`object`)
+        val start = AccessorUtil.getStart(subject)
         if (start == null) {
             return emptySet()
         }
         // find all subjects that are URI
         // then get the end time of each subject and filter on it
-        return this.quadSet.filter { it.subject is URIValue && it.subject != `object` }
+        return this.quadSet.filter { it.subject is URIValue && it.subject != subject }
             .map { it.subject as URIValue }
             .filter { AccessorUtil.getEnd(it) != null && AccessorUtil.getEnd(it)!! <= start }
+            .toSet()
+    }
+
+    override fun findSubjects(`object`: URIValue): Set<URIValue> {
+        val end = AccessorUtil.getEnd(`object`)
+        if (end == null) {
+            return emptySet()
+        }
+        // find all subjects that are URI
+        // then get the start time of each subject and filter on it
+        return this.quadSet.filter { it.subject is URIValue && it.subject != `object` }
+            .map { it.subject as URIValue }
+            .filter { AccessorUtil.getStart(it) != null && AccessorUtil.getStart(it)!! >= end }
             .toSet()
     }
 
@@ -53,9 +53,10 @@ class AfterHandler : ImplicitRelationHandler {
         // and filter on the end and start times
         val pairs = mutableSetOf<Quad>()
         for (subject in subjects) {
+            val start = AccessorUtil.getStart(subject)
             for (otherSubject in subjects) {
-                if (subject != otherSubject) {val start = AccessorUtil.getStart(otherSubject)
-                    val end = AccessorUtil.getEnd(subject)
+                if (subject != otherSubject) {
+                    val end = AccessorUtil.getEnd(otherSubject)
                     if (start!! >= end!!) {
                         pairs.add(Quad(subject, predicate, otherSubject))
                     }

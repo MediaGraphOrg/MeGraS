@@ -2,7 +2,7 @@ package org.megras.lang.sparql.functions.accessors.temporal
 
 import org.apache.jena.sparql.expr.NodeValue
 import org.apache.jena.sparql.function.FunctionBase1
-import org.megras.data.graph.QuadValue
+import org.megras.data.graph.TemporalValue
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.SparqlUtil
 import org.megras.data.graph.URIValue
@@ -30,7 +30,7 @@ class StartAccessor : FunctionBase1() {
             return NodeValue.makeDateTime(AccessorUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES).toString())
         }
 
-        fun getStartQV(subject: URIValue): QuadValue? {
+        fun getStartQV(subject: URIValue): TemporalValue? {
             return AccessorUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES)
         }
     }

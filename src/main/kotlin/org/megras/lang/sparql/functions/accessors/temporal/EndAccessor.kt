@@ -2,6 +2,7 @@ package org.megras.lang.sparql.functions.accessors.temporal
 
 import org.apache.jena.sparql.expr.NodeValue
 import org.apache.jena.sparql.function.FunctionBase1
+import org.megras.data.graph.TemporalValue
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.SparqlUtil
 import org.megras.data.graph.URIValue
@@ -27,6 +28,10 @@ class EndAccessor : FunctionBase1() {
         private fun getEnd(subject: URIValue): NodeValue {
             // Get the start time from the subject quads
             return NodeValue.makeDateTime(AccessorUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES).toString())
+        }
+
+        fun getEndQV(subject: URIValue): TemporalValue? {
+            return AccessorUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES)
         }
     }
 

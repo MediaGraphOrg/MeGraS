@@ -316,14 +316,15 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
     }
 }
 
-data class TemporalValue(val originalString: String) : Comparable<TemporalValue> {
+data class TemporalValue(val originalString: String) : Comparable<TemporalValue>, QuadValue(), Serializable {
     private val dateTime: LocalDateTime
+
     val value: String
         get() = dateTime.toString()
 
     init {
         val value = if (originalString.contains("^^")) {
-            originalString.split("^^")[0]
+            originalString.substringBefore("^^").trim()
         } else {
             originalString
         }
@@ -331,14 +332,26 @@ data class TemporalValue(val originalString: String) : Comparable<TemporalValue>
     }
 
     private fun parseDateTime(value: String): LocalDateTime {
-        return try {
-            LocalDateTime.parse(value)
-        } catch (e: DateTimeParseException) {
+        val formats = listOf(
+            DateTimeFormatter.ISO_DATE_TIME, // ISO-8601 format
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"), // Common database format
+            DateTimeFormatter.ISO_DATE // Date only
+        )
+
+        formats.forEach { formatter ->
             try {
-                LocalDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME)
+                return LocalDateTime.parse(value, formatter)
             } catch (e: DateTimeParseException) {
-                throw IllegalArgumentException("Invalid datetime format: $value", e)
+                // Ignore and try the next format
             }
+        }
+
+        // Try parsing as a Unix timestamp (milliseconds)
+        return try {
+            val instant = java.time.Instant.ofEpochMilli(value.toLong())
+            LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Unsupported date-time format: $value")
         }
     }
 

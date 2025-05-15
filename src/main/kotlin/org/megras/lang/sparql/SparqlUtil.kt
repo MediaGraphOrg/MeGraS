@@ -62,6 +62,7 @@ object SparqlUtil {
         is LongValue -> model.createTypedLiteral(value.value)
         is StringValue -> model.createTypedLiteral(value.value)
         is VectorValue -> model.createTypedLiteral(value.toString())
+        is TemporalValue -> model.createTypedLiteral(value.toString())
     }.asNode()
 
 }

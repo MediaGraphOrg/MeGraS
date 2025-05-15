@@ -30,7 +30,7 @@ class StartAccessor : FunctionBase1() {
             return NodeValue.makeDateTime(AccessorUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES).toString())
         }
 
-        fun getStartQV(subject: URIValue): TemporalValue? {
+        internal fun getStartQV(subject: URIValue): TemporalValue? {
             return AccessorUtil.getDateTime(subject, this.quadSet, START_TIME_PREDICATES)
         }
     }

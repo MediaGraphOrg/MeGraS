@@ -30,7 +30,7 @@ class EndAccessor : FunctionBase1() {
             return NodeValue.makeDateTime(AccessorUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES).toString())
         }
 
-        fun getEndQV(subject: URIValue): TemporalValue? {
+        internal fun getEndQV(subject: URIValue): TemporalValue? {
             return AccessorUtil.getDateTime(subject, this.quadSet, END_TIME_PREDICATES)
         }
     }

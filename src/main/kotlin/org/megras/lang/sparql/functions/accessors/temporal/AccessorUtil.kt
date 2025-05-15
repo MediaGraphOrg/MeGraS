@@ -26,13 +26,19 @@ object AccessorUtil {
             } else if (timeValue is URIValue) {
                 // If it's a URI, we can try to convert it to a date
                 return TemporalValue(timeValue.value)
-            } else {
-                throw IllegalArgumentException("Unsupported time value type")
             }
         }
 
         // If we got here, we didn't find any recognized time
         //throw IllegalArgumentException("No time found for subject")
         return null
+    }
+
+    fun getStart(subject: URIValue): TemporalValue? {
+        return StartAccessor.getStartQV(subject)
+    }
+
+    fun getEnd(subject: URIValue): TemporalValue? {
+        return EndAccessor.getEndQV(subject)
     }
 }

@@ -1,4 +1,4 @@
-package org.megras.graphstore.implicit.handlers.temporal
+package org.megras.graphstore.implicit.handlers
 
 import org.megras.data.graph.Quad
 import org.megras.data.graph.TemporalValue
@@ -8,6 +8,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.lang.sparql.functions.accessors.temporal.AccessorUtil
+import org.megras.util.Constants
 
 abstract class ImplicitTemporalHandler(
     override val predicate: URIValue,
@@ -76,3 +77,62 @@ abstract class ImplicitTemporalHandler(
         return BasicQuadSet(pairs)
     }
 }
+
+class AfterHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/after"),
+    compare = { start1: TemporalValue?, _, _, end2: TemporalValue? ->
+        start1 != null && end2 != null && start1 >= end2
+    }
+)
+
+class PrecedesHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/precedes"),
+    compare = { _, end1: TemporalValue?, start2: TemporalValue?, _ ->
+        end1 != null && start2 != null && end1 < start2
+    }
+)
+
+class FinishesHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/finishes"),
+    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+        end1 != null && end2 != null && end1 == end2 && start1 != null && start2 != null && start1 > start2
+    }
+)
+
+class MeetsHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/meets"),
+    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+        (start1 != null && end2 != null && start1 == end2) || (end1 != null && start2 != null && end1 == start2)
+    }
+)
+
+class StartsHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/starts"),
+    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+        start1 != null && start2 != null && start1 == start2 && end1 != null && end2 != null && end1 < end2
+    }
+)
+
+class ContainsHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/contains"),
+    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+        start1 != null && end1 != null && start2 != null && end2 != null &&
+                start1 < start2 && end1 > end2
+    }
+)
+
+class EqualsHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/equals"),
+    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+        start1 != null && end1 != null && start2 != null && end2 != null &&
+                start1 == start2 && end1 == end2
+    }
+)
+
+class OverlapsHandler : ImplicitTemporalHandler(
+    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/overlaps"),
+    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+        start1 != null && end1 != null && start2 != null && end2 != null &&
+                ((start1 < start2 && start2 < end1 && end1 < end2) || (start2 < start1 && start1 < end2 && end2 < end1))
+    }
+)

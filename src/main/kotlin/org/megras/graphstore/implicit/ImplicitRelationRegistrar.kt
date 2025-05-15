@@ -1,15 +1,14 @@
 package org.megras.graphstore.implicit
 
-import org.megras.graphstore.implicit.handlers.NearDuplicateHandler
 import org.megras.graphstore.implicit.handlers.SamePrefixHandler
-import org.megras.graphstore.implicit.handlers.temporal.AfterHandler
-import org.megras.graphstore.implicit.handlers.temporal.ContainsHandler
-import org.megras.graphstore.implicit.handlers.temporal.EqualsHandler
-import org.megras.graphstore.implicit.handlers.temporal.FinishesHandler
-import org.megras.graphstore.implicit.handlers.temporal.MeetsHandler
-import org.megras.graphstore.implicit.handlers.temporal.OverlapsHandler
-import org.megras.graphstore.implicit.handlers.temporal.PrecedesHandler
-import org.megras.graphstore.implicit.handlers.temporal.StartsHandler
+import org.megras.graphstore.implicit.handlers.AfterHandler
+import org.megras.graphstore.implicit.handlers.ContainsHandler
+import org.megras.graphstore.implicit.handlers.EqualsHandler
+import org.megras.graphstore.implicit.handlers.FinishesHandler
+import org.megras.graphstore.implicit.handlers.MeetsHandler
+import org.megras.graphstore.implicit.handlers.OverlapsHandler
+import org.megras.graphstore.implicit.handlers.PrecedesHandler
+import org.megras.graphstore.implicit.handlers.StartsHandler
 
 class ImplicitRelationRegistrar {
     private val handlers = mutableListOf<ImplicitRelationHandler>()

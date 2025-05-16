@@ -2,7 +2,7 @@ package org.megras.lang.sparql.functions
 
 import org.apache.jena.sparql.expr.NodeValue
 import org.apache.jena.sparql.function.FunctionBase1
-import org.megras.util.djl.ClipEmbeddings
+import org.megras.util.embeddings.ClipEmbeddings
 
 class ClipTextFunction : FunctionBase1() {
 

@@ -10,10 +10,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.util.Constants
-import org.megras.util.djl.ClipEmbeddings
-import java.io.File
-import java.io.IOException
-import javax.imageio.ImageIO
+import org.megras.util.embeddings.ClipEmbeddings
 
 class NearDuplicateHandler(private val objectStore: FileSystemObjectStore) : ImplicitRelationHandler{
 
@@ -40,7 +37,6 @@ class NearDuplicateHandler(private val objectStore: FileSystemObjectStore) : Imp
         val path: String = objectStore.storageFile(osId).absolutePath
 
         val embedding = ClipEmbeddings.getImageEmbedding(path)
-        println("Embedding: ${embedding.joinToString(",")}")
 
         TODO("Not yet implemented")
     }

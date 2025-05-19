@@ -297,9 +297,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
     override fun clear() = this.base.clear()
 
-    override fun iterator(): MutableIterator<Quad> {
-        TODO("Not yet implemented")
-    }
+    override fun iterator(): MutableIterator<Quad> = this.base.iterator()
 
     override fun remove(element: Quad): Boolean = this.base.remove(element)
 

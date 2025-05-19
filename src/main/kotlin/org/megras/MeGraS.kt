@@ -86,10 +86,10 @@ object MeGraS {
             }
         }
 
-        val implicitRelationRegistrar = ImplicitRelationRegistrar(objectStore)
-        quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers())
         val derivedRelationRegistrar = DerivedRelationRegistrar(quadSet, objectStore)
         quadSet = DerivedRelationMutableQuadSet(quadSet, derivedRelationRegistrar.getHandlers())
+        val implicitRelationRegistrar = ImplicitRelationRegistrar(objectStore)
+        quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers())
 
         RestApi.init(config, objectStore, quadSet)
 

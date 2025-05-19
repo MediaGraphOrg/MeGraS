@@ -3,9 +3,11 @@ package org.megras.graphstore.implicit.handlers
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.StoredObjectId
 import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.Quad
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
 import org.megras.data.schema.MeGraS
+import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
@@ -80,6 +82,25 @@ class NearDuplicateHandler(private val objectStore: FileSystemObjectStore) : Imp
     }
 
     override fun findAll(): QuadSet {
-        TODO("Not yet implemented")
+        val subjects = this.quadSet.filter { it.subject is LocalQuadValue }
+            .map { it.subject as LocalQuadValue }
+            .toSet()
+        val embeddingCache = subjects.associateWith { ClipEmbeddings.getImageEmbedding(getPath(it) ?: return@associateWith null) }
+        val dist = Distance.valueOf(DISTANCE).distance()
+
+        val pairs = mutableSetOf<Quad>()
+        for (subject1 in subjects) {
+            val embedding1 = embeddingCache[subject1] ?: continue
+            for (subject2 in subjects) {
+                if (subject1 != subject2) {
+                    val embedding2 = embeddingCache[subject2] ?: continue
+                    val distance = dist.distance(embedding1, embedding2)
+                    if (distance < DISTANCE_THRESHOLD) {
+                        pairs.add(Quad(subject1, predicate, subject2))
+                    }
+                }
+            }
+        }
+        return BasicQuadSet(pairs)
     }
 }

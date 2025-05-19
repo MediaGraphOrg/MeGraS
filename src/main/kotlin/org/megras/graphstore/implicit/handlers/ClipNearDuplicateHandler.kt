@@ -13,14 +13,14 @@ import org.megras.util.Constants
 import org.megras.graphstore.Distance
 import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
 
-class NearDuplicateHandler(private val objectStore: FileSystemObjectStore) : ImplicitRelationHandler{
+class ClipNearDuplicateHandler(private val objectStore: FileSystemObjectStore) : ImplicitRelationHandler{
     companion object {
         private const val DISTANCE = "COSINE"
         private const val DISTANCE_THRESHOLD = 0.1
         private val CLIP_EMBEDDING_PREDICATE = ClipEmbeddingHandler.getPredicate()
     }
 
-    override val predicate: URIValue = URIValue("${Constants.IMPLICIT_PREFIX}/nearDuplicate")
+    override val predicate: URIValue = URIValue("${Constants.IMPLICIT_PREFIX}/clipNearDuplicate")
 
     private lateinit var quadSet: ImplicitRelationMutableQuadSet
 

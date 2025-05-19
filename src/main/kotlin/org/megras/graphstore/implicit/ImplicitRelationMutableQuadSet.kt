@@ -64,60 +64,34 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         predicates: Collection<QuadValue>?,
         objects: Collection<QuadValue>?
     ): QuadSet {
-        if (subjects.isNullOrEmpty() && objects.isNullOrEmpty() && predicates.isNullOrEmpty()) { //if subjects, predicates, and objects are null, do not filter
-                return this.base
+        val existing = this.base.filter(subjects, predicates, objects)
+
+        val relevantHandlers = predicates?.mapNotNull { this.handlers[it] } ?: this.handlers.values
+
+        if (relevantHandlers.isEmpty()) {
+            return existing
         }
 
-        // check if handlers contain any of the predicates
-        val implicitPredicates = predicates?.filter { handlers.containsKey(it) }?.toSet()
-        if (implicitPredicates.isNullOrEmpty()) {
-            return this.base.filter(subjects, predicates, objects)
-        }
-        val nonImplicitPredicates = predicates - implicitPredicates
-
-        val set = mutableSetOf<Quad>()
-        if (subjects.isNullOrEmpty() && objects.isNullOrEmpty()) {
-            // only filtering by predicates
-            implicitPredicates.forEach { predicate ->
-                val handler = handlers[predicate]!!
-                val quads = handler.findAll()
-                set.addAll(quads)
-            }
-        } else {
-            if (!subjects.isNullOrEmpty()) {
-                // only filtering by subjects
-                implicitPredicates.forEach { predicate ->
-                    val handler = handlers[predicate]!!
-                    subjects.forEach { subject ->
-                        // check if the subject is a URIValue
-                        if (subject is URIValue) {
-                            val iObjects = handler.findObjects(subject)
-                            iObjects.forEach { `object` ->
-                                set.add(Quad(subject, predicate, `object`))
-                            }
-                        }
+        val implicit = relevantHandlers.flatMap { handler ->
+            when {
+                (subjects.isNullOrEmpty() && objects.isNullOrEmpty()) -> {
+                    handler.findAll()
+                }
+                !subjects.isNullOrEmpty() -> {
+                    subjects.filterIsInstance<URIValue>().flatMap { subject ->
+                        handler.findObjects(subject).map { `object` -> Quad(subject, handler.predicate, `object`) }
                     }
                 }
-            }
-            if (!objects.isNullOrEmpty()) {
-                // only filtering by objects
-                implicitPredicates.forEach { predicate ->
-                    val handler = handlers[predicate]!!
-                    objects.forEach { `object` ->
-                        // check if the subject is a URIValue
-                        if (`object` is URIValue) {
-                            val iSubjects = handler.findSubjects(`object`)
-                            iSubjects.forEach { subject ->
-                                set.add(Quad(subject, predicate, `object`))
-                            }
-                        }
+                !objects.isNullOrEmpty() -> {
+                    objects.filterIsInstance<URIValue>().flatMap { `object` ->
+                        handler.findSubjects(`object`).map { subject -> Quad(subject, handler.predicate, `object`) }
                     }
                 }
+                else -> emptyList()
             }
         }
 
-        val nonImplicitQuads = if (nonImplicitPredicates.isEmpty()) BasicQuadSet() else base.filter(subjects, nonImplicitPredicates, objects)
-        return BasicQuadSet(set) + nonImplicitQuads
+        return existing + BasicQuadSet(implicit.toSet())
     }
 
     override fun toMutable(): MutableQuadSet = this

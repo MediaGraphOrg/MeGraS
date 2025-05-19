@@ -13,7 +13,13 @@ import org.megras.util.Constants
 import org.megras.util.embeddings.ClipEmbeddings
 
 class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<FloatVectorValue> {
-    override val predicate: URIValue = URIValue("${Constants.DERIVED_PREFIX}/clipEmbedding")
+    override val predicate: URIValue = getPredicate()
+
+    companion object {
+        fun getPredicate(): URIValue {
+            return URIValue("${Constants.DERIVED_PREFIX}/clipEmbedding")
+        }
+    }
 
     override fun canDerive(subject: URIValue): Boolean {
         if (subject !is LocalQuadValue) {

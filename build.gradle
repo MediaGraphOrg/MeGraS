@@ -6,6 +6,7 @@ plugins {
     id 'org.jetbrains.kotlin.kapt' version '1.8.10'
     id 'antlr'
     id 'org.openjfx.javafxplugin' version '0.0.14'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
 group 'org.megras'
@@ -24,6 +25,16 @@ application {
 }
 // Required for shadow
 mainClassName = application.mainClass.get()
+
+shadowJar {
+    archiveBaseName.set('megras') // Sets the base name of the JAR
+    archiveClassifier.set('all') // Adds '-all' to the JAR name (e.g., megras-0.1-SNAPSHOT-all.jar)
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+    // Optional: If you have conflicting dependencies, you might need to relocate them
+    // relocate 'org.some.conflicting.package', 'shadow.org.some.conflicting.package'
+}
 
 dependencies {
 

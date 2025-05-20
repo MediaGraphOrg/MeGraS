@@ -1,6 +1,7 @@
 package org.megras.graphstore.derived.handlers
 
 import org.megras.data.fs.FileSystemObjectStore
+import org.megras.data.fs.FileUtil
 import org.megras.data.fs.StoredObjectId
 import org.megras.data.graph.FloatVectorValue
 import org.megras.data.graph.LocalQuadValue
@@ -53,20 +54,7 @@ class AverageColorHandler(private val quads: QuadSet, private val objectStore: F
     override val predicate: URIValue = URIValue("${Constants.DERIVED_PREFIX}/averageColor")
 
     override fun canDerive(subject: URIValue): Boolean {
-
-        if (subject !is LocalQuadValue) {
-            return false
-        }
-
-        val canonicalId = quads.filter(
-            setOf(subject),
-            setOf(MeGraS.CANONICAL_ID.uri),
-            null
-        ).firstOrNull()?.`object` as? StringValue ?: return false
-
-        val osId = StoredObjectId.of(canonicalId.value) ?: return false
-
-        val osr = objectStore.get(osId) ?: return false
+        val osr = FileUtil.getOsr(subject, quads, objectStore) ?: return false
 
         return when (osr.descriptor.mimeType) { //TODO technically, video should also be supported
             MimeType.BMP,
@@ -81,20 +69,7 @@ class AverageColorHandler(private val quads: QuadSet, private val objectStore: F
     }
 
     override fun derive(subject: URIValue): Collection<FloatVectorValue> {
-
-        if (subject !is LocalQuadValue) {
-            return emptyList()
-        }
-
-        val canonicalId = quads.filter(
-            setOf(subject),
-            setOf(MeGraS.CANONICAL_ID.uri),
-            null
-        ).firstOrNull()?.`object` as? StringValue ?: return emptyList()
-
-        val osId = StoredObjectId.of(canonicalId.value) ?: return emptyList()
-
-        val osr = objectStore.get(osId) ?: return emptyList()
+        val osr = FileUtil.getOsr(subject, quads, objectStore) ?: return emptyList()
 
         val bufferedImage = try {
             ImageIO.read(osr.inputStream())

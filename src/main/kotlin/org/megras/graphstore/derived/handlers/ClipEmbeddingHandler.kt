@@ -1,12 +1,10 @@
 package org.megras.graphstore.derived.handlers
 
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.fs.StoredObjectId
+import org.megras.data.fs.FileUtil
 import org.megras.data.graph.FloatVectorValue
 import org.megras.data.graph.LocalQuadValue
-import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
-import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
@@ -26,20 +24,9 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
             return false
         }
 
-        getPath(subject) ?: return false
+        FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return false
 
         return true
-    }
-
-    private fun getPath(subject: URIValue): String? {
-        val canonicalId = this.quadSet.filter(
-            setOf(subject),
-            setOf(MeGraS.CANONICAL_ID.uri),
-            null
-        ).firstOrNull()?.`object` as? StringValue ?: return null
-
-        val osId = StoredObjectId.of(canonicalId.value) ?: return null
-        return objectStore.storageFile(osId).absolutePath
     }
 
     override fun derive(subject: URIValue): Collection<FloatVectorValue> {
@@ -47,7 +34,7 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
             return emptyList()
         }
 
-        val path = getPath(subject) ?: return emptyList()
+        val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
         val embedding = ClipEmbeddings.getImageEmbedding(path)
 

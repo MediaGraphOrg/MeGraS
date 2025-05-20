@@ -7,7 +7,7 @@ import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 
 object FileUtil {
-    private fun getOsId(subject: URIValue, quadSet: QuadSet): StoredObjectId? {
+    fun getOsId(subject: URIValue, quadSet: QuadSet): StoredObjectId? {
         if (subject !is LocalQuadValue) {
             return null
         }

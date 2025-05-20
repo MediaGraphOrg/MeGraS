@@ -1,13 +1,13 @@
 package org.megras.graphstore.derived.handlers
 
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.fs.FileUtil
 import org.megras.data.graph.FloatVectorValue
 import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.URIValue
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
+import org.megras.util.FileUtil
 import org.megras.util.embeddings.ClipEmbeddings
 
 class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<FloatVectorValue> {

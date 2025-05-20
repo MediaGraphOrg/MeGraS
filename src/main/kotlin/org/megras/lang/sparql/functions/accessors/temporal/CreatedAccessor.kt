@@ -3,10 +3,10 @@ package org.megras.lang.sparql.functions.accessors.temporal
 import org.apache.jena.sparql.expr.NodeValue
 import org.apache.jena.sparql.function.FunctionBase1
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.fs.FileUtil
 import org.megras.data.graph.URIValue
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.SparqlUtil
+import org.megras.util.FileUtil
 
 class CreatedAccessor  : FunctionBase1() {
     companion object {

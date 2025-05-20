@@ -1,17 +1,13 @@
 package org.megras.graphstore.derived.handlers
 
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.fs.FileUtil
-import org.megras.data.fs.StoredObjectId
 import org.megras.data.graph.FloatVectorValue
-import org.megras.data.graph.LocalQuadValue
-import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
-import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
+import org.megras.util.FileUtil
 import java.awt.image.BufferedImage
 import java.io.IOException
 import javax.imageio.ImageIO

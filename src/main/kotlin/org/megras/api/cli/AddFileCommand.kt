@@ -4,22 +4,12 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.required
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.fs.StoredObjectDescriptor
 import org.megras.data.fs.file.PseudoFile
-import org.megras.data.graph.Quad
-import org.megras.data.mime.MimeType
-import org.megras.data.model.MediaType
-import org.megras.data.schema.MeGraS
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.PersistableQuadSet
-import org.megras.id.IdUtil
-import org.megras.util.AddFileUtil
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import org.megras.util.FileUtil
 import java.io.File
-import javax.imageio.ImageIO
 
 class AddFileCommand(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : CliktCommand(name = "add", printHelpOnEmptyArgs = true, help = "Adds a media file as a graph node") {
 
@@ -39,7 +29,7 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
             }
 
             if (file.isFile) {
-                val id = AddFileUtil.addFile(objectStore, quads, PseudoFile(file)).uri
+                val id = FileUtil.addFile(objectStore, quads, PseudoFile(file)).uri
 
                 println("Added file '${file.absolutePath}' with id '${id}'")
             } else if (file.isDirectory) {
@@ -52,7 +42,7 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
                 file.walkTopDown().forEach {
 
                     if (it.isFile && it.canRead()) {
-                        val id = AddFileUtil.addFile(objectStore, quads, PseudoFile(it)).uri
+                        val id = FileUtil.addFile(objectStore, quads, PseudoFile(it)).uri
                         println("Added file '${it.absolutePath}' with id '${id}'")
                     }
                 }

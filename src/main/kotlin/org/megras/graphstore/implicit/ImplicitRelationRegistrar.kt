@@ -48,7 +48,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         ObjectHandlers.add(objectHandler)
     }
 
-    fun getObjectHandlers(): List<ImplicitRelationHandler> {
+    fun getHandlers(): List<ImplicitRelationHandler> {
         return ObjectHandlers
     }
 }

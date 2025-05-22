@@ -22,7 +22,7 @@ import org.megras.graphstore.implicit.handlers.PrecedesSegmentHandler
 import org.megras.graphstore.implicit.handlers.StartsSegmentHandler
 
 class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) {
-    private val ObjectHandlers = mutableListOf<ImplicitRelationHandler>()
+    private val handlers = mutableListOf<ImplicitRelationHandler>()
 
     init {
         register(SamePrefixHandler())
@@ -47,10 +47,10 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
     }
 
     private fun register(objectHandler: ImplicitRelationHandler) {
-        ObjectHandlers.add(objectHandler)
+        handlers.add(objectHandler)
     }
 
     fun getHandlers(): List<ImplicitRelationHandler> {
-        return ObjectHandlers
+        return handlers
     }
 }

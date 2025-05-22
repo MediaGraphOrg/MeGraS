@@ -10,8 +10,10 @@ import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.lang.sparql.functions.accessors.temporal.AccessorUtil
 import org.megras.util.Constants
 
-abstract class ImplicitTemporalObjectHandler(
+abstract class AbstractImplicitTemporalHandler(
     override val predicate: URIValue,
+    private val getStart: (URIValue) -> TemporalValue?,
+    private val getEnd: (URIValue) -> TemporalValue?,
     private val compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
 ) : ImplicitRelationHandler {
 
@@ -22,13 +24,13 @@ abstract class ImplicitTemporalObjectHandler(
     }
 
     private fun getTemporalCandidatesAndCaches(subject: URIValue): TemporalCandidatesResult {
-        val start = AccessorUtil.getStart(subject)
-        val end = AccessorUtil.getEnd(subject)
+        val start = getStart(subject)
+        val end = getEnd(subject)
         val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject }
             .map { it.subject as URIValue }
             .toSet()
-        val startCache = candidates.associateWith { AccessorUtil.getStart(it) }
-        val endCache = candidates.associateWith { AccessorUtil.getEnd(it) }
+        val startCache = candidates.associateWith { getStart(it) }
+        val endCache = candidates.associateWith { getEnd(it) }
         return TemporalCandidatesResult(start, end, candidates, startCache, endCache)
     }
 
@@ -58,8 +60,8 @@ abstract class ImplicitTemporalObjectHandler(
         val subjects = quadSet.filter { it.subject is URIValue }
             .map { it.subject as URIValue }
             .toSet()
-        val startCache = subjects.associateWith { AccessorUtil.getStart(it) }
-        val endCache = subjects.associateWith { AccessorUtil.getEnd(it) }
+        val startCache = subjects.associateWith { getStart(it) }
+        val endCache = subjects.associateWith { getEnd(it) }
         val pairs = mutableSetOf<Quad>()
         for (subject1 in subjects) {
             val start1 = startCache[subject1]
@@ -78,61 +80,143 @@ abstract class ImplicitTemporalObjectHandler(
     }
 }
 
+// Subclasses for Object and Segment handlers
+abstract class ImplicitTemporalObjectHandler(
+    predicate: URIValue,
+    compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
+) : AbstractImplicitTemporalHandler(
+    predicate,
+    //TODO: Use correct accessor functions
+    getStart = { AccessorUtil.getStart(it) },
+    getEnd = { AccessorUtil.getEnd(it) },
+    compare
+)
+
+abstract class ImplicitTemporalSegmentHandler(
+    predicate: URIValue,
+    compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
+) : AbstractImplicitTemporalHandler(
+    predicate,
+    //TODO: Use correct accessor functions
+    getStart = { AccessorUtil.getStart(it) },
+    getEnd = { AccessorUtil.getEnd(it) },
+    compare
+)
+
+// Common compare functions
+private val afterCompare = { start1: TemporalValue?, _: TemporalValue?, _: TemporalValue?, end2: TemporalValue? ->
+    start1 != null && end2 != null && start1 >= end2
+}
+
+private val precedesCompare = { _: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, _: TemporalValue? ->
+    end1 != null && start2 != null && end1 < start2
+}
+
+private val finishesCompare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+    end1 != null && end2 != null && end1 == end2 && start1 != null && start2 != null && start1 > start2
+}
+
+private val meetsCompare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+    (start1 != null && end2 != null && start1 == end2) || (end1 != null && start2 != null && end1 == start2)
+}
+
+private val startsCompare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+    start1 != null && start2 != null && start1 == start2 && end1 != null && end2 != null && end1 < end2
+}
+
+private val containsCompare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+    start1 != null && end1 != null && start2 != null && end2 != null &&
+            start1 < start2 && end1 > end2
+}
+
+private val equalsCompare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+    start1 != null && end1 != null && start2 != null && end2 != null &&
+            start1 == start2 && end1 == end2
+}
+
+private val overlapsCompare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
+    start1 != null && end1 != null && start2 != null && end2 != null &&
+            ((start1 < start2 && start2 < end1 && end1 < end2) || (start2 < start1 && start1 < end2 && end2 < end1))
+}
+
+// Object Handlers
 class AfterObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/after"),
-    compare = { start1: TemporalValue?, _, _, end2: TemporalValue? ->
-        start1 != null && end2 != null && start1 >= end2
-    }
+    compare = afterCompare
 )
 
 class PrecedesObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/precedes"),
-    compare = { _, end1: TemporalValue?, start2: TemporalValue?, _ ->
-        end1 != null && start2 != null && end1 < start2
-    }
+    compare = precedesCompare
 )
 
 class FinishesObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/finishes"),
-    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
-        end1 != null && end2 != null && end1 == end2 && start1 != null && start2 != null && start1 > start2
-    }
+    compare = finishesCompare
 )
 
 class MeetsObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/meets"),
-    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
-        (start1 != null && end2 != null && start1 == end2) || (end1 != null && start2 != null && end1 == start2)
-    }
+    compare = meetsCompare
 )
 
 class StartsObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/starts"),
-    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
-        start1 != null && start2 != null && start1 == start2 && end1 != null && end2 != null && end1 < end2
-    }
+    compare = startsCompare
 )
 
 class ContainsObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/contains"),
-    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
-        start1 != null && end1 != null && start2 != null && end2 != null &&
-                start1 < start2 && end1 > end2
-    }
+    compare = containsCompare
 )
 
 class EqualsObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/equals"),
-    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
-        start1 != null && end1 != null && start2 != null && end2 != null &&
-                start1 == start2 && end1 == end2
-    }
+    compare = equalsCompare
 )
 
 class OverlapsObjectHandler : ImplicitTemporalObjectHandler(
     predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/overlaps"),
-    compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
-        start1 != null && end1 != null && start2 != null && end2 != null &&
-                ((start1 < start2 && start2 < end1 && end1 < end2) || (start2 < start1 && start1 < end2 && end2 < end1))
-    }
+    compare = overlapsCompare
+)
+
+// Segment Handlers
+class AfterSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/after"),
+    compare = afterCompare
+)
+
+class PrecedesSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/precedes"),
+    compare = precedesCompare
+)
+
+class FinishesSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/finishes"),
+    compare = finishesCompare
+)
+
+class MeetsSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/meets"),
+    compare = meetsCompare
+)
+
+class StartsSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/starts"),
+    compare = startsCompare
+)
+
+class ContainsSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/contains"),
+    compare = containsCompare
+)
+
+class EqualsSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/equals"),
+    compare = equalsCompare
+)
+
+class OverlapsSegmentHandler : ImplicitTemporalSegmentHandler(
+    predicate = URIValue("${Constants.TEMPORAL_SEGMENT_PREFIX}/overlaps"),
+    compare = overlapsCompare
 )

@@ -8,6 +8,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.segmentation.Bounds
+import org.megras.util.Constants
 
 
 abstract class AbstractImplicitSpatialHandler(
@@ -79,3 +80,10 @@ abstract class AbstractImplicitSpatialHandler(
         return BasicQuadSet(pairs)
     }
 }
+
+class ContainsSpatialHandler : AbstractImplicitSpatialHandler(
+    predicate = URIValue("${Constants.SPATIAL_SEGMENT_PREFIX}/contains"),
+    filter = { bounds1, bounds2 ->
+        bounds1 != null && bounds2 != null && bounds1.contains(bounds2)
+    }
+)

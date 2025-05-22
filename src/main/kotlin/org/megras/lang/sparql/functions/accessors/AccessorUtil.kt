@@ -1,10 +1,12 @@
-package org.megras.lang.sparql.functions.accessors.temporal
+package org.megras.lang.sparql.functions.accessors
 
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.TemporalValue
 import org.megras.data.graph.URIValue
 import org.megras.graphstore.MutableQuadSet
+import org.megras.lang.sparql.functions.accessors.temporal.EndAccessor
+import org.megras.lang.sparql.functions.accessors.temporal.StartAccessor
 
 object AccessorUtil {
     internal fun getDateTime(subject: URIValue, quadSet: MutableQuadSet, predicates: Collection<QuadValue>): TemporalValue? {

@@ -7,7 +7,7 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
-import org.megras.lang.sparql.functions.accessors.temporal.AccessorUtil
+import org.megras.lang.sparql.functions.accessors.AccessorUtil
 import org.megras.util.Constants
 
 abstract class AbstractImplicitTemporalHandler(

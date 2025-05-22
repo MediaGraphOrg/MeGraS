@@ -6,6 +6,7 @@ import org.megras.data.graph.TemporalValue
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.SparqlUtil
 import org.megras.data.graph.URIValue
+import org.megras.lang.sparql.functions.accessors.AccessorUtil
 
 class EndAccessor : FunctionBase1() {
 

@@ -31,9 +31,20 @@ abstract class AbstractImplicitSpatialHandler(
         return Bounds(boundsQuad.`object`.toString().removeSuffix("^^String"))
     }
 
-    private fun getSpatialCandidatesAndCaches(subject: URIValue): SpatialCandidatesResult {
-        val bounds = getBounds(subject)
-        val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject }
+    private fun getParent(subject: URIValue): URIValue? {
+        return quadSet.filter(
+            setOf(subject),
+            setOf(MeGraS.SEGMENT_OF.uri),
+            null)
+            .firstOrNull()?.`object` as? URIValue
+    }
+
+    private fun getSpatialCandidatesAndCaches(subject: URIValue): SpatialCandidatesResult? {
+        val bounds = getBounds(subject) ?: return null
+        val parent = getParent(subject) ?: return null
+        //TODO: get actual top ancestor
+        //TODO: check behavior of segment of segment
+        val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject && parent == getParent(it.subject)}
             .map { it.subject as URIValue }
             .toSet()
         val boundsCache = candidates.associateWith { getBounds(it) }
@@ -47,14 +58,14 @@ abstract class AbstractImplicitSpatialHandler(
     )
 
     override fun findObjects(subject: URIValue): Set<URIValue> {
-        val (bounds, candidates, boundsCache) = getSpatialCandidatesAndCaches(subject)
+        val (bounds, candidates, boundsCache) = getSpatialCandidatesAndCaches(subject) ?: return emptySet()
         return candidates.filter {
             filter(bounds, boundsCache[it])
         }.toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val (bounds, candidates, boundsCache) = getSpatialCandidatesAndCaches(`object`)
+        val (bounds, candidates, boundsCache) = getSpatialCandidatesAndCaches(`object`) ?: return emptySet()
         return candidates.filter {
             filter(boundsCache[it], bounds)
         }.toSet()

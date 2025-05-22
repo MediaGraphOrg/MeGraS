@@ -10,7 +10,7 @@ import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.lang.sparql.functions.accessors.temporal.AccessorUtil
 import org.megras.util.Constants
 
-abstract class ImplicitTemporalHandler(
+abstract class ImplicitTemporalObjectHandler(
     override val predicate: URIValue,
     private val compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
 ) : ImplicitRelationHandler {
@@ -78,59 +78,59 @@ abstract class ImplicitTemporalHandler(
     }
 }
 
-class AfterHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/after"),
+class AfterObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/after"),
     compare = { start1: TemporalValue?, _, _, end2: TemporalValue? ->
         start1 != null && end2 != null && start1 >= end2
     }
 )
 
-class PrecedesHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/precedes"),
+class PrecedesObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/precedes"),
     compare = { _, end1: TemporalValue?, start2: TemporalValue?, _ ->
         end1 != null && start2 != null && end1 < start2
     }
 )
 
-class FinishesHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/finishes"),
+class FinishesObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/finishes"),
     compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
         end1 != null && end2 != null && end1 == end2 && start1 != null && start2 != null && start1 > start2
     }
 )
 
-class MeetsHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/meets"),
+class MeetsObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/meets"),
     compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
         (start1 != null && end2 != null && start1 == end2) || (end1 != null && start2 != null && end1 == start2)
     }
 )
 
-class StartsHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/starts"),
+class StartsObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/starts"),
     compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
         start1 != null && start2 != null && start1 == start2 && end1 != null && end2 != null && end1 < end2
     }
 )
 
-class ContainsHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/contains"),
+class ContainsObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/contains"),
     compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
         start1 != null && end1 != null && start2 != null && end2 != null &&
                 start1 < start2 && end1 > end2
     }
 )
 
-class EqualsHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/equals"),
+class EqualsObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/equals"),
     compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
         start1 != null && end1 != null && start2 != null && end2 != null &&
                 start1 == start2 && end1 == end2
     }
 )
 
-class OverlapsHandler : ImplicitTemporalHandler(
-    predicate = URIValue("${Constants.TEMPORAL_PREFIX}/overlaps"),
+class OverlapsObjectHandler : ImplicitTemporalObjectHandler(
+    predicate = URIValue("${Constants.TEMPORAL_OBJECT_PREFIX}/overlaps"),
     compare = { start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue? ->
         start1 != null && end1 != null && start2 != null && end2 != null &&
                 ((start1 < start2 && start2 < end1 && end1 < end2) || (start2 < start1 && start1 < end2 && end2 < end1))

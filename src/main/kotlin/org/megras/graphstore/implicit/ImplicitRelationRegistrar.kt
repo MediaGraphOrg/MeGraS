@@ -2,37 +2,37 @@ package org.megras.graphstore.implicit
 
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.graphstore.implicit.handlers.SamePrefixHandler
-import org.megras.graphstore.implicit.handlers.AfterHandler
-import org.megras.graphstore.implicit.handlers.ContainsHandler
-import org.megras.graphstore.implicit.handlers.EqualsHandler
-import org.megras.graphstore.implicit.handlers.FinishesHandler
-import org.megras.graphstore.implicit.handlers.MeetsHandler
+import org.megras.graphstore.implicit.handlers.AfterObjectHandler
+import org.megras.graphstore.implicit.handlers.ContainsObjectHandler
+import org.megras.graphstore.implicit.handlers.EqualsObjectHandler
+import org.megras.graphstore.implicit.handlers.FinishesObjectHandler
+import org.megras.graphstore.implicit.handlers.MeetsObjectHandler
 import org.megras.graphstore.implicit.handlers.ClipNearDuplicateHandler
-import org.megras.graphstore.implicit.handlers.OverlapsHandler
-import org.megras.graphstore.implicit.handlers.PrecedesHandler
-import org.megras.graphstore.implicit.handlers.StartsHandler
+import org.megras.graphstore.implicit.handlers.OverlapsObjectHandler
+import org.megras.graphstore.implicit.handlers.PrecedesObjectHandler
+import org.megras.graphstore.implicit.handlers.StartsObjectHandler
 
 class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) {
-    private val handlers = mutableListOf<ImplicitRelationHandler>()
+    private val ObjectHandlers = mutableListOf<ImplicitRelationHandler>()
 
     init {
         register(SamePrefixHandler())
         register(ClipNearDuplicateHandler(objectStore))
-        register(AfterHandler())
-        register(PrecedesHandler())
-        register(FinishesHandler())
-        register(StartsHandler())
-        register(MeetsHandler())
-        register(ContainsHandler())
-        register(EqualsHandler())
-        register(OverlapsHandler())
+        register(AfterObjectHandler())
+        register(PrecedesObjectHandler())
+        register(FinishesObjectHandler())
+        register(StartsObjectHandler())
+        register(MeetsObjectHandler())
+        register(ContainsObjectHandler())
+        register(EqualsObjectHandler())
+        register(OverlapsObjectHandler())
     }
 
-    private fun register(handler: ImplicitRelationHandler) {
-        handlers.add(handler)
+    private fun register(objectHandler: ImplicitRelationHandler) {
+        ObjectHandlers.add(objectHandler)
     }
 
-    fun getHandlers(): List<ImplicitRelationHandler> {
-        return handlers
+    fun getObjectHandlers(): List<ImplicitRelationHandler> {
+        return ObjectHandlers
     }
 }

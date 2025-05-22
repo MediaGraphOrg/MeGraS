@@ -28,7 +28,7 @@ abstract class AbstractImplicitSpatialHandler(
             setOf(MeGraS.SEGMENT_BOUNDS.uri),
             null)
             .firstOrNull() ?: return null
-        return Bounds(boundsQuad.toString())
+        return Bounds(boundsQuad.`object`.toString().removeSuffix("^^String"))
     }
 
     private fun getSpatialCandidatesAndCaches(subject: URIValue): SpatialCandidatesResult {

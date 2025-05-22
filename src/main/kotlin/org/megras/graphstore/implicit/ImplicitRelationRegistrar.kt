@@ -43,7 +43,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
 //        register(ContainsSegmentHandler())
 //        register(EqualsSegmentHandler())
 //        register(OverlapsSegmentHandler())
-//        register(ContainsSpatialHandler())
+        register(ContainsSpatialHandler())
     }
 
     private fun register(objectHandler: ImplicitRelationHandler) {

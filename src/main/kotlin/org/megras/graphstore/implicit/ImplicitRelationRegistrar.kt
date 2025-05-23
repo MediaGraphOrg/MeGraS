@@ -25,7 +25,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
     private val handlers = mutableListOf<ImplicitRelationHandler>()
 
     init {
-        register(SamePrefixHandler())
+//        register(SamePrefixHandler())
         register(ClipNearDuplicateHandler(objectStore))
 //        register(AfterObjectHandler())
 //        register(PrecedesObjectHandler())

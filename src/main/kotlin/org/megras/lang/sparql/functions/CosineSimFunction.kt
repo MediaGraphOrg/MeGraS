@@ -14,8 +14,12 @@ class CosineSimFunction : FunctionBase2() {
          * Example:
          * "[1.0, 2.0, 3.0]^^FloatVector" -> listOf(1.0f, 2.0f, 3.0f)
          */
-        val cleanStr = vectorStr.substringBefore("]").removePrefix("[").trim()
-        return cleanStr.split(",").map { it.toFloat() }.toFloatArray()
+        try {
+            val cleanStr = vectorStr.substringBefore("]").removePrefix("[").trim()
+            return cleanStr.split(",").map { it.toFloat() }.toFloatArray()
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Failed to parse vector from string: '$vectorStr'", e)
+        }
     }
 
     override fun exec(arg1: NodeValue, arg2: NodeValue): NodeValue {

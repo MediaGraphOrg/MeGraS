@@ -13,7 +13,7 @@ import org.megras.util.Constants
 import org.megras.graphstore.Distance
 import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
 
-class ClipNearDuplicateHandler(private val objectStore: FileSystemObjectStore) : ImplicitRelationHandler{
+class ClipNearDuplicateHandler() : ImplicitRelationHandler{
     companion object {
         private const val DISTANCE = "COSINE"
         private const val DISTANCE_THRESHOLD = 0.1

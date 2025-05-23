@@ -26,7 +26,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
 
     init {
 //        register(SamePrefixHandler())
-        register(ClipNearDuplicateHandler(objectStore))
+        register(ClipNearDuplicateHandler())
 //        register(AfterObjectHandler())
 //        register(PrecedesObjectHandler())
 //        register(FinishesObjectHandler())

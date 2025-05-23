@@ -8,11 +8,13 @@ import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
+import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
+import org.megras.segmentation.Bounds
 
 class AboutObjectRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
@@ -135,12 +137,40 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             parent = quads.filter(setOf(parent), setOf(MeGraS.SEGMENT_OF.uri), null).firstOrNull()?.`object`
         }
 
+        fun getBounds(subject: URIValue) : Bounds {
+            return Bounds(
+                quads.filter(setOf(subject), setOf(MeGraS.SEGMENT_BOUNDS.uri), null)
+                    .firstOrNull()?.`object`.toString().removeSuffix("^^String")
+            )
+        }
+
+        val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(objectId)).map { it.subject as URIValue }.toSet()
+        val imgBounds = Bounds(
+            quads.filter(setOf(objectId), setOf(MeGraS.BOUNDS.uri), null)
+                .firstOrNull()?.`object`.toString().removeSuffix("^^String")
+        )
+
         val mediaType = relevant.filterPredicate(MeGraS.MEDIA_TYPE.uri).firstOrNull()?.`object` as? StringValue
         val mimeType = relevant.filterPredicate(MeGraS.CANONICAL_MIME_TYPE.uri).firstOrNull()?.`object` as? StringValue
 
         when(mediaType?.value) {
             MediaType.IMAGE.name -> {
-                buf.append("<div class='media-container'><img src='${objectId.toPath()}' alt='Image preview'/></div>")
+                var svg = ""
+                if (children.isNotEmpty()) {
+                    svg = "<svg width='100%' height='100%' style='position: absolute; top: 15px; left: 15px;'>\n"
+                    children.forEach { child ->
+                        val bounds = getBounds(child)
+                        svg += "<rect x='${bounds.getMinX()}' y='${imgBounds.getMaxY() - bounds.getMaxY()}' width='${bounds.getMaxX() - bounds.getMinX()}' height='${bounds.getMaxY() - bounds.getMinY()}' style='fill:blue; stroke:red; stroke-width:3; fill-opacity:0.2; stroke-opacity:0.9;' />\n"
+                    }
+                    svg += "</svg>"
+                }
+                buf.append("""
+                    <div class='media-container' style='position: relative; display: inline-block;'>
+                        <img src='${objectId.toPath()}' alt='Image preview' style='display: block;'/>
+                        ${svg}
+                    </div>
+                    """.trimIndent()
+                )
             }
 
             MediaType.VIDEO.name -> {

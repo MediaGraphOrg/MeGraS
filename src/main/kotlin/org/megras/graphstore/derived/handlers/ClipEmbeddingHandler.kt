@@ -4,6 +4,7 @@ import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.graph.FloatVectorValue
 import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.URIValue
+import org.megras.data.mime.MimeType
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
@@ -20,9 +21,17 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
     }
 
     override fun canDerive(subject: URIValue): Boolean {
-        FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return false
+        val osr = FileUtil.getOsr(subject, this.quadSet, this.objectStore) ?: return false
 
-        return true
+        return when (osr.descriptor.mimeType) { //TODO technically, video should also be supported
+            MimeType.BMP,
+            MimeType.GIF,
+            MimeType.JPEG_I,
+            MimeType.PNG,
+            MimeType.TIFF -> true
+
+            else -> false
+        }
     }
 
     override fun derive(subject: URIValue): Collection<FloatVectorValue> {

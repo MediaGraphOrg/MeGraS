@@ -109,7 +109,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         val subs = (subjects ?: existing.map { it.subject }.toSet()).filterIsInstance<URIValue>()
         val derived = subs.flatMap { subject ->
-            val present = existing.filterSubject(subject)
+            val present = this.base.filterSubject(subject)
             relevantHandlers.flatMap { handler ->
                 if (present.filterPredicate(handler.predicate).isNotEmpty()) {
                     return@flatMap emptyList()

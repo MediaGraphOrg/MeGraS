@@ -9,13 +9,11 @@ import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
-import org.megras.data.mime.MimeType
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
-import kotlin.times
 import kotlin.toString
 
 class AboutObjectRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
@@ -57,10 +55,18 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
                     max-width: 80%;
                 }
-                img, video, audio, embed {
+                img, video, audio {
                     max-width: 100%;
                     max-height: 600px;
                     border-radius: 4px;
+                }
+                embed {
+                    width: 100%;
+                    min-height: 400px;
+                    max-width: 1000px;
+                    border-radius: 4px;
+                    background: #fff;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
                 }
                 a {
                     color: black;
@@ -258,7 +264,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 )
             }
 
-            MimeType.TEXT.name -> {
+            MediaType.TEXT.name, MediaType.DOCUMENT.name -> {
                 buf.append("<div class='media-container'><embed src='${objectId.toPath()}'></div>")
             }
 

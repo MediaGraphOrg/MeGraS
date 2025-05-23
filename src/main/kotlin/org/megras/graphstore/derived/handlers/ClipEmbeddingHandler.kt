@@ -20,20 +20,12 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
     }
 
     override fun canDerive(subject: URIValue): Boolean {
-        if (subject !is LocalQuadValue) {
-            return false
-        }
-
         FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return false
 
         return true
     }
 
     override fun derive(subject: URIValue): Collection<FloatVectorValue> {
-        if (subject !is LocalQuadValue) {
-            return emptyList()
-        }
-
         val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
         val embedding = ClipEmbeddings.getImageEmbedding(path)

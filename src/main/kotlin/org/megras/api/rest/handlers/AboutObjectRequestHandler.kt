@@ -15,6 +15,8 @@ import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
+import kotlin.times
+import kotlin.toString
 
 class AboutObjectRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
@@ -116,6 +118,26 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
+                button {
+                    background: #2c3e50;
+                    color: #fff;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 18px;
+                    font-size: 1rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    box-shadow: 0 2px 6px rgba(44,62,80,0.08);
+                    transition: background 0.2s, box-shadow 0.2s;
+                }
+                button:hover {
+                    background: #34495e;
+                    box-shadow: 0 4px 12px rgba(44,62,80,0.15);
+                }
+                .segments-toggle-btn {
+                    display: block;
+                    margin: 18px auto 0 auto;
+                }
             </style>
         """.trimIndent()
 
@@ -157,20 +179,57 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             MediaType.IMAGE.name -> {
                 var svg = ""
                 if (children.isNotEmpty()) {
-                    svg = "<svg width='100%' height='100%' style='position: absolute; top: 15px; left: 15px;'>\n"
-                    children.forEach { child ->
+                    val sortedChildren = children.sortedBy {
+                        val b = getBounds(it)
+                        -(b.getMaxX() - b.getMinX()) * (b.getMaxY() - b.getMinY())
+                    }
+                    val colorPalette = listOf(
+                        "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6",
+                        "#bcf60c", "#fabebe", "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000", "#aaffc3"
+                    )
+                    svg = "<svg width='100%' height='100%' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
+                    sortedChildren.forEachIndexed { idx, child ->
                         val bounds = getBounds(child)
-                        svg += "<rect x='${bounds.getMinX()}' y='${imgBounds.getMaxY() - bounds.getMaxY()}' width='${bounds.getMaxX() - bounds.getMinX()}' height='${bounds.getMaxY() - bounds.getMinY()}' style='fill:blue; stroke:red; stroke-width:3; fill-opacity:0.2; stroke-opacity:0.9;' />\n"
+                        val color = colorPalette[idx % colorPalette.size]
+                        val aboutUrl = "${child.value}/about"
+                        svg += """
+                            <a xlink:href='$aboutUrl' target='_blank'>
+                                <rect
+                                    x='${bounds.getMinX()}'
+                                    y='${imgBounds.getMaxY() - bounds.getMaxY()}'
+                                    width='${bounds.getMaxX() - bounds.getMinX()}'
+                                    height='${bounds.getMaxY() - bounds.getMinY()}'
+                                    style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;'
+                                >
+                                </rect>
+                            </a>
+                        """.trimIndent()
                     }
                     svg += "</svg>"
                 }
                 buf.append("""
-                    <div class='media-container' style='position: relative; display: inline-block;'>
-                        <img src='${objectId.toPath()}' alt='Image preview' style='display: block;'/>
-                        ${svg}
+                    <div class='media-container'>
+                        <div style="position: relative; display: inline-block;">
+                            <img src='${objectId.toPath()}' alt='Image preview' style='display: block; margin: 0 auto; max-width: 100%; max-height: 600px; border-radius: 4px;'/>
+                            <div id="segments-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+                                <div style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: auto;">
+                                    ${svg}
+                                </div>
+                            </div>
+                        </div>
+                        <button class="segments-toggle-btn" onclick="toggleSegments()">Toggle Segments</button>
                     </div>
-                    """.trimIndent()
-                )
+                    <script>
+                        function toggleSegments() {
+                            var overlay = document.getElementById('segments-overlay');
+                            if (overlay.style.display === 'none') {
+                                overlay.style.display = '';
+                            } else {
+                                overlay.style.display = 'none';
+                            }
+                        }
+                    </script>
+                """.trimIndent())
             }
 
             MediaType.VIDEO.name -> {

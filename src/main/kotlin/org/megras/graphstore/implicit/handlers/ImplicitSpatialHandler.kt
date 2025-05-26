@@ -7,13 +7,14 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
-import org.megras.segmentation.Bounds
+import org.megras.segmentation.SegmentationUtil
+import org.megras.segmentation.type.Segmentation
 import org.megras.util.Constants
 
 
 abstract class AbstractImplicitSpatialHandler(
     relationName: String,
-    private val filter: (Bounds?, Bounds?) -> Boolean
+    private val filter: (Segmentation?, Segmentation?) -> Boolean
 ) : ImplicitRelationHandler {
 
     override val predicate: URIValue = URIValue("${Constants.SPATIAL_SEGMENT_PREFIX}/$relationName")
@@ -24,13 +25,18 @@ abstract class AbstractImplicitSpatialHandler(
         this.quadSet = quadSet
     }
 
-    private fun getBounds(subject: URIValue): Bounds? {
-        val boundsQuad = quadSet.filter(
+    private fun getSegmentation(subject: URIValue): Segmentation? {
+        val segmentDefinition = quadSet.filter(
             setOf(subject),
-            setOf(MeGraS.SEGMENT_BOUNDS.uri),
+            setOf(MeGraS.SEGMENT_DEFINITION.uri),
             null)
             .firstOrNull() ?: return null
-        return Bounds(boundsQuad.`object`.toString().removeSuffix("^^String"))
+        val segmentType = quadSet.filter(
+            setOf(subject),
+            setOf(MeGraS.SEGMENT_TYPE.uri),
+            null)
+            .firstOrNull() ?: return null
+        return SegmentationUtil.parseSegmentation(segmentType.`object`.toString().removeSuffix("^^String"), segmentDefinition.`object`.toString().removeSuffix("^^String"))
     }
 
     private fun getParent(subject: URIValue): URIValue? {
@@ -42,34 +48,34 @@ abstract class AbstractImplicitSpatialHandler(
     }
 
     private fun getSpatialCandidatesAndCaches(subject: URIValue): SpatialCandidatesResult? {
-        val bounds = getBounds(subject) ?: return null
+        val segment = getSegmentation(subject) ?: return null
         val parent = getParent(subject) ?: return null
         //TODO: get actual top ancestor
         //TODO: check behavior of segment of segment
         val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject && parent == getParent(it.subject)}
             .map { it.subject as URIValue }
             .toSet()
-        val boundsCache = candidates.associateWith { getBounds(it) }
-        return SpatialCandidatesResult(bounds, candidates, boundsCache)
+        val segmentsCache = candidates.associateWith { getSegmentation(it) }
+        return SpatialCandidatesResult(segment, candidates, segmentsCache)
     }
 
     private data class SpatialCandidatesResult(
-        val bounds: Bounds?,
+        val segment: Segmentation?,
         val candidates: Set<URIValue>,
-        val boundsCache: Map<URIValue, Bounds?>
+        val segmentsCache: Map<URIValue, Segmentation?>
     )
 
     override fun findObjects(subject: URIValue): Set<URIValue> {
-        val (bounds, candidates, boundsCache) = getSpatialCandidatesAndCaches(subject) ?: return emptySet()
+        val (segment, candidates, segmentsCache) = getSpatialCandidatesAndCaches(subject) ?: return emptySet()
         return candidates.filter {
-            filter(bounds, boundsCache[it])
+            filter(segment, segmentsCache[it])
         }.toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val (bounds, candidates, boundsCache) = getSpatialCandidatesAndCaches(`object`) ?: return emptySet()
+        val (segment, candidates, segmentsCache) = getSpatialCandidatesAndCaches(`object`) ?: return emptySet()
         return candidates.filter {
-            filter(boundsCache[it], bounds)
+            filter(segment, segmentsCache[it])
         }.toSet()
     }
 
@@ -77,14 +83,14 @@ abstract class AbstractImplicitSpatialHandler(
         val subjects = quadSet.filter { it.subject is URIValue }
             .map { it.subject as URIValue }
             .toSet()
-        val boundsCache = subjects.associateWith { getBounds(it) }
+        val segmentsCache = subjects.associateWith { getSegmentation(it) }
         val pairs = mutableSetOf<Quad>()
         for (subject1 in subjects) {
-            val bounds1 = boundsCache[subject1]
+            val segment1 = segmentsCache[subject1]
             for (subject2 in subjects) {
                 if (subject1 != subject2) {
-                    val bounds2 = boundsCache[subject2]
-                    if (filter(bounds1, bounds2)) {
+                    val segment2 = segmentsCache[subject2]
+                    if (filter(segment1, segment2)) {
                         pairs.add(Quad(subject1, predicate, subject2))
                     }
                 }
@@ -96,7 +102,7 @@ abstract class AbstractImplicitSpatialHandler(
 
 class ContainsSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "contains",
-    filter = { bounds1, bounds2 ->
-        bounds1 != null && bounds2 != null && bounds1.contains(bounds2)
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.contains(segment2)
     }
 )

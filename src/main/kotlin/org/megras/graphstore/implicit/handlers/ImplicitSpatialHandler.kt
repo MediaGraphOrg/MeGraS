@@ -12,9 +12,11 @@ import org.megras.util.Constants
 
 
 abstract class AbstractImplicitSpatialHandler(
-    override val predicate: URIValue,
+    relationName: String,
     private val filter: (Bounds?, Bounds?) -> Boolean
 ) : ImplicitRelationHandler {
+
+    override val predicate: URIValue = URIValue("${Constants.SPATIAL_SEGMENT_PREFIX}/$relationName")
 
     protected lateinit var quadSet: ImplicitRelationMutableQuadSet
 
@@ -93,7 +95,7 @@ abstract class AbstractImplicitSpatialHandler(
 }
 
 class ContainsSpatialHandler : AbstractImplicitSpatialHandler(
-    predicate = URIValue("${Constants.SPATIAL_SEGMENT_PREFIX}/contains"),
+    relationName = "contains",
     filter = { bounds1, bounds2 ->
         bounds1 != null && bounds2 != null && bounds1.contains(bounds2)
     }

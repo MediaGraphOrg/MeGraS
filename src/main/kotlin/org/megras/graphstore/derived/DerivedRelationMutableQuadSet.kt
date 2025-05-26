@@ -169,7 +169,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         val order = if (invert) -1 else 1
         val dist = distance.distance()
 
-        val vectors = existing.map { it.`object` as VectorValue }
+        val vectors = existing.mapNotNull { it.`object` as? VectorValue }.toSet()
         val derivedVectors = derived.mapNotNull { it.`object` as? VectorValue }.toSet()
 
         val candidates = vectors.asSequence() + derivedVectors.asSequence()

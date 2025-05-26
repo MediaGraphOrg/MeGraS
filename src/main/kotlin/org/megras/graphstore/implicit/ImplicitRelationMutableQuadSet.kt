@@ -109,7 +109,8 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         distance: Distance,
         invert: Boolean
     ): QuadSet {
-        TODO("Not yet implemented")
+        // Implicit relations do not need to handle nearest neighbors for predicates (since they are document relations)
+        return this.base.nearestNeighbor(predicate, `object`, count, distance, invert)
     }
 
     override fun textFilter(

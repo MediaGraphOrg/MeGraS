@@ -40,7 +40,7 @@ object MeGraS {
 
         val objectStore = FileSystemObjectStore(config.objectStoreBase)
 
-        var quadSet = when (config.backend) {
+        val slQuadSet = when (config.backend) {
             Config.StorageBackend.FILE -> {
                 val set = TSVMutableQuadSet(config.fileStore!!.filename, config.fileStore.compression)
                 // ensure that latest state of quads is persisted on shutdown
@@ -86,12 +86,13 @@ object MeGraS {
             }
         }
 
+        var quadSet = slQuadSet
         val derivedRelationRegistrar = DerivedRelationRegistrar(quadSet, objectStore)
         quadSet = DerivedRelationMutableQuadSet(quadSet, derivedRelationRegistrar.getHandlers())
         val implicitRelationRegistrar = ImplicitRelationRegistrar(objectStore)
         quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers())
 
-        RestApi.init(config, objectStore, quadSet)
+        RestApi.init(config, objectStore, quadSet, slQuadSet)
 
         FunctionRegistrar.register(quadSet, objectStore)
 

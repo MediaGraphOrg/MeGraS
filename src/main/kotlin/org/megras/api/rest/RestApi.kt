@@ -13,7 +13,7 @@ object RestApi {
 
     private var javalin: Javalin? = null
 
-    fun init(config: Config, objectStore: FileSystemObjectStore, quadSet: MutableQuadSet) {
+    fun init(config: Config, objectStore: FileSystemObjectStore, quadSet: MutableQuadSet, slQuadSet: MutableQuadSet) {
 
         if (javalin != null) {
             stop() //stop instance in case there already is one. should not happen, just in case
@@ -23,7 +23,7 @@ object RestApi {
         val canonicalObjectRequestHandler = CanonicalObjectRequestHandler(quadSet, objectStore)
         val cachedSegmentRequestHandler = CachedSegmentRequestHandler(quadSet, objectStore)
         val canonicalSegmentRequestHandler = CanonicalSegmentRequestHandler(quadSet, objectStore)
-        val aboutObjectRequestHandler = AboutObjectRequestHandler(quadSet, objectStore)
+        val aboutObjectRequestHandler = AboutObjectRequestHandler(slQuadSet, objectStore)
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val addQuadRequestHandler = AddQuadRequestHandler(quadSet)

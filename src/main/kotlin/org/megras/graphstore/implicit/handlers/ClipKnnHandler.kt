@@ -41,12 +41,13 @@ class ClipKnnHandler(private val k: Int) : ImplicitRelationHandler {
         return this.quadSet.nearestNeighbor(
                 CLIP_EMBEDDING_PREDICATE,
                 embedding,
-                k,
+                k+1, // +1 because we include the subject itself
                 Distance.valueOf(DISTANCE),
                 false
             )
             .map { it.subject }
             .filterIsInstance<LocalQuadValue>()
+            .filter { it != value } // Exclude the subject itself
             .toSet()
     }
 

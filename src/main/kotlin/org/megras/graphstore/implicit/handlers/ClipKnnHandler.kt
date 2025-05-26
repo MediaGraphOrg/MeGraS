@@ -51,11 +51,11 @@ class ClipKnnHandler(private val k: Int) : ImplicitRelationHandler {
     }
 
     override fun findObjects(subject: URIValue): Set<URIValue> {
-        TODO("Not yet implemented")
+        return findValues(subject)
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        TODO("Not yet implemented")
+        return findValues(`object`)
     }
 
     override fun findAll(): QuadSet {

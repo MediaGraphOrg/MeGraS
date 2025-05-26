@@ -2,7 +2,9 @@ package org.megras.graphstore.implicit.handlers
 
 import org.megras.data.graph.FloatVectorValue
 import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.Quad
 import org.megras.data.graph.URIValue
+import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
@@ -60,6 +62,18 @@ class ClipKnnHandler(private val k: Int) : ImplicitRelationHandler {
     }
 
     override fun findAll(): QuadSet {
-        TODO("Not yet implemented")
+        val subjects = this.quadSet
+            .filter { it.subject is LocalQuadValue }
+            .map { it.subject as LocalQuadValue }
+            .toSet()
+
+        val pairs = mutableSetOf<Quad>()
+        for (subject in subjects) {
+            val objects = findValues(subject)
+            for (obj in objects) {
+                pairs.add(Quad(subject, this.predicate, obj))
+            }
+        }
+        return BasicQuadSet(pairs)
     }
 }

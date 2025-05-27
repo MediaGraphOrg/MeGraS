@@ -6,6 +6,7 @@ plugins {
     id 'org.jetbrains.kotlin.kapt' version '1.8.10'
     id 'antlr'
     id 'org.openjfx.javafxplugin' version '0.0.14'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 group 'org.megras'
@@ -25,6 +26,10 @@ application {
 // Required for shadow
 mainClassName = application.mainClass.get()
 
+def grpcVersion = '1.60.0'
+def protobufVersion = '3.25.1'
+def grpcKotlinVersion = '1.4.0'
+
 dependencies {
 
     def javalinVersion = '6.1.6'
@@ -35,8 +40,6 @@ dependencies {
     def batikVersion = '1.17'
     def twelvemonkeysVersion = '3.11.0'
     def cottontaildbDriverVerion='0.16.5'
-    def grpcVersion = '1.60.0'
-    def protobufVersion = '3.25.1'
     def exposedVersion = '0.40.1'
 //    def antlrVersion = '4.13.0'
     def jenaVersion = '5.0.0'
@@ -150,6 +153,14 @@ dependencies {
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+
+    implementation group: 'org.jetbrains.kotlinx', name: 'kotlinx-coroutines-core', version: '1.8.0'
+
+    // gRPC dependencies
+    implementation group: 'io.grpc', name: 'grpc-netty-shaded', version: grpcVersion
+    implementation group: 'io.grpc', name: 'grpc-protobuf', version: grpcVersion
+    implementation group: 'io.grpc', name: 'grpc-stub', version: grpcVersion
+    implementation group: 'io.grpc', name: 'grpc-kotlin-stub', version: grpcKotlinVersion
 }
 
 javafx {
@@ -164,6 +175,31 @@ javafx {
 //                  "-package", "org.megras.lang.sparql"]
 //
 //}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+        create("grpckt") {
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:${grpcKotlinVersion}:jdk8@jar"
+        }
+    }
+    generateProtoTasks {
+        all().forEach { task ->
+            task.builtins {
+
+            }
+            task.plugins {
+                grpc {}
+                grpckt {}
+            }
+        }
+    }
+}
 
 test {
     useJUnitPlatform()

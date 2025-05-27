@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package clip;
+package org.megras.util.embeddings;
 
 // Define the service for CLIP embeddings
 service ClipService {

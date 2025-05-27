@@ -176,31 +176,6 @@ javafx {
 //
 //}
 
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:${protobufVersion}"
-    }
-    plugins {
-        create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
-        }
-        create("grpckt") {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:${grpcKotlinVersion}:jdk8@jar"
-        }
-    }
-    generateProtoTasks {
-        all().forEach { task ->
-            task.builtins {
-
-            }
-            task.plugins {
-                grpc {}
-                grpckt {}
-            }
-        }
-    }
-}
-
 test {
     useJUnitPlatform()
 }

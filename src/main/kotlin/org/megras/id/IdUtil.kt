@@ -27,7 +27,7 @@ object IdUtil {
 
         return ObjectId(
             when (mediaType) {
-                MediaType.TEXT -> {"${MediaType.TEXT.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
+                MediaType.TEXT -> {"${MediaType.TEXT.prefix}${HashUtil.hash(file.inputStream()).toBase64()}"}
                 MediaType.IMAGE -> {
 
                     //computing simple perceptual hash
@@ -36,31 +36,34 @@ object IdUtil {
 
                     val luminances = mutableListOf<Float>()
 
-                    ImmutableImage.loader().fromBytes(file.bytes()).resizeTo(8, 8).forEach { luminances.add(luminance(it)) }
+                    val imageBytes = file.bytes() // Read bytes once
+                    ImmutableImage.loader().fromBytes(imageBytes).resizeTo(8, 8).forEach { luminances.add(luminance(it)) }
 
                     val meanLuminance = luminances.sum() / 64f
 
                     val bits = luminances.map { it > meanLuminance }
 
-                    val bytes = ByteArray(8)
+                    val pHashBytes = ByteArray(8)
 
                     for (i in 0..7) {
                         for (j in 0..7) {
                             if (bits[8 * i + j]) {
-                                bytes[i] = bytes[i] or ((1 shl j).toByte())
+                                pHashBytes[i] = pHashBytes[i] or ((1 shl j).toByte())
                             }
                         }
                     }
 
-                    //prefix + phash + file hash
-                    MediaType.IMAGE.prefix + (bytes + HashUtil.hash(file.inputStream())).toBase64()
+                    // Combine perceptual hash bytes and the full image bytes before hashing
+                    // This creates a single multihash that encompasses both
+                    val combinedBytes = pHashBytes + imageBytes
+                    MediaType.IMAGE.prefix + HashUtil.hash(combinedBytes.inputStream()).toBase64()
 
                 }
-                MediaType.AUDIO -> {"${MediaType.AUDIO.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
-                MediaType.VIDEO -> {"${MediaType.VIDEO.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
-                MediaType.DOCUMENT -> {"${MediaType.DOCUMENT.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
-                MediaType.MESH -> {"${MediaType.MESH.prefix}${HashUtil.hashToBase64(file.inputStream())}"}
-                MediaType.UNKNOWN -> "${MediaType.UNKNOWN.prefix}${HashUtil.hashToBase64(file.inputStream())}"
+                MediaType.AUDIO -> {"${MediaType.AUDIO.prefix}${HashUtil.hash(file.inputStream()).toBase64()}"}
+                MediaType.VIDEO -> {"${MediaType.VIDEO.prefix}${HashUtil.hash(file.inputStream()).toBase64()}"}
+                MediaType.DOCUMENT -> {"${MediaType.DOCUMENT.prefix}${HashUtil.hash(file.inputStream()).toBase64()}"}
+                MediaType.MESH -> {"${MediaType.MESH.prefix}${HashUtil.hash(file.inputStream()).toBase64()}"}
+                MediaType.UNKNOWN -> "${MediaType.UNKNOWN.prefix}${HashUtil.hash(file.inputStream()).toBase64()}"
             }.trim())
     }
 

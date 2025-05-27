@@ -1,6 +1,0 @@
-grpcio
-grpcio-tools
-transformers
-torch
-Pillow
-requests

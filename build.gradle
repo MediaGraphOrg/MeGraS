@@ -1,9 +1,11 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.8.10'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.8.10'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.20'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.20'
     id 'java'
     id 'application'
-    id 'org.jetbrains.kotlin.kapt' version '1.8.10'
+    id 'org.jetbrains.kotlin.kapt' version '1.9.20'
     id 'antlr'
     id 'org.openjfx.javafxplugin' version '0.0.14'
     id 'com.google.protobuf' version '0.9.4'
@@ -20,11 +22,11 @@ repositories {
 }
 
 application {
-    getMainClass().set('org.megras.MeGraS')
+    mainClass = 'org.megras.MeGraS' // Groovy DSL style for setting mainClass
     applicationDefaultJvmArgs = ["-Xms2G", "-Xmx4G"]
 }
 // Required for shadow
-mainClassName = application.mainClass.get()
+mainClassName = application.mainClass // Groovy DSL style for getting mainClass
 
 def grpcVersion = '1.60.0'
 def protobufVersion = '3.25.1'
@@ -116,8 +118,6 @@ dependencies {
     /* CSV */
     implementation group: 'com.github.doyaaaaaken', name: 'kotlin-csv-jvm', version: '1.9.0'
 
-
-
     /* Image decoding */
     implementation group: 'com.twelvemonkeys.imageio',  name: 'imageio-core',       version: twelvemonkeysVersion
     implementation group: 'com.twelvemonkeys.imageio',  name: 'imageio-jpeg',       version: twelvemonkeysVersion
@@ -150,7 +150,7 @@ dependencies {
     /* LibSVM */
     implementation group: 'tw.edu.ntu.csie', name: 'libsvm', version: '3.31'
 
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.20' // Updated Kotlin Stdlib
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
 
@@ -168,6 +168,11 @@ javafx {
     modules = [ 'javafx.graphics' ]
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_19
+    targetCompatibility = JavaVersion.VERSION_19
+}
+
 //generateGrammarSource {
 //    maxHeapSize = "64m"
 //    arguments += ["-visitor",
@@ -176,40 +181,13 @@ javafx {
 //
 //}
 
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:${protobufVersion}"
-    }
-    plugins {
-        create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
-        }
-        create("grpckt") {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:${grpcKotlinVersion}:jdk8@jar"
-        }
-    }
-    generateProtoTasks {
-        all().forEach { task ->
-            task.builtins {
 
-            }
-            task.plugins {
-                grpc {}
-                grpckt {}
-            }
-        }
-    }
-}
 
 test {
     useJUnitPlatform()
 }
 
-compileKotlin {
-//    dependsOn(tasks.generateGrammarSource)
-    kotlinOptions.jvmTarget = '1.8'
-}
-
-compileTestKotlin {
-    kotlinOptions.jvmTarget = '1.8'
+// Groovy DSL way to configure all Kotlin compilation tasks
+tasks.withType(KotlinCompile).configureEach {
+    kotlinOptions.jvmTarget = "19" // Updated JVM target for Groovy DSL
 }

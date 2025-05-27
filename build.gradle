@@ -30,6 +30,14 @@ def grpcVersion = '1.60.0'
 def protobufVersion = '3.25.1'
 def grpcKotlinVersion = '1.4.0'
 
+sourceSets {
+    main {
+        proto {
+            srcDir 'src/main/kotlin/org/megras/util/embeddings/proto' // Your .proto file location
+        }
+    }
+}
+
 dependencies {
 
     def javalinVersion = '6.1.6'
@@ -161,6 +169,37 @@ dependencies {
     implementation group: 'io.grpc', name: 'grpc-protobuf', version: grpcVersion
     implementation group: 'io.grpc', name: 'grpc-stub', version: grpcVersion
     implementation group: 'io.grpc', name: 'grpc-kotlin-stub', version: grpcKotlinVersion
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+        grpckt {
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:${grpcKotlinVersion}:jdk8@jar"
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+                    option 'lite' // Keep if you want lite, remove if you want full
+                }
+                kotlin { // Add this to generate Kotlin message classes
+                    option 'lite' // Keep if you want lite, remove if you want full
+                }
+            }
+            task.plugins {
+                grpc { }
+                grpckt { }
+            }
+        }
+    }
+    // REMOVE THE sourceSets BLOCK FROM HERE - IT GOES IN THE PROJECT'S MAIN sourceSets BLOCK
 }
 
 javafx {

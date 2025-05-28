@@ -54,7 +54,7 @@ class ClipServiceServicer(clip_service_pb2_grpc.ClipServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             return clip_service_pb2.EmbeddingResponse() # Return an empty response on error
 
-class OCRServiceServicer(ocr_service_pb2_grpc.OCRServiceServicer):
+class OcrServiceServicer(ocr_service_pb2_grpc.OcrServiceServicer):
     """
     Implements the gRPC methods for the OCRService.
     """
@@ -84,8 +84,8 @@ def serve():
         ClipServiceServicer(), server)
 
     # Add OCR Service
-    ocr_service_pb2_grpc.add_OCRServiceServicer_to_server(
-        OCRServiceServicer(), server)
+    ocr_service_pb2_grpc.add_OcrServiceServicer_to_server(
+        OcrServiceServicer(), server)
 
     server.add_insecure_port('[::]:50051') # Listen on all interfaces, port 50051
     print("Starting gRPC server on port 50051...")

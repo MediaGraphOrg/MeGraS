@@ -5,6 +5,7 @@ import org.megras.data.graph.QuadValue
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.handlers.AverageColorHandler
 import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
+import org.megras.graphstore.derived.handlers.OcrHandler
 
 class DerivedRelationRegistrar(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<DerivedRelationHandler<QuadValue>>()
@@ -12,6 +13,7 @@ class DerivedRelationRegistrar(private val quads: QuadSet, private val objectSto
     init {
         register(AverageColorHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(ClipEmbeddingHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
+        register(OcrHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
     }
 
     private fun register(handler: DerivedRelationHandler<QuadValue>) {

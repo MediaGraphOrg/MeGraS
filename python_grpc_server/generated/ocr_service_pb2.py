@@ -24,17 +24,17 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11ocr_service.proto\x12\x1aorg.megras.util.embeddings\"*\n\x14RecognizeTextRequest\x12\x12\n\nimage_data\x18\x01 \x01(\x0c\"0\n\x15RecognizeTextResponse\x12\x17\n\x0frecognized_text\x18\x01 \x01(\t2\x82\x01\n\nOCRService\x12t\n\rRecognizeText\x12\x30.org.megras.util.embeddings.RecognizeTextRequest\x1a\x31.org.megras.util.embeddings.RecognizeTextResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11ocr_service.proto\x12\x18org.megras.util.services\"*\n\x14RecognizeTextRequest\x12\x12\n\nimage_data\x18\x01 \x01(\x0c\"0\n\x15RecognizeTextResponse\x12\x17\n\x0frecognized_text\x18\x01 \x01(\t2~\n\nOcrService\x12p\n\rRecognizeText\x12..org.megras.util.services.RecognizeTextRequest\x1a/.org.megras.util.services.RecognizeTextResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'ocr_service_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_RECOGNIZETEXTREQUEST']._serialized_start=49
-  _globals['_RECOGNIZETEXTREQUEST']._serialized_end=91
-  _globals['_RECOGNIZETEXTRESPONSE']._serialized_start=93
-  _globals['_RECOGNIZETEXTRESPONSE']._serialized_end=141
-  _globals['_OCRSERVICE']._serialized_start=144
-  _globals['_OCRSERVICE']._serialized_end=274
+  _globals['_RECOGNIZETEXTREQUEST']._serialized_start=47
+  _globals['_RECOGNIZETEXTREQUEST']._serialized_end=89
+  _globals['_RECOGNIZETEXTRESPONSE']._serialized_start=91
+  _globals['_RECOGNIZETEXTRESPONSE']._serialized_end=139
+  _globals['_OCRSERVICE']._serialized_start=141
+  _globals['_OCRSERVICE']._serialized_end=267
 # @@protoc_insertion_point(module_scope)

@@ -36,12 +36,12 @@ class ClipServiceStub(object):
             channel: A grpc.Channel.
         """
         self.GetTextEmbedding = channel.unary_unary(
-                '/org.megras.util.embeddings.ClipService/GetTextEmbedding',
+                '/org.megras.util.services.ClipService/GetTextEmbedding',
                 request_serializer=clip__service__pb2.TextRequest.SerializeToString,
                 response_deserializer=clip__service__pb2.EmbeddingResponse.FromString,
                 _registered_method=True)
         self.GetImageEmbedding = channel.unary_unary(
-                '/org.megras.util.embeddings.ClipService/GetImageEmbedding',
+                '/org.megras.util.services.ClipService/GetImageEmbedding',
                 request_serializer=clip__service__pb2.ImageRequest.SerializeToString,
                 response_deserializer=clip__service__pb2.EmbeddingResponse.FromString,
                 _registered_method=True)
@@ -80,9 +80,9 @@ def add_ClipServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'org.megras.util.embeddings.ClipService', rpc_method_handlers)
+            'org.megras.util.services.ClipService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('org.megras.util.embeddings.ClipService', rpc_method_handlers)
+    server.add_registered_method_handlers('org.megras.util.services.ClipService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -104,7 +104,7 @@ class ClipService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/org.megras.util.embeddings.ClipService/GetTextEmbedding',
+            '/org.megras.util.services.ClipService/GetTextEmbedding',
             clip__service__pb2.TextRequest.SerializeToString,
             clip__service__pb2.EmbeddingResponse.FromString,
             options,
@@ -131,7 +131,7 @@ class ClipService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/org.megras.util.embeddings.ClipService/GetImageEmbedding',
+            '/org.megras.util.services.ClipService/GetImageEmbedding',
             clip__service__pb2.ImageRequest.SerializeToString,
             clip__service__pb2.EmbeddingResponse.FromString,
             options,

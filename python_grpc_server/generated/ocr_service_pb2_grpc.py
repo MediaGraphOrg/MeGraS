@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class OCRServiceStub(object):
+class OcrServiceStub(object):
     """OCRService defines the gRPC service for performing Optical Character Recognition.
     """
 
@@ -36,13 +36,13 @@ class OCRServiceStub(object):
             channel: A grpc.Channel.
         """
         self.RecognizeText = channel.unary_unary(
-                '/org.megras.util.embeddings.OCRService/RecognizeText',
+                '/org.megras.util.services.OcrService/RecognizeText',
                 request_serializer=ocr__service__pb2.RecognizeTextRequest.SerializeToString,
                 response_deserializer=ocr__service__pb2.RecognizeTextResponse.FromString,
                 _registered_method=True)
 
 
-class OCRServiceServicer(object):
+class OcrServiceServicer(object):
     """OCRService defines the gRPC service for performing Optical Character Recognition.
     """
 
@@ -54,7 +54,7 @@ class OCRServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_OCRServiceServicer_to_server(servicer, server):
+def add_OcrServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'RecognizeText': grpc.unary_unary_rpc_method_handler(
                     servicer.RecognizeText,
@@ -63,13 +63,13 @@ def add_OCRServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'org.megras.util.embeddings.OCRService', rpc_method_handlers)
+            'org.megras.util.services.OcrService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('org.megras.util.embeddings.OCRService', rpc_method_handlers)
+    server.add_registered_method_handlers('org.megras.util.services.OcrService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class OCRService(object):
+class OcrService(object):
     """OCRService defines the gRPC service for performing Optical Character Recognition.
     """
 
@@ -87,7 +87,7 @@ class OCRService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/org.megras.util.embeddings.OCRService/RecognizeText',
+            '/org.megras.util.services.OcrService/RecognizeText',
             ocr__service__pb2.RecognizeTextRequest.SerializeToString,
             ocr__service__pb2.RecognizeTextResponse.FromString,
             options,

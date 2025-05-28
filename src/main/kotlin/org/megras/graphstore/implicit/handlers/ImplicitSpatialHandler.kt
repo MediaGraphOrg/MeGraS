@@ -135,6 +135,13 @@ class CoversSpatialHandler : AbstractImplicitSpatialHandler(
     }
 )
 
+class BesideSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "beside",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.beside(segment2)
+    }
+)
+
 // Uncomment and implement if needed
 //class SpatialHandler : AbstractImplicitSpatialHandler(
 //    relationName = "",

@@ -18,6 +18,7 @@ import org.megras.graphstore.implicit.handlers.ContainsSpatialHandler
 import org.megras.graphstore.implicit.handlers.EqualsSegmentHandler
 import org.megras.graphstore.implicit.handlers.EqualsSpatialHandler
 import org.megras.graphstore.implicit.handlers.FinishesSegmentHandler
+import org.megras.graphstore.implicit.handlers.IntersectsSpatialHandler
 import org.megras.graphstore.implicit.handlers.MeetsSegmentHandler
 import org.megras.graphstore.implicit.handlers.OverlapsSegmentHandler
 import org.megras.graphstore.implicit.handlers.PrecedesSegmentHandler
@@ -48,6 +49,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
 //        register(OverlapsSegmentHandler())
         register(ContainsSpatialHandler())
         register(EqualsSpatialHandler())
+        register(IntersectsSpatialHandler())
         for (k in 2..4) {
             register(ClipKnnHandler(k))
         }

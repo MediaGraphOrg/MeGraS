@@ -113,3 +113,10 @@ class EqualsSpatialHandler : AbstractImplicitSpatialHandler(
         segment1 != null && segment2 != null && segment1.equals(segment2)
     }
 )
+
+class IntersectsSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "intersects",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.orthogonalTo(segment2)
+    }
+)

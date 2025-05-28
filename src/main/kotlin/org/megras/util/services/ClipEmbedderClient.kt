@@ -1,13 +1,13 @@
-package org.megras.util.embeddings
+package org.megras.util.services
 
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
-import org.megras.util.embeddings.ClipServiceGrpcKt.ClipServiceCoroutineStub
-import org.megras.util.embeddings.ClipServiceOuterClass.TextRequest
-import org.megras.util.embeddings.ClipServiceOuterClass.ImageRequest
-import org.megras.util.embeddings.ClipServiceOuterClass.EmbeddingResponse
+import org.megras.util.services.ClipServiceGrpcKt.ClipServiceCoroutineStub
+import org.megras.util.services.ClipServiceOuterClass.TextRequest
+import org.megras.util.services.ClipServiceOuterClass.ImageRequest
+import org.megras.util.services.ClipServiceOuterClass.EmbeddingResponse
 
 import java.io.Closeable
 import java.io.File

@@ -9,7 +9,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
-import org.megras.util.embeddings.ClipEmbedderClient
+import org.megras.util.services.ClipEmbedderClient
 
 class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<FloatVectorValue> {
     override val predicate: URIValue = getPredicate()

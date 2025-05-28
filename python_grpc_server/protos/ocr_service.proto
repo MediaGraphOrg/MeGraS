@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package org.megras.util.embeddings;
+package org.megras.util.services;
 
 // OCRService defines the gRPC service for performing Optical Character Recognition.
 service OCRService {

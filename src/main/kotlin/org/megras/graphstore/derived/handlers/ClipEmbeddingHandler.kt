@@ -40,7 +40,7 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
         val embedding: List<Float> = runBlocking {
             val client = ClipEmbedderClient("localhost", 50051)
             try {
-                val embedding: List<Float> = client.getTextEmbedding(path)
+                val embedding: List<Float> = client.getImageEmbedding(path)
                 return@runBlocking embedding
 
             } catch (e: Exception) {

@@ -149,6 +149,13 @@ class DisjointSpatialHandler : AbstractImplicitSpatialHandler(
     }
 )
 
+class OverlapsSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "overlaps",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.overlaps(segment2)
+    }
+)
+
 /* Uncomment and implement if needed
 class SpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "",

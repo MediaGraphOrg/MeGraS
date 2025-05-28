@@ -120,3 +120,18 @@ class IntersectsSpatialHandler : AbstractImplicitSpatialHandler(
         segment1 != null && segment2 != null && segment1.orthogonalTo(segment2)
     }
 )
+
+class WithinSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "within",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.within(segment2)
+    }
+)
+
+// Uncomment and implement if needed
+//class SpatialHandler : AbstractImplicitSpatialHandler(
+//    relationName = "",
+//    filter = { segment1, segment2 ->
+//        segment1 != null && segment2 != null && segment1.(segment2)
+//    }
+//)

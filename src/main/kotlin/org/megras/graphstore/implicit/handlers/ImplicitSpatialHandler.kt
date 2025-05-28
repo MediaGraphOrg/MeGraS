@@ -142,10 +142,18 @@ class BesideSpatialHandler : AbstractImplicitSpatialHandler(
     }
 )
 
-// Uncomment and implement if needed
-//class SpatialHandler : AbstractImplicitSpatialHandler(
-//    relationName = "",
-//    filter = { segment1, segment2 ->
-//        segment1 != null && segment2 != null && segment1.(segment2)
-//    }
-//)
+class DisjointSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "disjoint",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.disjoint(segment2)
+    }
+)
+
+/* Uncomment and implement if needed
+class SpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.(segment2)
+    }
+)
+*/

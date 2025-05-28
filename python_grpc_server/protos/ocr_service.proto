@@ -3,7 +3,7 @@ syntax = "proto3";
 package org.megras.util.services;
 
 // OCRService defines the gRPC service for performing Optical Character Recognition.
-service OCRService {
+service OcrService {
   // RecognizeText takes an image and returns the recognized text.
   rpc RecognizeText (RecognizeTextRequest) returns (RecognizeTextResponse);
 }

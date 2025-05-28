@@ -37,6 +37,50 @@ sealed interface Segmentation {
         return this.bounds.orthogonalTo(rhs.bounds)
     }
 
+    fun within(rhs: Segmentation): Boolean {
+        return rhs.contains(this) && (this.getDefinition() != rhs.getDefinition())
+    }
+
+    fun covers(rhs: Segmentation): Boolean {
+        return rhs.contains(this)
+    }
+
+    fun beside(rhs: Segmentation): Boolean {
+        return ((this.left(rhs) || this.right(rhs)) && !(this.above(rhs) || this.below(rhs)))
+    }
+
+    fun disjoint(rhs: Segmentation): Boolean{
+        return !this.orthogonalTo(rhs)
+    }
+
+    fun overlaps(rhs: Segmentation): Boolean {
+        return this.orthogonalTo(rhs)
+    }
+
+    fun above(rhs: Segmentation): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    fun below(rhs: Segmentation): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    fun crosses(rhs: Segmentation): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    fun left(rhs: Segmentation): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    fun right(rhs: Segmentation): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    fun touches(rhs: Segmentation): Boolean {
+        TODO("Not yet implemented")
+    }
+
     fun translate(by: Bounds, direction: TranslateDirection = TranslateDirection.POSITIVE): Segmentation {
         return this
     }

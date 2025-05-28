@@ -106,3 +106,10 @@ class ContainsSpatialHandler : AbstractImplicitSpatialHandler(
         segment1 != null && segment2 != null && segment1.contains(segment2)
     }
 )
+
+class EqualsSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "equals",
+    filter = { segment1, segment2 ->
+        segment1 != null && segment2 != null && segment1.equals(segment2)
+    }
+)

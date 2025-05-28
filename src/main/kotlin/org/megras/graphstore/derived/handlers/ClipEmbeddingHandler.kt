@@ -1,15 +1,15 @@
 package org.megras.graphstore.derived.handlers
 
+import kotlinx.coroutines.runBlocking
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.graph.FloatVectorValue
-import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
-import org.megras.util.embeddings.ClipEmbeddings
+import org.megras.util.embeddings.ClipEmbedderClient
 
 class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<FloatVectorValue> {
     override val predicate: URIValue = getPredicate()
@@ -37,7 +37,19 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
     override fun derive(subject: URIValue): Collection<FloatVectorValue> {
         val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
-        val embedding = ClipEmbeddings.getImageEmbedding(path)
+        val embedding: List<Float> = runBlocking {
+            val client = ClipEmbedderClient("localhost", 50051)
+            try {
+                val embedding: List<Float> = client.getTextEmbedding(path)
+                return@runBlocking embedding
+
+            } catch (e: Exception) {
+                println("Error getting text embedding for '$path': ${e.message}")
+                return@runBlocking emptyList<Float>()
+            } finally {
+                client.close()
+            }
+        }
 
         return listOf(
             FloatVectorValue(embedding)

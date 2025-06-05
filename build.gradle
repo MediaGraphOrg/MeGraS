@@ -134,6 +134,7 @@ dependencies {
     implementation group: 'org.jetbrains.exposed', name: 'exposed-dao', version: exposedVersion
     implementation group: 'org.jetbrains.exposed', name: 'exposed-jdbc', version: exposedVersion
     implementation group: 'org.postgresql', name: 'postgresql', version: '42.7.3'
+    implementation group: 'com.pgvector', name: 'pgvector', version: '0.1.6'
 
 //    /* Antlr4 */
 //    antlr group: 'org.antlr', name: 'antlr4', version: antlrVersion

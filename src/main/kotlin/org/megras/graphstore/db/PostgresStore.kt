@@ -1,6 +1,7 @@
 package org.megras.graphstore.db
 
 import com.google.common.cache.CacheBuilder
+import com.pgvector.PGvector
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -39,28 +40,36 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
         val value: Column<String> = text("value")
 
-        override val primaryKey = PrimaryKey(QuadsTable.id)
+        override val primaryKey = PrimaryKey(id)
     }
 
     object DoubleLiteralTable : Table("literal_double") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
         val value: Column<Double> = double("value").uniqueIndex()
 
-        override val primaryKey = PrimaryKey(QuadsTable.id)
+        override val primaryKey = PrimaryKey(id)
     }
 
     object EntityPrefixTable : Table("entity_prefix") {
         val id: Column<Int> = integer("id").autoIncrement().uniqueIndex()
         val prefix: Column<String> = varchar("prefix", 255).uniqueIndex()
 
-        override val primaryKey = PrimaryKey(QuadsTable.id)
+        override val primaryKey = PrimaryKey(id)
     }
 
     object EntityTable : Table("entity") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
         val value: Column<String> = varchar("value", 255).uniqueIndex()
 
-        override val primaryKey = PrimaryKey(QuadsTable.id)
+        override val primaryKey = PrimaryKey(id)
+    }
+
+    object VectorTypesTable : Table("vector_types") {
+        val id: Column<Int> = integer("id").autoIncrement().uniqueIndex()
+        val type: Column<Int> = integer("type")
+        val length: Column<Int> = integer("length")
+
+        override val primaryKey = PrimaryKey(id)
     }
 
     private val db: Database
@@ -81,7 +90,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
 
     override fun setup() {
         transaction {
-            SchemaUtils.create(QuadsTable, StringLiteralTable, DoubleLiteralTable, EntityPrefixTable, EntityTable)
+            SchemaUtils.create(QuadsTable, StringLiteralTable, DoubleLiteralTable, EntityPrefixTable, EntityTable, VectorTypesTable)
             //TODO add this in a more idiomatic exposed way
             exec("ALTER TABLE megras.literal_string ADD COLUMN IF NOT EXISTS ts tsvector GENERATED ALWAYS AS (to_tsvector('english', value)) STORED;")
             exec("CREATE INDEX IF NOT EXISTS ts_idx ON megras.literal_string USING GIN (ts);")
@@ -121,7 +130,62 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
-        return emptyMap() //FIXME currently unsupported
+        if (vectorValues.isEmpty()) {
+            return emptyMap()
+        }
+
+        val returnMap = HashMap<VectorValue, QuadValueId>(vectorValues.size)
+
+        vectorValues.groupBy { it.type to it.length }.forEach { (properties, vectorList) ->
+
+            val vectorsInGroup = vectorList.toSet() // Set<VectorValue>
+            val vectorTable = getOrCreateVectorTable(properties.first, properties.second)
+
+            val queryResults: List<Pair<Long, VectorValue>> = transaction {
+                when (properties.first) {
+                    VectorValue.Type.Float -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val specificValueColumn = vectorTable.value as Column<FloatVectorValue>
+                        val floatVectors = vectorsInGroup.mapNotNull { it as? FloatVectorValue }
+                        if (floatVectors.isEmpty()) {
+                            emptyList()
+                        } else {
+                            vectorTable.select { specificValueColumn inList floatVectors }
+                                .map { it[vectorTable.id] to it[specificValueColumn] }
+                        }
+                    }
+                    VectorValue.Type.Double -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val specificValueColumn = vectorTable.value as Column<DoubleVectorValue>
+                        val doubleVectors = vectorsInGroup.mapNotNull { it as? DoubleVectorValue }
+                        if (doubleVectors.isEmpty()) {
+                            emptyList()
+                        } else {
+                            vectorTable.select { specificValueColumn inList doubleVectors }
+                                .map { it[vectorTable.id] to it[specificValueColumn] }
+                        }
+                    }
+                    VectorValue.Type.Long -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val specificValueColumn = vectorTable.value as Column<LongVectorValue>
+                        val longVectors = vectorsInGroup.mapNotNull { it as? LongVectorValue }
+                        if (longVectors.isEmpty()) {
+                            emptyList()
+                        } else {
+                            vectorTable.select { specificValueColumn inList longVectors }
+                                .map { it[vectorTable.id] to it[specificValueColumn] }
+                        }
+                    }
+                }
+            }
+
+            for ((id, value) in queryResults) {
+                val quadValueId = (-vectorTable.typeId + VECTOR_ID_OFFSET) to id
+                returnMap[value] = quadValueId
+            }
+        }
+
+        return returnMap
     }
 
     override fun insertDoubleValues(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
@@ -165,8 +229,115 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         return list.zip(results).toMap()
     }
 
-    override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
-        return emptyMap() //FIXME currently unsupported
+override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
+    vectorValues.groupBy { it.type to it.length }.forEach { (properties, v) ->
+        val vectorsInGroup = v // v is List<VectorValue>
+        val currentVectorType = properties.first
+        val currentLength = properties.second
+        // getOrCreateVectorTable returns a VectorTable instance where 'value' is Column<out VectorValue>
+        // but its actual underlying type corresponds to currentVectorType
+        val vectorTable = getOrCreateVectorTable(currentVectorType, currentLength)
+
+        if (vectorsInGroup.isNotEmpty()) {
+            transaction {
+                vectorTable.batchInsert(vectorsInGroup) { it ->
+                    when (currentVectorType) {
+                        VectorValue.Type.Float -> {
+                            @Suppress("UNCHECKED_CAST")
+                            this[vectorTable.value as Column<FloatVectorValue>] = it as FloatVectorValue
+                        }
+                        VectorValue.Type.Double -> {
+                            @Suppress("UNCHECKED_CAST")
+                            this[vectorTable.value as Column<DoubleVectorValue>] = it as DoubleVectorValue
+                        }
+                        VectorValue.Type.Long -> {
+                            @Suppress("UNCHECKED_CAST")
+                            this[vectorTable.value as Column<LongVectorValue>] = it as LongVectorValue
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return lookUpVectorValueIds(vectorValues)
+}
+
+    class VectorTable(val typeId: Int, type: VectorValue.Type, length: Int) : Table("vector_values_$typeId") {
+        val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
+        val value = when (type) {
+            VectorValue.Type.Float -> registerColumn<FloatVectorValue>("value",
+                object : ColumnType() {
+                    override fun sqlType(): String = "vector($length)"
+                    override fun valueFromDB(value: Any): FloatVectorValue {
+                        return FloatVectorValue.parse(value.toString())
+                    }
+
+                    override fun notNullValueToDB(value: Any): Any {
+                        return PGvector((value as FloatVectorValue).vector)
+                    }
+                }
+            )
+            VectorValue.Type.Double -> registerColumn<DoubleVectorValue>("value",
+                object : ColumnType() {
+                    override fun sqlType(): String = "vector($length)"
+                    override fun valueFromDB(value: Any): DoubleVectorValue {
+                        return DoubleVectorValue.parse(value.toString())
+                    }
+
+                    override fun notNullValueToDB(value: Any): Any {
+                        return PGvector(value.toString().replace("^^DoubleVector", ""))
+                    }
+                }
+            )
+            VectorValue.Type.Long -> registerColumn<LongVectorValue>("value",
+                object : ColumnType() {
+                    override fun sqlType(): String = "vector($length)"
+                    override fun valueFromDB(value: Any): LongVectorValue {
+                        return LongVectorValue.parse(value.toString())
+                    }
+
+                    override fun notNullValueToDB(value: Any): Any {
+                        return PGvector(value.toString().replace("^^LongVector", ""))
+                    }
+                }
+            )
+        }
+
+        override val primaryKey = PrimaryKey(this.id)
+    }
+
+    private fun getOrCreateVectorTable(type: VectorValue.Type, length: Int): VectorTable {
+        fun createTable(): VectorTable {
+            val result = transaction {
+                VectorTypesTable.insert {
+                    it[VectorTypesTable.type] = type.ordinal
+                    it[VectorTypesTable.length] = length
+                }
+            }
+            val id = result[VectorTypesTable.id]
+            val vectorTable = VectorTable(id, type, length)
+            transaction {
+                SchemaUtils.create(vectorTable)
+            }
+
+            return vectorTable
+        }
+
+        return getVectorTable(type, length) ?: createTable()
+    }
+
+    private fun getVectorTable(type: VectorValue.Type, length: Int): VectorTable? {
+        val tableId = transaction {
+            VectorTypesTable.select {
+                (VectorTypesTable.type eq type.ordinal) and (VectorTypesTable.length eq length)
+            }.map { it[VectorTypesTable.id] }.firstOrNull()
+        }
+
+        return if (tableId != null) {
+            VectorTable(tableId, type, length)
+        } else {
+            null
+        }
     }
 
     override fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue> {
@@ -186,7 +357,67 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue> {
-        return emptyMap() //FIXME currently unsupported
+        val returnMap = HashMap<QuadValueId, VectorValue>(ids.size)
+
+        ids.groupBy { it.first }.forEach { ids ->
+            val values = getVectorQuadValues(ids.key, ids.value.map { it.second })
+            values.forEach {
+                returnMap[ids.key to it.key] = it.value
+            }
+        }
+        //TODO batch by type
+        return returnMap
+    }
+
+    private fun getVectorQuadValues(type: Int, ids: List<Long>): Map<Long, VectorValue> {
+        val internalId = -type + VECTOR_ID_OFFSET
+
+        val properties = getVectorProperties(internalId) ?: return emptyMap()
+
+        val vectorTable = getOrCreateVectorTable(properties.second, properties.first)
+
+        val result = transaction {
+            vectorTable.select {
+                vectorTable.id inList ids
+            }.map {
+                it[vectorTable.id] to it[vectorTable.value]
+            }.associate { (id, value) ->
+                id to value
+            }
+        }
+
+        val map = mutableMapOf<Long, VectorValue>()
+
+        when(properties.second) {
+            VectorValue.Type.Double -> {
+                result.forEach { (id, value) ->
+                    map[id] = value as DoubleVectorValue
+                }
+            }
+            VectorValue.Type.Long -> {
+                result.forEach { (id, value) ->
+                    map[id] = value as LongVectorValue
+                }
+            }
+            VectorValue.Type.Float -> {
+                result.forEach { (id, value) ->
+                    map[id] = value as FloatVectorValue
+                }
+            }
+        }
+
+        return map
+    }
+
+    private fun getVectorProperties(type: Int): Pair<Int, VectorValue.Type>? {
+        return transaction {
+            VectorTypesTable
+                .select { VectorTypesTable.id eq type }
+                .firstOrNull()
+                ?.let { row ->
+                    row[VectorTypesTable.length] to VectorValue.Type.values()[row[VectorTypesTable.type]]
+                }
+        }
     }
 
     override fun lookUpPrefixes(ids: Set<Int>): Map<Int, String> {

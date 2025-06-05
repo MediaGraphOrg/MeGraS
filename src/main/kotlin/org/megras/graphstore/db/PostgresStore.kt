@@ -460,7 +460,12 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     override fun isEmpty(): Boolean = this.size > 0
 
     override fun iterator(): MutableIterator<Quad> {
-        TODO("Not yet implemented")
+        //FIXME this is not efficient, but improving is a a lot of work
+        val allIds = transaction {
+            QuadsTable.slice(QuadsTable.id).selectAll().map { it[QuadsTable.id] }
+        }
+        val quadSet = getIds(allIds)
+        return quadSet.toMutableSet().iterator()
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {

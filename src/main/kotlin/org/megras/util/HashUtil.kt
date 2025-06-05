@@ -198,16 +198,15 @@ object HashUtil {
     }
     //endregion
 
-    //region Convenient Hash-to-String Functions (for multihashes)
-    // These functions now always return the string representation of a multihash
-    fun hashToHex(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = hash(stream, hashType).toHex()
+    //region Convenient Hash-to-String Functions
+    fun hashToHex(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = calculateRawDigest(stream, hashType).toHex()
 
-    fun hashToBase32(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = hash(stream, hashType).toBase32()
+    fun hashToBase32(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = calculateRawDigest(stream, hashType).toBase32()
 
-    fun hashToBase64(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = hash(stream, hashType).toBase64()
+    fun hashToBase64(stream: InputStream, hashType: HashType = HashType.SHA3_256): String = calculateRawDigest(stream, hashType).toBase64()
 
-    fun hashToBase64(string: String, hashType: HashType = HashType.SHA3_256): String = hash(string, hashType).toBase64()
+    fun hashToBase64(string: String, hashType: HashType = HashType.SHA3_256): String = calculateRawDigest(string, hashType).toBase64()
 
-    fun hashToBase64(mask: BitSet, hashType: HashType = HashType.SHA3_256): String = hash(mask, hashType).toBase64()
+    fun hashToBase64(mask: BitSet, hashType: HashType = HashType.SHA3_256): String = calculateRawDigest(mask, hashType).toBase64()
     //endregion
 }

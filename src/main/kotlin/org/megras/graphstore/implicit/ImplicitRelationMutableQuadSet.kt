@@ -8,8 +8,6 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
-import kotlin.collections.containsKey
-import kotlin.collections.get
 
 class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<ImplicitRelationHandler>) : MutableQuadSet {
 
@@ -147,7 +145,7 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
         return this.base.add(element)
     }
 
-    override fun addAll(elements: Collection<Quad>): Boolean = this.base.addAll(elements)
+    override fun addAll(elements: Collection<Quad>): Boolean = this.base.addAll(elements.filter{!handlers.containsKey(it.predicate)})
 
     override fun clear() = this.base.clear()
 

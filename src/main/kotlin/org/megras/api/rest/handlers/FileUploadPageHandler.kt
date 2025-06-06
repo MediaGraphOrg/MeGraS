@@ -13,6 +13,7 @@ class FileUploadPageHandler : GetRequestHandler {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>File Upload</title>
+                <link rel="stylesheet" type="text/css" href="/static/styles.css">
             </head>
             <body>
                 <h1>Upload Files</h1>

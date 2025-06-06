@@ -41,7 +41,7 @@ object RestApi {
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
         val rootPageHandler = RootPageHandler()
         val fileUploadPageHandler = FileUploadPageHandler()
-        val addQuadPageHandler = AddQuadsPageHandler()
+        val addTriplesPageHandler = AddTriplesPageHandler()
 
 
         javalin = Javalin.create {
@@ -117,7 +117,7 @@ object RestApi {
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
                 get("/fileupload", fileUploadPageHandler::get)
-                get("/addquads", addQuadPageHandler::get)
+                get("/addtriples", addTriplesPageHandler::get)
             }
 
             it.staticFiles.add{ static ->

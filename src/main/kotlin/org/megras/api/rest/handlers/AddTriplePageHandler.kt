@@ -3,7 +3,7 @@ package org.megras.api.rest.handlers
 import io.javalin.http.Context
 import org.megras.api.rest.GetRequestHandler
 
-class AddQuadsPageHandler : GetRequestHandler {
+class AddTriplesPageHandler : GetRequestHandler {
 
     override fun get(ctx: Context) {
         val htmlContent = """
@@ -13,6 +13,7 @@ class AddQuadsPageHandler : GetRequestHandler {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Add Triples</title>
+                <link rel="stylesheet" type="text/css" href="/static/styles.css">
                 <style>
                     #triples {
                         width: 80vw;
@@ -20,11 +21,34 @@ class AddQuadsPageHandler : GetRequestHandler {
                         box-sizing: border-box;
                     }
                 </style>
-                <script>
-                    function sendQuads() {
+                
+            </head>
+            <body>
+                <h1>Add Triples</h1>
+                <textarea id="triples" placeholder="Enter triples separated by tabs (<s> <p> <o>)"></textarea>
+                <br>
+                <button onclick="sendTriples()">Submit</button>
+            </body>
+            <script>
+                   document.getElementById('triples').addEventListener('keydown', function(e) {
+                      if (e.key == 'Tab') {
+                        e.preventDefault();
+                        var start = this.selectionStart;
+                        var end = this.selectionEnd;
+
+                        // set textarea value to: text before caret + tab + text after caret
+                        this.value = this.value.substring(0, start) +
+                          "\t" + this.value.substring(end);
+
+                        // put caret at right position again
+                        this.selectionStart =
+                          this.selectionEnd = start + 1;
+                      }
+                    });
+                    function sendTriples() {
                         const input = document.getElementById("triples").value.trim();
                         const lines = input.split("\n");
-                        const quads = [];
+                        const triples = [];
 
                         lines.forEach(line => {
                             const parts = line.split("\t");
@@ -34,25 +58,25 @@ class AddQuadsPageHandler : GetRequestHandler {
                                 const o = parts[2].trim();
 
                                 if (s && p && o) {
-                                    quads.push({ s: s, p: p, o: o });
+                                    triples.push({ s: s, p: p, o: o });
                                 }
                             }
                         });
 
-                        if (quads.length > 0) {
+                        if (triples.length > 0) {
                             fetch("/add/quads", {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/json"
                                 },
-                                body: JSON.stringify({ quads: quads })
+                                body: JSON.stringify({ quads: triples })
                             })
                             .then(response => {
                                 if (response.ok) {
-                                    alert("Quads added successfully!");
+                                    alert("Triples added successfully!");
                                     document.getElementById("triples").value = "";
                                 } else {
-                                    alert("Failed to add quads.");
+                                    alert("Failed to add triples: " + response.body);
                                 }
                             })
                             .catch(error => {
@@ -64,13 +88,6 @@ class AddQuadsPageHandler : GetRequestHandler {
                         }
                     }
                 </script>
-            </head>
-            <body>
-                <h1>Add Quads</h1>
-                <textarea id="triples" placeholder="Enter triples separated by tabs (<s> <p> <o>)"></textarea>
-                <br>
-                <button onclick="sendQuads()">Submit</button>
-            </body>
             </html>
         """.trimIndent()
 

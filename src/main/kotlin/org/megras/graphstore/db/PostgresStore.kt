@@ -94,6 +94,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
             //TODO add this in a more idiomatic exposed way
             exec("ALTER TABLE megras.literal_string ADD COLUMN IF NOT EXISTS ts tsvector GENERATED ALWAYS AS (to_tsvector('english', value)) STORED;")
             exec("CREATE INDEX IF NOT EXISTS ts_idx ON megras.literal_string USING GIN (ts);")
+            exec("CREATE EXTENSION IF NOT EXISTS vector;")
         }
     }
 

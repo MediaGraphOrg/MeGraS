@@ -59,7 +59,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
 
     object EntityTable : Table("entity") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
-        val value: Column<String> = varchar("value", 255).uniqueIndex()
+        val value: Column<String> = text("value").uniqueIndex()
 
         override val primaryKey = PrimaryKey(id)
     }

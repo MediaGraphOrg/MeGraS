@@ -39,6 +39,7 @@ object RestApi {
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
         val rootPageHandler = RootPageHandler()
+        val fileUploadPageHandler = FileUploadPageHandler()
 
 
         javalin = Javalin.create {
@@ -113,6 +114,7 @@ object RestApi {
                 get("/sparqlui", sparqlUiHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
+                get("/fileupload", fileUploadPageHandler::get)
             }
 
             it.registerPlugin(

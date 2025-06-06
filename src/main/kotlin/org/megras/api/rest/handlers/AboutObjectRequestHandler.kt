@@ -11,6 +11,7 @@ import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
+import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
@@ -24,7 +25,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
 
         val objectId = ObjectId(ctx.pathParam("objectId"))
 
-        var relevant = quads.filter(setOf(objectId), null,null) + quads.filter(null, null, setOf(objectId))
+        val relevant = quads.filter(setOf(objectId), null,null) + quads.filter(null, null, setOf(objectId))
 
         if (relevant.isEmpty()) {
             throw RestErrorStatus.notFound
@@ -44,9 +45,11 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
           """.trimIndent()
         )
 
+        val extended = BasicMutableQuadSet()
+
         var parent = quads.filter(setOf(objectId), setOf(MeGraS.SEGMENT_OF.uri), null).firstOrNull()?.`object`
         while (parent != null) {
-            relevant += quads.filter(setOf(parent), null, null)
+            extended.addAll(quads.filter(setOf(parent), null, null))
             parent = quads.filter(setOf(parent), setOf(MeGraS.SEGMENT_OF.uri), null).firstOrNull()?.`object`
         }
 
@@ -65,8 +68,8 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 .firstOrNull()?.`object`.toString().removeSuffix("^^String")
         )
 
-        val mediaType = relevant.filterPredicate(MeGraS.MEDIA_TYPE.uri).firstOrNull()?.`object` as? StringValue
-        val mimeType = relevant.filterPredicate(MeGraS.CANONICAL_MIME_TYPE.uri).firstOrNull()?.`object` as? StringValue
+        val mediaType = (relevant.filterPredicate(MeGraS.MEDIA_TYPE.uri).firstOrNull()?.`object` ?: extended.filterPredicate(MeGraS.MEDIA_TYPE.uri).firstOrNull()?.`object`) as? StringValue
+        val mimeType = (relevant.filterPredicate(MeGraS.CANONICAL_MIME_TYPE.uri).firstOrNull()?.`object` ?: extended.filterPredicate(MeGraS.CANONICAL_MIME_TYPE.uri).firstOrNull()?.`object`) as? StringValue
 
         when(mediaType?.value) {
             MediaType.IMAGE.name -> {
@@ -124,7 +127,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                 }
                                 svg += """
                                     <a xlink:href='$aboutUrl' target='_blank'>
-                                        <path d='$adjustedPath' fill='none' stroke='$color' />
+                                        <path d='$adjustedPath' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
                                     </a>
                                 """.trimIndent()
                             }
@@ -199,7 +202,8 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         // Make the link clickable, only if it is a URI
         // Ensure that the URIs are displayed correctly
         // e.g., <http://localhost:8080/ig4eHDw8PBwehl44EMsGGVowgwnovvt3-tTGOdJd4baxnIRMdrTy6sg> <http://megras.org/schema#canonicalMimeType> image/png^^String
-        buf.append("\n<br><table>\n")
+        buf.append("<br><h2>Node Neighborhood</h2>")
+        buf.append("\n<table>\n")
         buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
         relevant.sortedBy { it.subject.toString().length }.forEach {
             buf.append("<tr>")
@@ -209,6 +213,20 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             buf.append("</tr>\n")
         }
         buf.append("</table>\n")
+
+        if (extended.isNotEmpty()) {
+            buf.append("<br><h2>Ancestor Neighborhood</h2>")
+            buf.append("\n<table>\n")
+            buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
+            extended.sortedBy { it.subject.toString().length }.forEach {
+                buf.append("<tr>")
+                buf.append("<td>${it.subject.toHtml()}</td>")
+                buf.append("<td>${it.predicate.toHtml()}</td>")
+                buf.append("<td>${it.`object`.toHtml()}</td>")
+                buf.append("</tr>\n")
+            }
+            buf.append("</table>\n")
+        }
 
 
         /*buf.append("\n<br><textarea readonly style='width: 100%; min-height: 500px; resize: vertical;'>\n")

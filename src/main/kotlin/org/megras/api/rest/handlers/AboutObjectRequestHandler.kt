@@ -14,7 +14,6 @@ import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
-import kotlin.toString
 
 class AboutObjectRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
@@ -29,130 +28,13 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         }
 
         val buf = StringBuilder()
-        val css = """
-            <style>
-                body {
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                    line-height: 1.6;
-                    max-width: 1400px;
-                    margin: 0 auto;
-                    padding: 20px;
-                    background-color: #f5f5f5;
-                    color: #333;
-                }
-                h1 {
-                    color: #2c3e50;
-                    padding-bottom: 10px;
-                    border-bottom: 1px solid #ddd;
-                    text-align: center;
-                }
-                .media-container {
-                    margin: 20px auto;
-                    text-align: center;
-                    background: white;
-                    padding: 15px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                    max-width: 80%;
-                }
-                img, video, audio {
-                    max-width: 100%;
-                    max-height: 600px;
-                    border-radius: 4px;
-                }
-                embed {
-                    width: 100%;
-                    min-height: 400px;
-                    max-width: 1000px;
-                    border-radius: 4px;
-                    background: #fff;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-                }
-                a {
-                    color: black;
-                    text-decoration: none;
-                    transition: color 0.2s;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                a:hover {
-                    color: black;
-                    text-decoration: underline;
-                }
-                a:visited {
-                    color: black;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 30px 0;
-                    background-color: white;
-                    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-                    border-radius: 8px;
-                    overflow: hidden;
-                    table-layout: fixed;
-                }
-                th, td {
-                    padding: 14px 16px;
-                    border-bottom: 1px solid #e0e0e0;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                th {
-                    background-color: #2c3e50;
-                    color: white;
-                    text-align: left;
-                    position: sticky;
-                    top: 0;
-                }
-                tr:last-child td {
-                    border-bottom: none;
-                }
-                tr:hover {
-                    background-color: #f9f9f9;
-                }
-                .vector-value {
-                    font-family: monospace;
-                    background-color: #f0f0f0;
-                    padding: 2px 4px;
-                    border-radius: 3px;
-                    cursor: help;
-                    display: inline-block;
-                    max-width: 100%;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                button {
-                    background: #2c3e50;
-                    color: #fff;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 18px;
-                    font-size: 1rem;
-                    font-weight: 500;
-                    cursor: pointer;
-                    box-shadow: 0 2px 6px rgba(44,62,80,0.08);
-                    transition: background 0.2s, box-shadow 0.2s;
-                }
-                button:hover {
-                    background: #34495e;
-                    box-shadow: 0 4px 12px rgba(44,62,80,0.15);
-                }
-                .segments-toggle-btn {
-                    display: block;
-                    margin: 18px auto 0 auto;
-                }
-            </style>
-        """.trimIndent()
 
         buf.append(
           """
               <!DOCTYPE html>
               <head>
                   <title>About '$objectId'</title>
-                  ${css}
+                  <link rel="stylesheet" type="text/css" href="/static/styles.css">
               </head>
               <body>
               

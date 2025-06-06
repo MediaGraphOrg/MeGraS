@@ -2,6 +2,7 @@ package org.megras.api.rest
 
 import io.javalin.Javalin
 import io.javalin.apibuilder.ApiBuilder.*
+import io.javalin.http.staticfiles.Location
 import io.javalin.openapi.plugin.OpenApiPlugin
 import io.javalin.openapi.plugin.swagger.SwaggerPlugin
 import org.megras.api.rest.handlers.*
@@ -117,6 +118,13 @@ object RestApi {
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
                 get("/fileupload", fileUploadPageHandler::get)
                 get("/addquads", addQuadPageHandler::get)
+            }
+
+            it.staticFiles.add{ static ->
+                static.directory = "static"
+                static.hostedPath = "/static"
+                static.location = Location.CLASSPATH
+                static.precompress = false
             }
 
             it.registerPlugin(

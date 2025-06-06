@@ -1,0 +1,38 @@
+package org.megras.api.rest.handlers
+
+import com.vladsch.flexmark.html.HtmlRenderer
+import com.vladsch.flexmark.parser.Parser
+import com.vladsch.flexmark.util.data.MutableDataSet
+import io.javalin.http.Context
+import java.io.File
+
+class RootPageHandler {
+
+    fun get(ctx: Context) {
+        try {
+            val projectDir = System.getProperty("user.dir")
+            val readmeFile = File(projectDir, "GETTING_STARTED.md")
+
+            if (readmeFile.exists() && readmeFile.isFile) {
+                val markdownContent = readmeFile.readText(Charsets.UTF_8)
+
+                // Initialize Flexmark parser and renderer
+                val options = MutableDataSet()
+                val parser = Parser.builder(options).build()
+                val renderer = HtmlRenderer.builder(options).build()
+
+                val document = parser.parse(markdownContent)
+                val htmlContent = renderer.render(document)
+
+                ctx.contentType("text/html; charset=utf-8")
+                ctx.result(htmlContent)
+            } else {
+                ctx.status(404).result("README.md not found in project root.")
+            }
+        } catch (e: Exception) {
+            // Consider logging the exception server-side
+            // e.printStackTrace()
+            ctx.status(500).result("Error reading or parsing README.md: ${e.message}")
+        }
+    }
+}

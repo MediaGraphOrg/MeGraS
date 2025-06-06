@@ -38,6 +38,7 @@ object RestApi {
         val sparqlUiHandler = SparqlUiHandler()
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
+        val rootPageHandler = RootPageHandler()
 
 
         javalin = Javalin.create {
@@ -57,6 +58,7 @@ object RestApi {
             it.showJavalinBanner = false
 
             it.router.apiBuilder {
+                get("/", rootPageHandler::get)
                 get("/raw/{objectId}", rawObjectRequestHandler::get)
                 get("/<objectId>/about", aboutObjectRequestHandler::get)
                 get("/<objectId>/preview", objectPreviewRequestHandler::get)

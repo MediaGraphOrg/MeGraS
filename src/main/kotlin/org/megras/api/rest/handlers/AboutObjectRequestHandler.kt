@@ -14,6 +14,9 @@ import org.megras.data.schema.MeGraS
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
+import org.megras.segmentation.SegmentationType
+import org.megras.segmentation.SegmentationUtil
+import org.megras.segmentation.type.Segmentation
 
 class AboutObjectRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
@@ -47,11 +50,13 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             parent = quads.filter(setOf(parent), setOf(MeGraS.SEGMENT_OF.uri), null).firstOrNull()?.`object`
         }
 
-        fun getBounds(subject: URIValue) : Bounds {
-            return Bounds(
-                quads.filter(setOf(subject), setOf(MeGraS.SEGMENT_BOUNDS.uri), null)
-                    .firstOrNull()?.`object`.toString().removeSuffix("^^String")
-            )
+        fun getSegmentation(subject: URIValue) : Segmentation? {
+            val typeDefinition = quads.filter(setOf(subject), setOf(MeGraS.SEGMENT_TYPE.uri, MeGraS.SEGMENT_DEFINITION.uri), null)
+            val type = typeDefinition.filter(setOf(subject), setOf(MeGraS.SEGMENT_TYPE.uri), null)
+                .firstOrNull()?.`object`.toString().removeSuffix("^^String")
+            val definition = typeDefinition.filter(setOf(subject), setOf(MeGraS.SEGMENT_DEFINITION.uri), null)
+                .firstOrNull()?.`object`.toString().removeSuffix("^^String")
+            return SegmentationUtil.parseSegmentation(type, definition)
         }
 
         val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(objectId)).map { it.subject as URIValue }.toSet()
@@ -67,31 +72,67 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             MediaType.IMAGE.name -> {
                 var svg = ""
                 if (children.isNotEmpty()) {
-                    val sortedChildren = children.sortedBy {
-                        val b = getBounds(it)
-                        -(b.getMaxX() - b.getMinX()) * (b.getMaxY() - b.getMinY())
-                    }
                     val colorPalette = listOf(
                         "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6",
                         "#bcf60c", "#fabebe", "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000", "#aaffc3"
                     )
                     svg = "<svg width='100%' height='100%' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
-                    sortedChildren.forEachIndexed { idx, child ->
-                        val bounds = getBounds(child)
+                    children.forEachIndexed { idx, child ->
+                        val segmentation = getSegmentation(child)
                         val color = colorPalette[idx % colorPalette.size]
                         val aboutUrl = "${child.value}/about"
-                        svg += """
-                            <a xlink:href='$aboutUrl' target='_blank'>
-                                <rect
-                                    x='${bounds.getMinX()}'
-                                    y='${imgBounds.getMaxY() - bounds.getMaxY()}'
-                                    width='${bounds.getMaxX() - bounds.getMinX()}'
-                                    height='${bounds.getMaxY() - bounds.getMinY()}'
-                                    style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;'
-                                >
-                                </rect>
-                            </a>
-                        """.trimIndent()
+
+                        if (segmentation == null) {
+                            // No segmentation found, skip this child
+                            return@forEachIndexed
+                        }
+                        when (segmentation.segmentationType) {
+                            SegmentationType.RECT -> {
+                                val svgPath = segmentation.getDefinition()
+                                val coords = svgPath.split(",").map { it.toDouble() }
+                                val x = coords[0]
+                                val y = imgBounds.getMaxY() - coords[3]
+                                val width = coords[1] - coords[0]
+                                val height = coords[3] - coords[2]
+                                svg += """
+                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                        <rect x='$x' y='$y' width='$width' height='$height' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
+                                    </a>
+                                """.trimIndent()
+                            }
+                            SegmentationType.POLYGON -> {
+                                val svgPath = segmentation.getDefinition()
+                                val points = svgPath.split("),(")
+                                    .map { it.replace("(", "").replace(")", "") }
+                                    .map { point ->
+                                        val (x, y) = point.split(",").map(String::toDouble)
+                                        "$x,${imgBounds.getMaxY() - y}"
+                                    }
+                                svg += """
+                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                        <polygon points='${points.joinToString(" ")}' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
+                                    </a>
+                                """.trimIndent()
+                            }
+                            SegmentationType.PATH -> {
+                                val svgPath = segmentation.getDefinition()
+                                val adjustedPath = svgPath.replace(Regex("""([MLQZ])(\d+\.?\d*),(\d+\.?\d*)""")) {
+                                    val command = it.groupValues[1]
+                                    val x = it.groupValues[2].toDouble()
+                                    val y = it.groupValues[3].toDouble()
+                                    "$command$x,${imgBounds.getMaxY() - y}"
+                                }
+                                svg += """
+                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                        <path d='$adjustedPath' fill='none' stroke='$color' />
+                                    </a>
+                                """.trimIndent()
+                            }
+                            else -> {
+                                //FIXME Unsupported segmentation type, skip this child
+                                return@forEachIndexed
+                            }
+                        }
                     }
                     svg += "</svg>"
                 }

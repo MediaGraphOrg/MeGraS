@@ -1,23 +1,10 @@
 package org.megras.graphstore.derived
 
-import org.megras.data.graph.DoubleValue
-import org.megras.data.graph.DoubleVectorValue
-import org.megras.data.graph.FloatVectorValue
-import org.megras.data.graph.LongVectorValue
-import org.megras.data.graph.Quad
-import org.megras.data.graph.QuadValue
-import org.megras.data.graph.StringValue
-import org.megras.data.graph.URIValue
-import org.megras.data.graph.VectorValue
+import org.megras.data.graph.*
 import org.megras.data.schema.MeGraS
-import org.megras.graphstore.BasicMutableQuadSet
-import org.megras.graphstore.BasicQuadSet
-import org.megras.graphstore.Distance
-import org.megras.graphstore.MutableQuadSet
-import org.megras.graphstore.QuadSet
+import org.megras.graphstore.*
 import org.megras.util.knn.DistancePairComparator
 import org.megras.util.knn.FixedSizePriorityQueue
-import kotlin.collections.contains
 
 class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<DerivedRelationHandler<*>>) :
     MutableQuadSet {
@@ -56,6 +43,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
     }
 
     private fun getAllBySubject(): Map<URIValue, Collection<Quad>> =
+        //FIXME this is not efficient, but it works for now
         this.base.iterator().asSequence().filter { it.subject is URIValue }.groupBy { it.subject as URIValue }
 
 
@@ -107,7 +95,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
             return existing
         }
 
-        val subs = (subjects ?: existing.map { it.subject }.toSet()).filterIsInstance<URIValue>()
+        val subs = (subjects ?: getAllBySubject().keys).filterIsInstance<URIValue>()
         val derived = subs.flatMap { subject ->
             val present = this.base.filterSubject(subject)
             relevantHandlers.flatMap { handler ->

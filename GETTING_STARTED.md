@@ -15,7 +15,3 @@ MeGraS provides a RESTful API for interacting with the graph.
 - **Intearcting with the graph**:
 	- **Uploading files**: [/fileupload](/fileupload)
 	- **Adding triples**: [/addtriples](/addtriples)
-
----
-
-# TO DO: Write guide!

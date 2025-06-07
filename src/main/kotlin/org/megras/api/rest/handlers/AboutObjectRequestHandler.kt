@@ -80,15 +80,20 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                         "#bcf60c", "#fabebe", "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000", "#aaffc3"
                     )
                     svg = "<svg width='100%' height='100%' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
-                    children.forEachIndexed { idx, child ->
+
+                    // Sort children by area and store segmentation
+                    val sortedChildrenWithSegmentation = children.mapNotNull { child ->
                         val segmentation = getSegmentation(child)
+                        segmentation?.bounds?.let { bounds ->
+                            val area = (bounds.getMaxX() - bounds.getMinX()) * (bounds.getMaxY() - bounds.getMinY())
+                            Triple(child, segmentation, area)
+                        }
+                    }.sortedBy { -it.third } // Sort by area (third element of Triple)
+
+                    sortedChildrenWithSegmentation.forEachIndexed { idx, (child, segmentation, _) ->
                         val color = colorPalette[idx % colorPalette.size]
                         val aboutUrl = "${child.value}/about"
 
-                        if (segmentation == null) {
-                            // No segmentation found, skip this child
-                            return@forEachIndexed
-                        }
                         when (segmentation.segmentationType) {
                             SegmentationType.RECT -> {
                                 val svgPath = segmentation.getDefinition()
@@ -132,7 +137,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                 """.trimIndent()
                             }
                             else -> {
-                                //FIXME Unsupported segmentation type, skip this child
+                                // FIXME Unsupported segmentation type, skip this child
                                 return@forEachIndexed
                             }
                         }

@@ -34,7 +34,7 @@
     },
     "/add/quads" : {
       "post" : {
-        "tags" : [ "Addition" ],
+        "tags" : [ "Object Management" ],
         "summary" : "Adds new quads to the graph.",
         "operationId" : "postAddQuads",
         "parameters" : [ ],
@@ -713,7 +713,7 @@
     },
     "/{objectId}/c/{segmentId}" : {
       "get" : {
-        "tags" : [ "Segmentation" ],
+        "tags" : [ "Object Segmentation" ],
         "summary" : "Get a cached segment by its ID",
         "description" : "Returns the cached segment for the given object ID and segment ID.",
         "parameters" : [ ],
@@ -893,7 +893,7 @@
     },
     "/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/{tail}" : {
       "get" : {
-        "tags" : [ "Segmentation" ],
+        "tags" : [ "Object Segmentation" ],
         "summary" : "Retrieves a specific segment of an object, potentially creating it or serving from cache. Handles chained segmentations.",
         "description" : "This endpoint serves a segment of an object. It can handle simple segments (e.g., `/{objectId}/segment/{segmentation}/{segmentDefinition}`), segments of cached segments (e.g., `/{objectId}/c/{segmentId}/segment/...`), and chained segmentations (e.g., `.../segment/{nextSegmentation}/{nextSegmentDefinition}`). The `{tail}` can be used for further chained operations. The specific path matched determines which parameters are active.\n\nSupported segmentation types for `segmentation` and `nextSegmentation` include: RECT, POLYGON, BEZIER, BSPLINE, PATH, MASK, HILBERT, CHANNEL, COLOR, FREQUENCY, TIME, CHARACTER, PAGE, WIDTH, HEIGHT, CUT, ROTOSCOPE, MESH.",
         "parameters" : [ {

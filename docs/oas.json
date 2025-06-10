@@ -9,6 +9,29 @@
     }
   },
   "paths" : {
+    "/" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "summary" : "Serves the GETTING_STARTED.md file as HTML",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the GETTING_STARTED.md as HTML.",
+            "content" : {
+              "text/html" : { }
+            }
+          },
+          "404" : {
+            "description" : "GETTING_STARTED.md not found."
+          },
+          "500" : {
+            "description" : "Error reading or parsing GETTING_STARTED.md."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/add/quads" : {
       "post" : {
         "tags" : [ "Addition" ],
@@ -44,6 +67,42 @@
                   "$ref" : "#/components/schemas/RestErrorStatus"
                 }
               }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/addtriples" : {
+      "get" : {
+        "tags" : [ "User Interface" ],
+        "summary" : "Serves an HTML page for adding triples.",
+        "description" : "Provides a user interface to input triples (subject, predicate, object) and submit them to the server. The submission posts to the '/add/quads' endpoint.",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the HTML page for adding triples.",
+            "content" : {
+              "text/html" : { }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/fileupload" : {
+      "get" : {
+        "tags" : [ "User Interface" ],
+        "summary" : "Serves an HTML page for uploading files.",
+        "description" : "Provides a user interface to select and upload files to the server. After successful upload via the form on this page (which posts to '/add/file'), the client-side script attempts to redirect to the 'about' page of the first uploaded file.",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the HTML file upload page.",
+            "content" : {
+              "text/html" : { }
             }
           }
         },
@@ -512,6 +571,458 @@
                 }
               }
             }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/raw/{objectId}" : {
+      "get" : {
+        "tags" : [ "Object Store" ],
+        "summary" : "Serves the raw bytes of an object",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the object to retrieve.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the raw object bytes. The Content-Type header will reflect the object's MIME type.",
+            "content" : {
+              "*/*" : { }
+            }
+          },
+          "403" : {
+            "description" : "Invalid objectId provided."
+          },
+          "404" : {
+            "description" : "Object not found."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/sparqlui" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "summary" : "Redirects to the SPARQL query interface.",
+        "description" : "Provides a user interface for executing SPARQL queries against the repository.",
+        "parameters" : [ ],
+        "responses" : {
+          "302" : {
+            "description" : "Redirects to the UI."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}" : {
+      "get" : {
+        "tags" : [ "Object Store" ],
+        "summary" : "Serves the canonical representation of an object",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the object to retrieve.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the canonical object. The Content-Type header will reflect the object's MIME type.",
+            "content" : {
+              "*/*" : { }
+            }
+          },
+          "404" : {
+            "description" : "Object or canonical ID not found."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      },
+      "delete" : {
+        "tags" : [ "Object Management" ],
+        "summary" : "Deletes an object and all its associated data.",
+        "description" : "Permanently deletes a specified object. This includes the object itself, all its segments, any associated metadata (quads in the graph store), and all related stored files (such as raw versions, canonical representations, and previews).",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the object to be deleted.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Object and all associated data successfully deleted."
+          },
+          "404" : {
+            "description" : "Object not found or specified ID is invalid."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}/about" : {
+      "get" : {
+        "tags" : [ "Object Information" ],
+        "summary" : "Provides information and a preview about a specific object and its related data.",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the object to retrieve information about.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves an HTML page with details about the object.",
+            "content" : {
+              "text/html" : { }
+            }
+          },
+          "404" : {
+            "description" : "Object not found."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}/c/{segmentId}" : {
+      "get" : {
+        "tags" : [ "Segmentation" ],
+        "summary" : "Get a cached segment by its ID",
+        "description" : "Returns the cached segment for the given object ID and segment ID.",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Cached segment data"
+          },
+          "404" : {
+            "description" : "Segment not found"
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}" : {
+      "get" : {
+        "tags" : [ "Object Segmentation" ],
+        "summary" : "Calculates the intersection of two segmentations and redirects.",
+        "description" : "Redirects to a path representing the intersection of two specified segmentations of an object or a cached segment. The path may also omit the `/c/{segmentId}` part (e.g., `/{objectId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}`). Supported segmentation types are listed in the GET endpoint description.",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the base object.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentId",
+          "in" : "path",
+          "description" : "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentation1",
+          "in" : "path",
+          "description" : "Type of the first segmentation (e.g., 'RECT', 'POLYGON'). See GET endpoint description for supported types.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentDefinition1",
+          "in" : "path",
+          "description" : "Definition of the first segmentation. Format depends on 'segmentation1' type.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentation2",
+          "in" : "path",
+          "description" : "Type of the second segmentation (e.g., 'TIME', 'MASK'). See GET endpoint description for supported types.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentDefinition2",
+          "in" : "path",
+          "description" : "Definition of the second segmentation. Format depends on 'segmentation2' type.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "302" : {
+            "description" : "Redirects to the path representing the intersection or reordering of the segmentations."
+          },
+          "400" : {
+            "description" : "Invalid input: Unknown media type or invalid segmentation parameters."
+          },
+          "404" : {
+            "description" : "Not Found: Object or canonical ID not found."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}" : {
+      "get" : {
+        "tags" : [ "Object Segmentation" ],
+        "summary" : "Calculates the union of two segmentations and redirects.",
+        "description" : "Redirects to a path representing the union of two specified segmentations of an object or a cached segment. The path may also omit the `/c/{segmentId}` part (e.g., `/{objectId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}`). Supported segmentation types are listed in the GET endpoint description.",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the base object.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentId",
+          "in" : "path",
+          "description" : "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentation1",
+          "in" : "path",
+          "description" : "Type of the first segmentation (e.g., 'RECT', 'POLYGON'). See GET endpoint description for supported types.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentDefinition1",
+          "in" : "path",
+          "description" : "Definition of the first segmentation. Format depends on 'segmentation1' type.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentation2",
+          "in" : "path",
+          "description" : "Type of the second segmentation (e.g., 'TIME', 'MASK'). See GET endpoint description for supported types.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentDefinition2",
+          "in" : "path",
+          "description" : "Definition of the second segmentation. Format depends on 'segmentation2' type.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "302" : {
+            "description" : "Redirects to the path representing the union of the segmentations."
+          },
+          "400" : {
+            "description" : "Invalid input: Unknown media type, invalid segmentation parameters, or union not supported/empty."
+          },
+          "404" : {
+            "description" : "Not Found: Object or canonical ID not found."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/{tail}" : {
+      "get" : {
+        "tags" : [ "Segmentation" ],
+        "summary" : "Retrieves a specific segment of an object, potentially creating it or serving from cache. Handles chained segmentations.",
+        "description" : "This endpoint serves a segment of an object. It can handle simple segments (e.g., `/{objectId}/segment/{segmentation}/{segmentDefinition}`), segments of cached segments (e.g., `/{objectId}/c/{segmentId}/segment/...`), and chained segmentations (e.g., `.../segment/{nextSegmentation}/{nextSegmentDefinition}`). The `{tail}` can be used for further chained operations. The specific path matched determines which parameters are active.\n\nSupported segmentation types for `segmentation` and `nextSegmentation` include: RECT, POLYGON, BEZIER, BSPLINE, PATH, MASK, HILBERT, CHANNEL, COLOR, FREQUENCY, TIME, CHARACTER, PAGE, WIDTH, HEIGHT, CUT, ROTOSCOPE, MESH.",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the base object.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentId",
+          "in" : "path",
+          "description" : "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentation",
+          "in" : "path",
+          "description" : "The type of the primary segmentation (e.g., 'RECT', 'TIME'). See endpoint description for a full list of supported types. The format of 'segmentDefinition' depends on this type.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "segmentDefinition",
+          "in" : "path",
+          "description" : "The definition of the primary segmentation. Its format is specific to the 'segmentation' type. Examples: for RECT '10,10,100,100'; for TIME '0-10.5'; for POLYGON '10,10,100,10,100,100'; for CHANNEL 'R,G'; for MESH (OBJ data).",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "nextSegmentation",
+          "in" : "path",
+          "description" : "The type of a subsequent segmentation if chained (e.g., 'RECT', 'TIME'). Optional, used for chained segmentations. See endpoint description for supported types.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "nextSegmentDefinition",
+          "in" : "path",
+          "description" : "The definition for 'nextSegmentation'. Format depends on 'nextSegmentation' type. Optional, used for chained segmentations.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "tail",
+          "in" : "path",
+          "description" : "Additional path components for further chained segmentations or operations. Optional.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "nocache",
+          "in" : "query",
+          "description" : "If true, bypasses cache lookup for certain steps. Defaults to false (cache is used).",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the segmented object. Content-Type reflects the object's MIME type.",
+            "content" : {
+              "*/*" : { }
+            }
+          },
+          "302" : {
+            "description" : "Redirect to a canonical, cached, or processed segment path."
+          },
+          "400" : {
+            "description" : "Invalid input: Unknown media type, invalid segmentation parameters, or segment out of bounds."
+          },
+          "404" : {
+            "description" : "Not Found: Object, segment, or canonical ID not found, or resulting segment is empty."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/{objectId}/preview" : {
+      "get" : {
+        "tags" : [ "Object Information" ],
+        "summary" : "Generates or retrieves a preview image for an object.",
+        "description" : "If a preview image (PNG) for the specified object already exists, it is served. Otherwise, a preview is generated based on the object's media type (e.g., text, image, video, audio, document), stored, and then served. All generated previews are in PNG format.",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the object for which to generate or retrieve a preview.",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successfully serves the preview image in PNG format. The response is cached.",
+            "content" : {
+              "image/png" : { }
+            }
+          },
+          "404" : {
+            "description" : "Object not found, or the canonical ID for the object could not be determined."
           }
         },
         "deprecated" : false,

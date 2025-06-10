@@ -4,10 +4,25 @@ import com.vladsch.flexmark.html.HtmlRenderer
 import com.vladsch.flexmark.parser.Parser
 import com.vladsch.flexmark.util.data.MutableDataSet
 import io.javalin.http.Context
+import io.javalin.openapi.HttpMethod
+import io.javalin.openapi.OpenApi
+import io.javalin.openapi.OpenApiContent
+import io.javalin.openapi.OpenApiResponse
 import java.io.File
 
 class RootPageHandler {
 
+    @OpenApi(
+        path = "/",
+        methods = [HttpMethod.GET],
+        summary = "Serves the GETTING_STARTED.md file as HTML",
+        tags = ["Public"],
+        responses = [
+            OpenApiResponse(status = "200", description = "Successfully serves the GETTING_STARTED.md as HTML.", content = [OpenApiContent(type = "text/html")]),
+            OpenApiResponse(status = "404", description = "GETTING_STARTED.md not found."),
+            OpenApiResponse(status = "500", description = "Error reading or parsing GETTING_STARTED.md.")
+        ]
+    )
     fun get(ctx: Context) {
         try {
             val projectDir = System.getProperty("user.dir")

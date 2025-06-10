@@ -2,6 +2,7 @@ package org.megras.api.rest.handlers
 
 import io.javalin.http.ContentType
 import io.javalin.http.Context
+import io.javalin.openapi.*
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
@@ -21,6 +22,20 @@ import org.megras.segmentation.type.Segmentation
 
 class AboutObjectRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
+    @OpenApi(
+        path = "/{objectId}/about",
+        methods = [HttpMethod.GET],
+        summary = "Provides information and a preview about a specific object and its related data.",
+        tags = ["Object Information"],
+        pathParams = [
+            OpenApiParam(name = "objectId", type = String::class, description = "The ID of the object to retrieve information about."
+            )
+        ],
+        responses = [
+            OpenApiResponse(status = "200", description = "Successfully serves an HTML page with details about the object.", content = [OpenApiContent(type = "text/html")]),
+            OpenApiResponse(status = "404", description = "Object not found.")
+        ]
+    )
     override fun get(ctx: Context) {
 
         val objectId = ObjectId(ctx.pathParam("objectId"))

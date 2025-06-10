@@ -1,13 +1,17 @@
 package org.megras.api.rest.handlers
 
 import io.javalin.http.Context
+import io.javalin.openapi.*
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.ObjectStoreResult
 import org.megras.data.fs.StoredObjectDescriptor
 import org.megras.data.fs.StoredObjectId
-import org.megras.data.graph.*
+import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.Quad
+import org.megras.data.graph.QuadValue
+import org.megras.data.graph.StringValue
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.data.schema.SchemaOrg
@@ -26,6 +30,31 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
+    @OpenApi(
+        path = "/{objectId}/c/{segmentId}/segment/{segmentation}/{segmentDefinition}/segment/{nextSegmentation}/{nextSegmentDefinition}/{tail}",
+        methods = [HttpMethod.GET],
+        summary = "Retrieves a specific segment of an object, potentially creating it or serving from cache. Handles chained segmentations.",
+        description = "This endpoint serves a segment of an object. It can handle simple segments (e.g., `/{objectId}/segment/{segmentation}/{segmentDefinition}`), segments of cached segments (e.g., `/{objectId}/c/{segmentId}/segment/...`), and chained segmentations (e.g., `.../segment/{nextSegmentation}/{nextSegmentDefinition}`). The `{tail}` can be used for further chained operations. The specific path matched determines which parameters are active.\n\nSupported segmentation types for `segmentation` and `nextSegmentation` include: RECT, POLYGON, BEZIER, BSPLINE, PATH, MASK, HILBERT, CHANNEL, COLOR, FREQUENCY, TIME, CHARACTER, PAGE, WIDTH, HEIGHT, CUT, ROTOSCOPE, MESH.",
+        tags = ["Segmentation"],
+        pathParams = [
+            OpenApiParam(name = "objectId", type = String::class, description = "The ID of the base object."),
+            OpenApiParam(name = "segmentId", type = String::class, description = "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'."),
+            OpenApiParam(name = "segmentation", type = String::class, description = "The type of the primary segmentation (e.g., 'RECT', 'TIME'). See endpoint description for a full list of supported types. The format of 'segmentDefinition' depends on this type."),
+            OpenApiParam(name = "segmentDefinition", type = String::class, description = "The definition of the primary segmentation. Its format is specific to the 'segmentation' type. Examples: for RECT '10,10,100,100'; for TIME '0-10.5'; for POLYGON '10,10,100,10,100,100'; for CHANNEL 'R,G'; for MESH (OBJ data)."),
+            OpenApiParam(name = "nextSegmentation", type = String::class, description = "The type of a subsequent segmentation if chained (e.g., 'RECT', 'TIME'). Optional, used for chained segmentations. See endpoint description for supported types."),
+            OpenApiParam(name = "nextSegmentDefinition", type = String::class, description = "The definition for 'nextSegmentation'. Format depends on 'nextSegmentation' type. Optional, used for chained segmentations."),
+            OpenApiParam(name = "tail", type = String::class, description = "Additional path components for further chained segmentations or operations. Optional.")
+        ],
+        queryParams = [
+            OpenApiParam(name = "nocache", type = Boolean::class, description = "If true, bypasses cache lookup for certain steps. Defaults to false (cache is used).", required = false)
+        ],
+        responses = [
+            OpenApiResponse(status = "200", description = "Successfully serves the segmented object. Content-Type reflects the object's MIME type.", content = [OpenApiContent(type = "*/*")]),
+            OpenApiResponse(status = "302", description = "Redirect to a canonical, cached, or processed segment path."),
+            OpenApiResponse(status = "400", description = "Invalid input: Unknown media type, invalid segmentation parameters, or segment out of bounds."),
+            OpenApiResponse(status = "404", description = "Not Found: Object, segment, or canonical ID not found, or resulting segment is empty.")
+        ]
+    )
     /**
      * /{objectId}/segment/{segmentation}/{segmentDefinition}"
      */
@@ -211,6 +240,26 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         redirect(ctx, cacheObject.uri, nextSegmentation)
     }
 
+    @OpenApi(
+        path = "/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}",
+        methods = [HttpMethod.GET],
+        summary = "Calculates the intersection of two segmentations and redirects.",
+        description = "Redirects to a path representing the intersection of two specified segmentations of an object or a cached segment. The path may also omit the `/c/{segmentId}` part (e.g., `/{objectId}/segment/{segmentation1}/{segmentDefinition1}/and/{segmentation2}/{segmentDefinition2}`). Supported segmentation types are listed in the GET endpoint description.",
+        tags = ["Object Segmentation"],
+        pathParams = [
+            OpenApiParam(name = "objectId", type = String::class, description = "The ID of the base object."),
+            OpenApiParam(name = "segmentId", type = String::class, description = "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'."),
+            OpenApiParam(name = "segmentation1", type = String::class, description = "Type of the first segmentation (e.g., 'RECT', 'POLYGON'). See GET endpoint description for supported types."),
+            OpenApiParam(name = "segmentDefinition1", type = String::class, description = "Definition of the first segmentation. Format depends on 'segmentation1' type."),
+            OpenApiParam(name = "segmentation2", type = String::class, description = "Type of the second segmentation (e.g., 'TIME', 'MASK'). See GET endpoint description for supported types."),
+            OpenApiParam(name = "segmentDefinition2", type = String::class, description = "Definition of the second segmentation. Format depends on 'segmentation2' type.")
+        ],
+        responses = [
+            OpenApiResponse(status = "302", description = "Redirects to the path representing the intersection or reordering of the segmentations."),
+            OpenApiResponse(status = "400", description = "Invalid input: Unknown media type or invalid segmentation parameters."),
+            OpenApiResponse(status = "404", description = "Not Found: Object or canonical ID not found.")
+        ]
+    )
     /**
      * /{objectId}/segment/{segmentation}/{segmentDefinition}/and/{nextSegmentation}/{nextSegmentDefinition}
      */
@@ -241,6 +290,26 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         }
     }
 
+    @OpenApi(
+        path = "/{objectId}/c/{segmentId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}",
+        methods = [HttpMethod.GET],
+        summary = "Calculates the union of two segmentations and redirects.",
+        description = "Redirects to a path representing the union of two specified segmentations of an object or a cached segment. The path may also omit the `/c/{segmentId}` part (e.g., `/{objectId}/segment/{segmentation1}/{segmentDefinition1}/or/{segmentation2}/{segmentDefinition2}`). Supported segmentation types are listed in the GET endpoint description.",
+        tags = ["Object Segmentation"],
+        pathParams = [
+            OpenApiParam(name = "objectId", type = String::class, description = "The ID of the base object."),
+            OpenApiParam(name = "segmentId", type = String::class, description = "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'."),
+            OpenApiParam(name = "segmentation1", type = String::class, description = "Type of the first segmentation (e.g., 'RECT', 'POLYGON'). See GET endpoint description for supported types."),
+            OpenApiParam(name = "segmentDefinition1", type = String::class, description = "Definition of the first segmentation. Format depends on 'segmentation1' type."),
+            OpenApiParam(name = "segmentation2", type = String::class, description = "Type of the second segmentation (e.g., 'TIME', 'MASK'). See GET endpoint description for supported types."),
+            OpenApiParam(name = "segmentDefinition2", type = String::class, description = "Definition of the second segmentation. Format depends on 'segmentation2' type.")
+        ],
+        responses = [
+            OpenApiResponse(status = "302", description = "Redirects to the path representing the union of the segmentations."),
+            OpenApiResponse(status = "400", description = "Invalid input: Unknown media type, invalid segmentation parameters, or union not supported/empty."),
+            OpenApiResponse(status = "404", description = "Not Found: Object or canonical ID not found.")
+        ]
+    )
     /**
      * /{objectId}/segment/{segmentation}/{segmentDefinition}/or/{nextSegmentation}/{nextSegmentDefinition}"
      */

@@ -1,10 +1,24 @@
 package org.megras.api.rest.handlers
 
 import io.javalin.http.Context
+import io.javalin.openapi.HttpMethod
+import io.javalin.openapi.OpenApi
+import io.javalin.openapi.OpenApiContent
+import io.javalin.openapi.OpenApiResponse
 import org.megras.api.rest.GetRequestHandler
 
 class FileUploadPageHandler : GetRequestHandler {
 
+    @OpenApi(
+        path = "/fileupload",
+        methods = [HttpMethod.GET],
+        summary = "Serves an HTML page for uploading files.",
+        description = "Provides a user interface to select and upload files to the server. After successful upload via the form on this page (which posts to '/add/file'), the client-side script attempts to redirect to the 'about' page of the first uploaded file.",
+        tags = ["User Interface"],
+        responses = [
+            OpenApiResponse(status = "200", description = "Successfully serves the HTML file upload page.", content = [OpenApiContent(type = "text/html")])
+        ]
+    )
     override fun get(ctx: Context) {
         val htmlContent = """
             <!DOCTYPE html>

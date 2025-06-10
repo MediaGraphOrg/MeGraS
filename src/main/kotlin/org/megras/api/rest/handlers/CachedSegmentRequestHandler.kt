@@ -1,6 +1,8 @@
 package org.megras.api.rest.handlers
 
 import io.javalin.http.Context
+import io.javalin.openapi.OpenApi
+import io.javalin.openapi.OpenApiResponse
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
@@ -12,6 +14,16 @@ import org.megras.graphstore.QuadSet
 
 class CachedSegmentRequestHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
+    @OpenApi(
+        summary = "Get a cached segment by its ID",
+        path = "/{objectId}/c/{segmentId}",
+        tags = ["Segmentation"],
+        description = "Returns the cached segment for the given object ID and segment ID.",
+        responses = [
+            OpenApiResponse("200", description = "Cached segment data"),
+            OpenApiResponse("404", description = "Segment not found")
+        ]
+    )
     // /{objectId}/c/{segmentId}
     override fun get(ctx: Context) {
 

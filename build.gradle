@@ -192,6 +192,14 @@ sourceSets {
     }
 }
 
+tasks {
+    processResources {
+        from("$rootDir/GETTING_STARTED.md") {
+            into("")
+        }
+    }
+}
+
 javafx {
     version = "19"
     modules = [ 'javafx.graphics' ]

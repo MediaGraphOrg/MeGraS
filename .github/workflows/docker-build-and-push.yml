@@ -3,10 +3,10 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch: # Add this line to enable manual triggering
+  release:
+    tags:
+      - 'v*.*.*'
+    types: [published]
 
 jobs:
   build:
@@ -15,6 +15,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -30,4 +34,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: floruosch/megras:latest
+          tags: floruosch/megras:latest,floruosch/megras:${{ env.VERSION }}

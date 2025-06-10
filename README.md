@@ -14,7 +14,7 @@ MeGraS uses Gradle as a build system. To build the application, simply run `./gr
 ### Using a Docker Image
 MeGraS is also available as a Docker image. You can pull and run the latest version from Docker Hub using the following command:
 ````bash
-docker run -p 8080:8080 -v ./assets:/assets -it floruosch/megras:latest
+docker run --name megras -p 8080:8080 -v ./assets:/assets -it floruosch/megras:latest
 ````
 TODO: move to a more specific Docker image repository.
 

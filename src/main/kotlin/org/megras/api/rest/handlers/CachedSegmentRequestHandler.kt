@@ -17,7 +17,7 @@ class CachedSegmentRequestHandler(private val quads: QuadSet, private val object
     @OpenApi(
         summary = "Get a cached segment by its ID",
         path = "/{objectId}/c/{segmentId}",
-        tags = ["Segmentation"],
+        tags = ["Object Segmentation"],
         description = "Returns the cached segment for the given object ID and segment ID.",
         responses = [
             OpenApiResponse("200", description = "Cached segment data"),

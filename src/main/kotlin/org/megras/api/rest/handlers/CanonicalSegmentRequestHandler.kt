@@ -35,7 +35,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         methods = [HttpMethod.GET],
         summary = "Retrieves a specific segment of an object, potentially creating it or serving from cache. Handles chained segmentations.",
         description = "This endpoint serves a segment of an object. It can handle simple segments (e.g., `/{objectId}/segment/{segmentation}/{segmentDefinition}`), segments of cached segments (e.g., `/{objectId}/c/{segmentId}/segment/...`), and chained segmentations (e.g., `.../segment/{nextSegmentation}/{nextSegmentDefinition}`). The `{tail}` can be used for further chained operations. The specific path matched determines which parameters are active.\n\nSupported segmentation types for `segmentation` and `nextSegmentation` include: RECT, POLYGON, BEZIER, BSPLINE, PATH, MASK, HILBERT, CHANNEL, COLOR, FREQUENCY, TIME, CHARACTER, PAGE, WIDTH, HEIGHT, CUT, ROTOSCOPE, MESH.",
-        tags = ["Segmentation"],
+        tags = ["Object Segmentation"],
         pathParams = [
             OpenApiParam(name = "objectId", type = String::class, description = "The ID of the base object."),
             OpenApiParam(name = "segmentId", type = String::class, description = "The ID of a cached parent segment. Optional, used if the path includes '/c/{segmentId}/'."),

@@ -4,14 +4,41 @@ Welcome to MeGraS! This guide will help you get started with using the REST API 
 
 ---
 
-## REST API
+## Interacting and Accessing the Graph
 
-MeGraS provides a RESTful API for interacting with the graph.
+### Using the CLI
 
-### Endpoints
+MeGraS has a built-in command line interface for simple data management tasks.
+It enables adding media files as graph nodes and bulk-importing graph triples.
+Type `help` to see the available commands and their parameters.
 
+#### Example CLI Commands
+To add a media file to the graph, use the `add` command:
+````bash
+add -f example.jpeg
+````
+
+To add the contents of a folder, use the `add` command with the `-r` flag:
+````bash
+add -r -f /examples
+````
+
+To load a TSV file containing graph triples, use the `import` command:
+````bash
+import -f triples.tsv
+````
+It provides the following optional flags:
+- `-b` to specify the batch size for importing triples (default is 100)
+- `-s` to skip the specified number of lines in the file (for TSV files with headers)
+
+### Using the REST API
+
+MeGraS offers a RESTful API for graph manipulation and querying.
+The OpenAPI specification of all available endpoints can be found in the docs directory or [here](/openapi.json).
+
+Important Endpoints
 - **Swagger UI**: [/swagger-ui](/swagger-ui)
 - **SPARQL UI**: [/sparqlui](/sparqlui)
-- **Intearcting with the graph**:
+- **Interacting with the graph**:
 	- **Uploading files**: [/fileupload](/fileupload)
 	- **Adding triples**: [/addtriples](/addtriples)

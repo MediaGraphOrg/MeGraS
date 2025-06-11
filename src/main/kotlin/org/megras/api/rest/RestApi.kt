@@ -43,6 +43,7 @@ object RestApi {
         val fileUploadPageHandler = FileUploadPageHandler()
         val addTriplesPageHandler = AddTriplesPageHandler()
         val predicateInformationHandler = PredicateInformationHandler()
+        val segmenterUiHandler = SegmenterUiHandler()
 
 
         javalin = Javalin.create {
@@ -121,6 +122,7 @@ object RestApi {
                 get("/addtriples", addTriplesPageHandler::get)
                 get("/predicateinformation", predicateInformationHandler::get)
                 get("/predicateinformation/<predicateUri>", predicateInformationHandler::get)
+                get("/segmenterui", segmenterUiHandler::get)
             }
 
             it.staticFiles.add{ static ->

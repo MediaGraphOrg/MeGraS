@@ -1,0 +1,147 @@
+[
+  {
+    "title": "Raw ID",
+    "uri": "http://megras.org/schema#rawId",
+    "description": "The unique identifier for the raw, unprocessed version of a media object."
+  },
+  {
+    "title": "Media Type",
+    "uri": "http://megras.org/schema#mediaType",
+    "description": "The general type of the media (e.g., image, video, text)."
+  },
+  {
+    "title": "Raw MIME Type",
+    "uri": "http://megras.org/schema#rawMimeType",
+    "description": "The specific MIME type of the raw media data (e.g., 'image/jpeg')."
+  },
+  {
+    "title": "Canonical ID",
+    "uri": "http://megras.org/schema#canonicalId",
+    "description": "The identifier for the canonical, standardized representation of a media object."
+  },
+  {
+    "title": "Canonical MIME Type",
+    "uri": "http://megras.org/schema#canonicalMimeType",
+    "description": "The MIME type of the canonical representation."
+  },
+  {
+    "title": "File Name",
+    "uri": "http://megras.org/schema#fileName",
+    "description": "The original file name of the media object."
+  },
+  {
+    "title": "Bounds",
+    "uri": "http://megras.org/schema#bounds",
+    "description": "The spatial or temporal boundary of the entire media object."
+  },
+  {
+    "title": "Segment Of",
+    "uri": "http://megras.org/schema#segmentOf",
+    "description": "Links a segment to the larger media object it belongs to."
+  },
+  {
+    "title": "Segment Type",
+    "uri": "http://megras.org/schema#segmentType",
+    "description": "Specifies the method or type of segmentation (e.g., 'polygon', 'bbox')."
+  },
+  {
+    "title": "Segment Definition",
+    "uri": "http://megras.org/schema#segmentDefinition",
+    "description": "Contains the actual data defining the segment (e.g., coordinates, timecodes)."
+  },
+  {
+    "title": "Segment Bounds",
+    "uri": "http://megras.org/schema#segmentBounds",
+    "description": "The spatial or temporal boundary of a specific segment."
+  },
+  {
+    "title": "Query Distance",
+    "uri": "http://megras.org/schema#queryDistance",
+    "description": "Represents the calculated distance or similarity score of an item to a query, often used in search results."
+  },
+  {
+    "title": "Preview ID",
+    "uri": "http://megras.org/schema#previewId",
+    "description": "The identifier for a preview version (e.g., thumbnail) of a media object."
+  },
+  {
+    "title": "Same URI Prefix",
+    "uri": "http://megras.org/implicit/samePrefix",
+    "description": "Relates resources that share the same base URI up to the last path segment."
+  },
+  {
+    "title": "Spatially Contains",
+    "uri": "http://megras.org/spatial/contains",
+    "description": "Asserts that the subject spatial segment geometrically contains the object spatial segment."
+  },
+  {
+    "title": "Spatially Within",
+    "uri": "http://megras.org/spatial/within",
+    "description": "Asserts that the subject spatial segment is geometrically within the object spatial segment."
+  },
+  {
+    "title": "Spatially Intersects",
+    "uri": "http://megras.org/spatial/intersects",
+    "description": "Asserts that the subject and object spatial segments geometrically intersect."
+  },
+  {
+    "title": "Spatially Overlaps",
+    "uri": "http://megras.org/spatial/overlaps",
+    "description": "Asserts that the subject and object spatial segments geometrically overlap (intersect but one does not contain the other)."
+  },
+  {
+    "title": "Spatially Equals",
+    "uri": "http://megras.org/spatial/equals",
+    "description": "Asserts that the subject and object spatial segments are geometrically identical."
+  },
+  {
+    "title": "Spatially Covers",
+    "uri": "http://megras.org/spatial/covers",
+    "description": "Asserts that the subject spatial segment geometrically covers the object spatial segment (every point of the object is a point of the subject, and their interiors intersect)."
+  },
+  {
+	"title": "Spatially Beside",
+    "uri": "http://megras.org/spatial/beside",
+    "description": "."
+  },
+  {
+    "name": "Average Color",
+    "description": "Computes the average color of an image.",
+    "predicate": "http://megras.org/derived/averageColor"
+  },
+  {
+    "name": "CLIP Embedding",
+    "description": "Generates a CLIP embedding for an image.",
+    "predicate": "http://megras.org/derived/clipEmbedding"
+  },
+  {
+    "name": "OCR",
+    "description": "Performs Optical Character Recognition on an image or document.",
+    "predicate": "http://megras.org/derived/ocr"
+  },
+  {
+    "name": "CLIP 2-Nearest Neighbors",
+    "description": "Finds the 2-nearest neighbors of an image based on CLIP embeddings.",
+    "predicate": "http://megras.org/implicit/clip2nn"
+  },
+  {
+    "name": "CLIP 3-Nearest Neighbors",
+    "description": "Finds the 3-nearest neighbors of an image based on CLIP embeddings.",
+    "predicate": "http://megras.org/implicit/clip3nn"
+  },
+  {
+    "name": "CLIP 4-Nearest Neighbors",
+    "description": "Finds the 4-nearest neighbors of an image based on CLIP embeddings.",
+    "predicate": "http://megras.org/implicit/clip4nn"
+  },
+  {
+    "name": "CLIP Near Duplicate",
+    "description": "Identifies near-duplicate images based on CLIP embeddings and a cosine distance threshold.",
+    "predicate": "http://megras.org/implicit/clipNearDuplicate"
+  },
+  {
+    "name": "Segment Sibling",
+    "description": "Identifies sibling segments of a media object.",
+    "predicate": "http://megras.org/implicit/segmentSibling"
+  }
+]

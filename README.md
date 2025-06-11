@@ -92,6 +92,19 @@ CREATE DATABASE megras WITH OWNER megras;
 GRANT ALL PRIVILEGES ON DATABASE megras TO megras;
 ````
 
+To connect the MeGraS docker to the PostgreSQL database, you can use the following commands, to create a dedicated Docker network for the two containers and to connect them:
+````bash
+docker network create megras
+docker network connect megras timescaledb
+docker network connect megras megras
+docker exec timescaledb hostname
+````
+
+Add the result of the hostname query of the database container to the config.json and copy it to the MeGraS container:
+````bash
+docker cp config.json megras:\
+````
+
 
 # Getting Started
 Once MeGraS is up and running, it can be accessed via HTTP on the configured port.

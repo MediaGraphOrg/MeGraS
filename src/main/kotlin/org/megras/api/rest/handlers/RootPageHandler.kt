@@ -8,7 +8,7 @@ import io.javalin.openapi.HttpMethod
 import io.javalin.openapi.OpenApi
 import io.javalin.openapi.OpenApiContent
 import io.javalin.openapi.OpenApiResponse
-import java.io.File
+import java.io.InputStreamReader
 
 class RootPageHandler {
 
@@ -25,12 +25,11 @@ class RootPageHandler {
     )
     fun get(ctx: Context) {
         try {
-            val projectDir = System.getProperty("user.dir")
-            val readmeFile = File(projectDir, "GETTING_STARTED.md")
+            val resourcePath = "/GETTING_STARTED.md"
+            val inputStream = RootPageHandler::class.java.getResourceAsStream(resourcePath)
 
-            if (readmeFile.exists() && readmeFile.isFile) {
-                val markdownContent = readmeFile.readText(Charsets.UTF_8)
-
+            if (inputStream != null) {
+                val markdownContent = InputStreamReader(inputStream, Charsets.UTF_8).use { it.readText() }
                 // Initialize Flexmark parser and renderer
                 val options = MutableDataSet()
                 val parser = Parser.builder(options).build()

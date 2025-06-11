@@ -40,16 +40,15 @@ class PredicateInformationHandler : GetRequestHandler {
             // Only attempt to scroll if predicateUriToJumpTo is not blank.
             if (predicateUriToJumpTo.isNotBlank()) {
                 // Use manual escaping for JS string literal as per current code.
-                val jsEscapedPredicateUri = predicateUriToJumpTo.replace("\"", "\\\"").let { "\"$it\"" }
-                appendLine("        const targetIdString = ${jsEscapedPredicateUri};")
+                appendLine("        const targetIdString = \"$predicateUriToJumpTo\";")
                 appendLine("        const element = document.getElementById(targetIdString);")
                 appendLine("        if (element) {")
-                appendLine("          element.scrollIntoView({ behavior: 'smooth', block: 'start' });")
+                appendLine("          element.scrollIntoView();")
                 appendLine("        } else {")
                 appendLine("          console.warn('Predicate section with ID \"' + targetIdString + '\" not found for scrolling.');")
                 appendLine("        }")
             } else {
-                appendLine("        // No specific predicate URI provided or it is blank, starting at the top of the page.");
+                appendLine("        // No specific predicate URI provided or it is blank, starting at the top of the page.")
             }
             appendLine("      });")
             appendLine("    </script>")

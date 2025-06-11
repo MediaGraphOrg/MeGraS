@@ -38,7 +38,10 @@ The OpenAPI specification of all available endpoints can be found in the docs di
 
 Important Endpoints
 - **Swagger UI**: [/swagger-ui](/swagger-ui)
+- **List of Predicates**: [/predicateinformation](/predicateinformation)
 - **SPARQL UI**: [/sparqlui](/sparqlui)
+  - Set the SPARQL Endpoint to `http://<host>:<port>/query/sparql`
+  - SPARQL examples are available from `https://github.com/floruo/MeGraS-SPARQL-Queries`
 - **Interacting with the graph**:
 	- **Uploading files**: [/fileupload](/fileupload)
 	- **Adding triples**: [/addtriples](/addtriples)

@@ -120,6 +120,7 @@ object RestApi {
                 get("/fileupload", fileUploadPageHandler::get)
                 get("/addtriples", addTriplesPageHandler::get)
                 get("/predicateinformation", predicateInformationHandler::get)
+                get("/predicateinformation/<predicateUri>", predicateInformationHandler::get)
             }
 
             it.staticFiles.add{ static ->

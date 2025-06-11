@@ -208,6 +208,9 @@ tasks {
         from("$rootDir/GETTING_STARTED.md") {
             into("")
         }
+        from("$rootDir/docs/predicates.json") {
+            into("")
+        }
     }
 }
 

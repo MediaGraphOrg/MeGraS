@@ -105,43 +105,43 @@
     "description": "."
   },
   {
-    "name": "Average Color",
+    "title": "Average Color",
     "description": "Computes the average color of an image.",
-    "predicate": "http://megras.org/derived/averageColor"
+    "uri": "http://megras.org/derived/averageColor"
   },
   {
-    "name": "CLIP Embedding",
+    "title": "CLIP Embedding",
     "description": "Generates a CLIP embedding for an image.",
-    "predicate": "http://megras.org/derived/clipEmbedding"
+    "uri": "http://megras.org/derived/clipEmbedding"
   },
   {
-    "name": "OCR",
+    "title": "OCR",
     "description": "Performs Optical Character Recognition on an image or document.",
-    "predicate": "http://megras.org/derived/ocr"
+    "uri": "http://megras.org/derived/ocr"
   },
   {
-    "name": "CLIP 2-Nearest Neighbors",
+    "title": "CLIP 2-Nearest Neighbors",
     "description": "Finds the 2-nearest neighbors of an image based on CLIP embeddings.",
-    "predicate": "http://megras.org/implicit/clip2nn"
+    "uri": "http://megras.org/implicit/clip2nn"
   },
   {
-    "name": "CLIP 3-Nearest Neighbors",
+    "title": "CLIP 3-Nearest Neighbors",
     "description": "Finds the 3-nearest neighbors of an image based on CLIP embeddings.",
-    "predicate": "http://megras.org/implicit/clip3nn"
+    "uri": "http://megras.org/implicit/clip3nn"
   },
   {
-    "name": "CLIP 4-Nearest Neighbors",
+    "title": "CLIP 4-Nearest Neighbors",
     "description": "Finds the 4-nearest neighbors of an image based on CLIP embeddings.",
-    "predicate": "http://megras.org/implicit/clip4nn"
+    "uri": "http://megras.org/implicit/clip4nn"
   },
   {
-    "name": "CLIP Near Duplicate",
+    "title": "CLIP Near Duplicate",
     "description": "Identifies near-duplicate images based on CLIP embeddings and a cosine distance threshold.",
-    "predicate": "http://megras.org/implicit/clipNearDuplicate"
+    "uri": "http://megras.org/implicit/clipNearDuplicate"
   },
   {
-    "name": "Segment Sibling",
+    "title": "Segment Sibling",
     "description": "Identifies sibling segments of a media object.",
-    "predicate": "http://megras.org/implicit/segmentSibling"
+    "uri": "http://megras.org/implicit/segmentSibling"
   }
 ]

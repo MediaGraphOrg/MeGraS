@@ -9,14 +9,19 @@ import de.javagl.obj.ObjReader
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.megras.data.fs.FileSystemObjectStore
+import org.megras.data.fs.ObjectStoreResult
 import org.megras.data.fs.StoredObjectDescriptor
+import org.megras.data.fs.StoredObjectId
 import org.megras.data.fs.file.PseudoFile
+import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.Quad
 import org.megras.data.graph.StringValue
+import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.QuadSet
 import org.megras.id.IdUtil
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
@@ -28,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
 
 
-object AddFileUtil {
+object FileUtil {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
@@ -291,5 +296,29 @@ object AddFileUtil {
 
     fun ptToMm(pt: Float): Float {
         return pt * 25.4f / 72
+    }
+
+    fun getOsId(subject: URIValue, quadSet: QuadSet): StoredObjectId? {
+        if (subject !is LocalQuadValue) {
+            return null
+        }
+
+        val canonicalId = quadSet.filter(
+            setOf(subject),
+            setOf(MeGraS.CANONICAL_ID.uri),
+            null
+        ).firstOrNull()?.`object` as? StringValue ?: return null
+
+        return StoredObjectId.of(canonicalId.value)
+    }
+
+    fun getOsr(subject: URIValue, quadSet: QuadSet, objectStore: FileSystemObjectStore): ObjectStoreResult? {
+        val osId = getOsId(subject, quadSet) ?: return null
+        return objectStore.get(osId)
+    }
+
+    fun getPath(subject: URIValue, quadSet: QuadSet, objectStore: FileSystemObjectStore): String? {
+        val osId = getOsId(subject, quadSet) ?: return null
+        return objectStore.storageFile(osId).absolutePath
     }
 }

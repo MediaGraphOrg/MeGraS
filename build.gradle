@@ -6,6 +6,7 @@ plugins {
     id 'org.jetbrains.kotlin.kapt' version '1.8.10'
     id 'antlr'
     id 'org.openjfx.javafxplugin' version '0.0.14'
+    id 'com.google.protobuf' version '0.9.4'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
@@ -46,8 +47,6 @@ dependencies {
     def batikVersion = '1.17'
     def twelvemonkeysVersion = '3.11.0'
     def cottontaildbDriverVerion='0.16.5'
-    def grpcVersion = '1.60.0'
-    def protobufVersion = '3.25.1'
     def exposedVersion = '0.40.1'
 //    def antlrVersion = '4.13.0'
     def jenaVersion = '5.0.0'
@@ -146,6 +145,7 @@ dependencies {
     implementation group: 'org.jetbrains.exposed', name: 'exposed-dao', version: exposedVersion
     implementation group: 'org.jetbrains.exposed', name: 'exposed-jdbc', version: exposedVersion
     implementation group: 'org.postgresql', name: 'postgresql', version: '42.7.3'
+    implementation group: 'com.pgvector', name: 'pgvector', version: '0.1.6'
 
 //    /* Antlr4 */
 //    antlr group: 'org.antlr', name: 'antlr4', version: antlrVersion
@@ -158,10 +158,57 @@ dependencies {
     /* LibSVM */
     implementation group: 'tw.edu.ntu.csie', name: 'libsvm', version: '3.31'
 
-
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+
+    implementation group: 'org.jetbrains.kotlinx', name: 'kotlinx-coroutines-core', version: '1.8.0'
+
+    implementation 'io.grpc:grpc-netty-shaded:1.64.0'
+    implementation 'io.grpc:grpc-protobuf:1.64.0'
+    implementation 'io.grpc:grpc-stub:1.64.0'
+    implementation 'io.grpc:grpc-kotlin-stub:1.4.3'
+    implementation 'com.google.protobuf:protobuf-kotlin:3.25.3'
+
+    implementation 'com.vladsch.flexmark:flexmark-all:0.64.8'
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.25.3'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.64.0'
+        }
+        grpckt {
+            artifact = 'io.grpc:protoc-gen-grpc-kotlin:1.4.3:jdk8@jar'
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.plugins {
+                grpc { }
+                grpckt { }
+            }
+        }
+    }
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDirs 'python_grpc_server/protos'
+        }
+    }
+}
+
+tasks {
+    processResources {
+        from("$rootDir/GETTING_STARTED.md") {
+            into("")
+        }
+    }
 }
 
 javafx {

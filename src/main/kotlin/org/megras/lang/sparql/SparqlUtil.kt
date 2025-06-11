@@ -61,7 +61,8 @@ object SparqlUtil {
         is DoubleValue -> model.createTypedLiteral(value.value)
         is LongValue -> model.createTypedLiteral(value.value)
         is StringValue -> model.createTypedLiteral(value.value)
-        is VectorValue -> TODO()
+        is VectorValue -> model.createTypedLiteral(value.toString())
+        is TemporalValue -> model.createTypedLiteral(value.toString())
     }.asNode()
 
 }

@@ -34,9 +34,9 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
         }
 
         return BasicQuadSet(quads.filter {
-            subjects?.contains(it.subject) ?: true &&
-                    predicates?.contains(it.predicate) ?: true &&
-                    objects?.contains(it.`object`) ?: true
+            subjects?.contains(it.subject) != false &&
+                    predicates?.contains(it.predicate) != false &&
+                    objects?.contains(it.`object`) != false
 
         }.toSet())
     }

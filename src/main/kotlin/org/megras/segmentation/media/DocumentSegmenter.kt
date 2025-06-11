@@ -9,7 +9,7 @@ import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
-import org.megras.util.AddFileUtil
+import org.megras.util.FileUtil
 import org.slf4j.LoggerFactory
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -42,8 +42,8 @@ object DocumentSegmenter {
             val page = pdf.getPage(0)
 
             SegmentationResult(out.toByteArray(),
-                Bounds().addX(0, AddFileUtil.ptToMm(page.mediaBox.width))
-                    .addY(0, AddFileUtil.ptToMm(page.mediaBox.height)).addT(0, pdf.numberOfPages))
+                Bounds().addX(0, FileUtil.ptToMm(page.mediaBox.width))
+                    .addY(0, FileUtil.ptToMm(page.mediaBox.height)).addT(0, pdf.numberOfPages))
         } catch (e: Exception) {
             logger.error("Error while segmenting PDF: ${e.localizedMessage}")
             null

@@ -2,6 +2,7 @@ package org.megras.api.rest
 
 import io.javalin.Javalin
 import io.javalin.apibuilder.ApiBuilder.*
+import io.javalin.http.staticfiles.Location
 import io.javalin.openapi.plugin.OpenApiPlugin
 import io.javalin.openapi.plugin.swagger.SwaggerPlugin
 import org.megras.api.rest.handlers.*
@@ -13,7 +14,7 @@ object RestApi {
 
     private var javalin: Javalin? = null
 
-    fun init(config: Config, objectStore: FileSystemObjectStore, quadSet: MutableQuadSet) {
+    fun init(config: Config, objectStore: FileSystemObjectStore, quadSet: MutableQuadSet, slQuadSet: MutableQuadSet) {
 
         if (javalin != null) {
             stop() //stop instance in case there already is one. should not happen, just in case
@@ -23,7 +24,7 @@ object RestApi {
         val canonicalObjectRequestHandler = CanonicalObjectRequestHandler(quadSet, objectStore)
         val cachedSegmentRequestHandler = CachedSegmentRequestHandler(quadSet, objectStore)
         val canonicalSegmentRequestHandler = CanonicalSegmentRequestHandler(quadSet, objectStore)
-        val aboutObjectRequestHandler = AboutObjectRequestHandler(quadSet, objectStore)
+        val aboutObjectRequestHandler = AboutObjectRequestHandler(slQuadSet, objectStore)
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val addQuadRequestHandler = AddQuadRequestHandler(quadSet)
@@ -35,8 +36,12 @@ object RestApi {
         val knnQueryHandler = KnnQueryHandler(quadSet)
         val pathQueryHandler = PathQueryHandler(quadSet)
         val sparqlQueryHandler = SparqlQueryHandler(quadSet)
+        val sparqlUiHandler = SparqlUiHandler()
         val deleteObjectRequestHandler = DeleteObjectRequestHandler(quadSet, objectStore)
         val relevanceFeedbackQueryHandler = RelevanceFeedbackQueryHandler(quadSet)
+        val rootPageHandler = RootPageHandler()
+        val fileUploadPageHandler = FileUploadPageHandler()
+        val addTriplesPageHandler = AddTriplesPageHandler()
 
 
         javalin = Javalin.create {
@@ -56,6 +61,7 @@ object RestApi {
             it.showJavalinBanner = false
 
             it.router.apiBuilder {
+                get("/", rootPageHandler::get)
                 get("/raw/{objectId}", rawObjectRequestHandler::get)
                 get("/<objectId>/about", aboutObjectRequestHandler::get)
                 get("/<objectId>/preview", objectPreviewRequestHandler::get)
@@ -107,8 +113,18 @@ object RestApi {
                 post("/query/knn", knnQueryHandler::post)
                 post("/query/path", pathQueryHandler::post)
                 get("/query/sparql", sparqlQueryHandler::get)
+                get("/sparqlui", sparqlUiHandler::get)
                 delete("/<objectId>", deleteObjectRequestHandler::delete)
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
+                get("/fileupload", fileUploadPageHandler::get)
+                get("/addtriples", addTriplesPageHandler::get)
+            }
+
+            it.staticFiles.add{ static ->
+                static.directory = "static"
+                static.hostedPath = "/static"
+                static.location = Location.CLASSPATH
+                static.precompress = false
             }
 
             it.registerPlugin(

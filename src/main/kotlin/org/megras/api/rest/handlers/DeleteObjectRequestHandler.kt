@@ -13,12 +13,27 @@ import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.slf4j.LoggerFactory
+import io.javalin.openapi.*
 
 class DeleteObjectRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) :
     DeleteRequestHandler {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
+    @OpenApi(
+        path = "/{objectId}",
+        methods = [HttpMethod.DELETE],
+        summary = "Deletes an object and all its associated data.",
+        description = "Permanently deletes a specified object. This includes the object itself, all its segments, any associated metadata (quads in the graph store), and all related stored files (such as raw versions, canonical representations, and previews).",
+        tags = ["Object Management"],
+        pathParams = [
+            OpenApiParam(name = "objectId", type = String::class, description = "The ID of the object to be deleted.")
+        ],
+        responses = [
+            OpenApiResponse(status = "200", description = "Object and all associated data successfully deleted."),
+            OpenApiResponse(status = "404", description = "Object not found or specified ID is invalid.")
+        ]
+    )
     override fun delete(ctx: Context) {
 
         val objectId = ObjectId(ctx.pathParam("objectId"))

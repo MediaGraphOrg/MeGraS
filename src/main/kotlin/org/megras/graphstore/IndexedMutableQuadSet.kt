@@ -44,20 +44,23 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
         val pFilter : (Quad) -> Boolean = if (!pSet.isNullOrEmpty()) {{it.predicate in pSet }} else {{true}}
         val oFilter : (Quad) -> Boolean = if (!oSet.isNullOrEmpty()) {{it.`object` in oSet }} else {{true}}
 
+        val set = mutableSetOf<Quad>()
+
+        if (subjects.isNullOrEmpty() && objects.isNullOrEmpty()) {
+            if (predicates.isNullOrEmpty()) { //if subjects, predicates, and objects are null, do not filter
+                return quads
+            } else { //only filtering by predicates
+                (predicates ?: emptyList()).flatMapTo(set) {
+                    pIndex[it] ?: emptyList()
+                }
+                return BasicQuadSet(set)
+            }
+        }
 
         val minCount = min(sCount, oCount)
 
         if (minCount == Int.MAX_VALUE) {
             return BasicQuadSet()
-        }
-
-        val set = mutableSetOf<Quad>()
-
-        if (subjects.isNullOrEmpty() && objects.isNullOrEmpty()) { //only filtering by predicates
-            (predicates ?: emptyList()).flatMapTo(set){
-                pIndex[it] ?: emptyList()
-            }
-            return BasicQuadSet(set)
         }
 
         return if (sCount < oCount) {

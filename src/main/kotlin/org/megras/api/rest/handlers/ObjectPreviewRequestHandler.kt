@@ -4,6 +4,7 @@ import com.github.kokorin.jaffree.StreamType
 import com.github.kokorin.jaffree.ffmpeg.*
 import com.sksamuel.scrimage.ImmutableImage
 import io.javalin.http.Context
+import io.javalin.openapi.*
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.apache.commons.io.IOUtils
 import org.apache.pdfbox.pdmodel.PDDocument
@@ -24,13 +25,30 @@ import org.megras.graphstore.MutableQuadSet
 import org.megras.id.ObjectId
 import java.awt.Color
 import java.awt.image.BufferedImage
-import java.io.*
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.imageio.ImageIO
 
 
 class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
+    @OpenApi(
+        path = "/{objectId}/preview",
+        methods = [HttpMethod.GET],
+        summary = "Generates or retrieves a preview image for an object.",
+        description = "If a preview image (PNG) for the specified object already exists, it is served. Otherwise, a preview is generated based on the object's media type (e.g., text, image, video, audio, document), stored, and then served. All generated previews are in PNG format.",
+        tags = ["Object Information"],
+        pathParams = [
+            OpenApiParam(name = "objectId", type = String::class, description = "The ID of the object for which to generate or retrieve a preview.")
+        ],
+        responses = [
+            OpenApiResponse(status = "200", description = "Successfully serves the preview image in PNG format. The response is cached.", content = [OpenApiContent(type = "image/png")]),
+            OpenApiResponse(status = "404", description = "Object not found, or the canonical ID for the object could not be determined.")
+        ]
+    )
     override fun get(ctx: Context) {
 
         val objectId = ObjectId(ctx.pathParam("objectId"))

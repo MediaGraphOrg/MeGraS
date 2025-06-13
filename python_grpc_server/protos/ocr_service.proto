@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package org.megras.util.services;
+
+// OCRService defines the gRPC service for performing Optical Character Recognition.
+service OcrService {
+  // RecognizeText takes an image and returns the recognized text.
+  rpc RecognizeText (RecognizeTextRequest) returns (RecognizeTextResponse);
+}
+
+// RecognizeTextRequest contains the image data to be processed for OCR.
+message RecognizeTextRequest {
+  // The image data in bytes (e.g., PNG, JPEG format).
+  bytes image_data = 1;
+}
+
+// RecognizeTextResponse contains the text recognized from the image.
+message RecognizeTextResponse {
+  // The text string recognized from the input image.
+  string recognized_text = 1;
+}

@@ -42,6 +42,8 @@ object RestApi {
         val rootPageHandler = RootPageHandler()
         val fileUploadPageHandler = FileUploadPageHandler()
         val addTriplesPageHandler = AddTriplesPageHandler()
+        val predicateInformationHandler = PredicateInformationHandler()
+        val segmenterUiHandler = SegmenterUiHandler()
 
 
         javalin = Javalin.create {
@@ -118,6 +120,9 @@ object RestApi {
                 post("/query/relevancefeedback", relevanceFeedbackQueryHandler::post)
                 get("/fileupload", fileUploadPageHandler::get)
                 get("/addtriples", addTriplesPageHandler::get)
+                get("/predicateinformation", predicateInformationHandler::get)
+                get("/predicateinformation/<predicateUri>", predicateInformationHandler::get)
+                get("/segmenterui", segmenterUiHandler::get)
             }
 
             it.staticFiles.add{ static ->

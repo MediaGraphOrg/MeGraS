@@ -228,7 +228,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         relevant.sortedBy { it.subject.toString().length }.forEach {
             buf.append("<tr>")
             buf.append("<td>${it.subject.toHtml()}</td>")
-            buf.append("<td>${it.predicate.toHtml()}</td>")
+            buf.append("<td>${it.predicate.toPredHtml()}</td>")
             buf.append("<td>${it.`object`.toHtml()}</td>")
             buf.append("</tr>\n")
         }
@@ -241,7 +241,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             extended.sortedBy { it.subject.toString().length }.forEach {
                 buf.append("<tr>")
                 buf.append("<td>${it.subject.toHtml()}</td>")
-                buf.append("<td>${it.predicate.toHtml()}</td>")
+                buf.append("<td>${it.predicate.toPredHtml()}</td>")
                 buf.append("<td>${it.`object`.toHtml()}</td>")
                 buf.append("</tr>\n")
             }
@@ -285,6 +285,26 @@ private fun QuadValue.toHtml(): String {
                 toString()
             }
             "<span title='${toString()}'>$shortDisplay</span>"
+        }
+        else -> {
+            // For other types (StringValue, DoubleValue, etc.), just return string representation
+            toString()
+        }
+    }
+}
+
+// TODO: move this to a common place
+private fun QuadValue.toPredHtml(): String {
+    // if it is a URI, make it clickable
+    // if it is a literal, return the value
+    // if it is a vector, return the value as a string and add a tooltip with the full value
+    return when (this) {
+        is org.megras.data.graph.URIValue -> {
+            // Make URI values clickable by replacing angle brackets with HTML entities
+            // and wrapping them in an anchor tag
+            val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
+            val linkValue = value.toString().replace("#", "%23")
+            "<a href='/predicateinformation/$linkValue' target='_blank'>$displayValue</a>"
         }
         else -> {
             // For other types (StringValue, DoubleValue, etc.), just return string representation

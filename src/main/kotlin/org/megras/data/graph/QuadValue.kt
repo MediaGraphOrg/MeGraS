@@ -3,6 +3,9 @@ package org.megras.data.graph
 import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 sealed class QuadValue : Serializable {
 
@@ -310,5 +313,57 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
 
     override fun toString(): String {
         return vector.joinToString(separator = ", ", prefix = "[", postfix = "]^^LongVector")
+    }
+}
+
+data class TemporalValue(val originalString: String) : Comparable<TemporalValue>, QuadValue(), Serializable {
+    private val dateTime: LocalDateTime
+
+    val value: String
+        get() = dateTime.toString()
+
+    init {
+        val value = if (originalString.contains("^^")) {
+            originalString.substringBefore("^^").trim()
+        } else {
+            originalString
+        }
+        dateTime = parseDateTime(value)
+    }
+
+    private fun parseDateTime(value: String): LocalDateTime {
+        val formats = listOf(
+            DateTimeFormatter.ISO_DATE_TIME, // ISO-8601 format
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"), // Common database format
+            DateTimeFormatter.ISO_DATE // Date only
+        )
+
+        formats.forEach { formatter ->
+            try {
+                return LocalDateTime.parse(value, formatter)
+            } catch (e: DateTimeParseException) {
+                // Ignore and try the next format
+            }
+        }
+
+        // Try parsing as a Unix timestamp (milliseconds)
+        return try {
+            val instant = java.time.Instant.ofEpochMilli(value.toLong())
+            LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Unsupported date-time format: $value")
+        }
+    }
+
+    override fun toString(): String {
+        return dateTime.toString()
+    }
+
+    override fun compareTo(other: TemporalValue): Int {
+        return dateTime.compareTo(other.dateTime)
+    }
+
+    operator fun compareTo(other: LocalDateTime): Int {
+        return dateTime.compareTo(other)
     }
 }

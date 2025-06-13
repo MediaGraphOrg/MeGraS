@@ -132,6 +132,9 @@ abstract class AbstractDbStore : MutableQuadSet {
 
                 lookup?.first to lookup?.second
             }
+            is TemporalValue -> {
+                TODO("Not yet implemented")
+            }
         }
 
     }
@@ -247,6 +250,9 @@ abstract class AbstractDbStore : MutableQuadSet {
                 vectorValueIdCache.put(insert, quadValue)
 
                 insert
+            }
+            is TemporalValue -> {
+                TODO("Not yet implemented")
             }
         }
 
@@ -469,6 +475,9 @@ abstract class AbstractDbStore : MutableQuadSet {
                 is StringValue -> stringValues.add(it)
                 is URIValue -> uriValues.add(it)
                 is VectorValue -> vectorValues.add(it)
+                is TemporalValue -> {
+                    TODO("Not yet implemented")
+                }
             }
         }
 

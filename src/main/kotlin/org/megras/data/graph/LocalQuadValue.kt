@@ -1,8 +1,9 @@
 package org.megras.data.graph
 
 import java.io.Serializable
+import org.megras.data.model.Config
 
-open class LocalQuadValue(public override val uri: String, infix: String = "") : URIValue(null, if (infix.isNotEmpty()) "${infix.trim()}/${clean(uri)}" else clean(uri)), Serializable{
+open class LocalQuadValue(public override val uri: String, infix: String = "") : URIValue(LocalQuadValue.defaultPrefix, if (infix.isNotEmpty()) "${infix.trim()}/${clean(uri)}" else clean(uri)), Serializable{
 
     companion object {
 
@@ -15,8 +16,11 @@ open class LocalQuadValue(public override val uri: String, infix: String = "") :
             }
         }
 
+        private val config: Config
+            get() = Config()
+
         val defaultPrefix: String
-            get() = "http://localhost:8080/"
+            get() = "http://${config.hostName}:${config.httpPort}/"
     }
 
 

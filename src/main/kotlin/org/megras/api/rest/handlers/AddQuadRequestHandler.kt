@@ -16,7 +16,7 @@ class AddQuadRequestHandler(private val quads: MutableQuadSet) : PostRequestHand
     @OpenApi(
         summary = "Adds new quads to the graph.",
         path = "/add/quads",
-        tags = ["Addition"],
+        tags = ["Object Management"],
         operationId = OpenApiOperation.AUTO_GENERATE,
         methods = [HttpMethod.POST],
         requestBody = OpenApiRequestBody([OpenApiContent(ApiAddQuad::class)]),

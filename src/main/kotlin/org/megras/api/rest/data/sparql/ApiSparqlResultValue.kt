@@ -11,7 +11,8 @@ data class ApiSparqlResultValue(val value: String, val type: String, val datatyp
             is LongValue -> ApiSparqlResultValue("${value.value}", "literal") //TODO type
             is StringValue -> ApiSparqlResultValue("${value.value}", "literal") //TODO type
             is URIValue -> ApiSparqlResultValue(value.value, "uri")
-            is VectorValue -> TODO()
+            is VectorValue -> ApiSparqlResultValue(value.toString(), "literal") //TODO type
+            is TemporalValue -> ApiSparqlResultValue(value.toString(), "literal") //TODO type
         }
 
     }

@@ -10,7 +10,7 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.graphstore.MutableQuadSet
-import org.megras.util.AddFileUtil
+import org.megras.util.FileUtil
 
 class AddFileRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) :
     PostRequestHandler {
@@ -26,7 +26,7 @@ class AddFileRequestHandler(private val quads: MutableQuadSet, private val objec
         val mapper = jacksonObjectMapper()
 
         val ids = files.associate { uploadedFile ->
-            val mapEntry = uploadedFile.filename() to AddFileUtil.addFile(objectStore, quads, PseudoFile(uploadedFile))
+            val mapEntry = uploadedFile.filename() to FileUtil.addFile(objectStore, quads, PseudoFile(uploadedFile))
 
             //check for metadata
             val meta = ctx.formParam(uploadedFile.filename())

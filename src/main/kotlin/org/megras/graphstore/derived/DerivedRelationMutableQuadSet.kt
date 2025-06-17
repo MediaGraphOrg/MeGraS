@@ -96,16 +96,26 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         }
 
         val subs = (subjects ?: getAllBySubject().keys).filterIsInstance<URIValue>()
-        val derived = subs.flatMap { subject ->
-            val present = this.base.filterSubject(subject)
-            relevantHandlers.flatMap { handler ->
-                if (present.filterPredicate(handler.predicate).isNotEmpty()) {
-                    return@flatMap emptyList()
+        val derived = subs.chunked(100).flatMap { chunk ->
+            val existingQuads = this.base.filter(
+                chunk,
+                relevantHandlers.map { it.predicate },
+                null
+            )
+            val quadsBySubject = existingQuads.groupBy { it.subject }
+
+            chunk.flatMap { subject ->
+                val presentPredicates = quadsBySubject[subject]?.map { it.predicate }?.toSet() ?: emptySet()
+
+                relevantHandlers.flatMap { handler ->
+                    if (handler.predicate in presentPredicates) {
+                        return@flatMap emptyList()
+                    }
+                    if (!handler.canDerive(subject)) {
+                        return@flatMap emptyList()
+                    }
+                    handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
                 }
-                if (!handler.canDerive(subject)) {
-                    return@flatMap emptyList()
-                }
-                handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
             }
         }
 

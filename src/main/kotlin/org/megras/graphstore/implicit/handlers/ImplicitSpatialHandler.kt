@@ -10,6 +10,7 @@ import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.segmentation.SegmentationUtil
 import org.megras.segmentation.type.Segmentation
 import org.megras.util.Constants
+import java.util.concurrent.ConcurrentHashMap
 
 
 abstract class AbstractImplicitSpatialHandler(
@@ -25,20 +26,6 @@ abstract class AbstractImplicitSpatialHandler(
         this.quadSet = quadSet
     }
 
-    private fun getSegmentation(subject: URIValue): Segmentation? {
-        val segmentDefinition = quadSet.filter(
-            setOf(subject),
-            setOf(MeGraS.SEGMENT_DEFINITION.uri),
-            null)
-            .firstOrNull() ?: return null
-        val segmentType = quadSet.filter(
-            setOf(subject),
-            setOf(MeGraS.SEGMENT_TYPE.uri),
-            null)
-            .firstOrNull() ?: return null
-        return SegmentationUtil.parseSegmentation(segmentType.`object`.toString().removeSuffix("^^String"), segmentDefinition.`object`.toString().removeSuffix("^^String"))
-    }
-
     private fun getParent(subject: URIValue): URIValue? {
         return quadSet.filter(
             setOf(subject),
@@ -48,15 +35,36 @@ abstract class AbstractImplicitSpatialHandler(
     }
 
     private fun getSpatialCandidatesAndCaches(subject: URIValue): SpatialCandidatesResult? {
-        val segment = getSegmentation(subject) ?: return null
+        // 1. Get parent of the initial subject
         val parent = getParent(subject) ?: return null
-        //TODO: get actual top ancestor
-        //TODO: check behavior of segment of segment
-        val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject && parent == getParent(it.subject)}
-            .map { it.subject as URIValue }
+
+        // 2. Find all siblings sharing the same parent
+        val siblings = quadSet.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(parent))
+            .mapNotNull { it.subject as? URIValue }
             .toSet()
-        val segmentsCache = candidates.associateWith { getSegmentation(it) }
-        return SpatialCandidatesResult(segment, candidates, segmentsCache)
+
+        val candidates = siblings - subject
+
+        // 3. Bulk fetch segment information for all siblings
+        val segmentDefs = quadSet.filter(siblings, setOf(MeGraS.SEGMENT_DEFINITION.uri), null)
+            .associateBy({ it.subject as URIValue }, { it.`object` })
+        val segmentTypes = quadSet.filter(siblings, setOf(MeGraS.SEGMENT_TYPE.uri), null)
+            .associateBy({ it.subject as URIValue }, { it.`object` })
+
+        // 4. Build cache from bulk-fetched data
+        val segmentsCache = siblings.associateWith { s ->
+            val definition = segmentDefs[s]
+            val type = segmentTypes[s]
+            if (definition != null && type != null) {
+                SegmentationUtil.parseSegmentation(type.toString().removeSuffix("^^String"), definition.toString().removeSuffix("^^String"))
+            } else {
+                null
+            }
+        }
+
+        val subjectSegment = segmentsCache[subject]
+
+        return SpatialCandidatesResult(subjectSegment, candidates, segmentsCache)
     }
 
     private data class SpatialCandidatesResult(
@@ -75,28 +83,75 @@ abstract class AbstractImplicitSpatialHandler(
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
         val (segment, candidates, segmentsCache) = getSpatialCandidatesAndCaches(`object`) ?: return emptySet()
         return candidates.filter {
-            filter(segment, segmentsCache[it])
+            // Note: The filter arguments are swapped to check the relation from the candidate's perspective
+            filter(segmentsCache[it], segment)
         }.toSet()
     }
 
     override fun findAll(): QuadSet {
-        val subjects = quadSet.filter { it.subject is URIValue }
-            .map { it.subject as URIValue }
-            .toSet()
-        val segmentsCache = subjects.associateWith { getSegmentation(it) }
-        val pairs = mutableSetOf<Quad>()
-        for (subject1 in subjects) {
-            val segment1 = segmentsCache[subject1]
-            for (subject2 in subjects) {
-                if (subject1 != subject2) {
+        // 1. Bulk fetch all parent, segment definition, and type relations
+        val parentQuads = quadSet.filter(null, setOf(MeGraS.SEGMENT_OF.uri), null)
+        val segmentDefQuads = quadSet.filter(null, setOf(MeGraS.SEGMENT_DEFINITION.uri), null)
+        val segmentTypeQuads = quadSet.filter(null, setOf(MeGraS.SEGMENT_TYPE.uri), null)
+
+        // 2. Create in-memory maps (caches) from the fetched data
+        val parentMap = parentQuads.mapNotNull {
+            (it.subject as? URIValue)?.let { s -> s to (it.`object` as? URIValue) }
+        }.toMap()
+
+        val segmentDefs = segmentDefQuads.mapNotNull {
+            (it.subject as? URIValue)?.let { s -> s to it.`object` }
+        }.toMap()
+
+        val segmentTypes = segmentTypeQuads.mapNotNull {
+            (it.subject as? URIValue)?.let { s -> s to it.`object` }
+        }.toMap()
+
+        // 3. Group subjects by their parent, ignoring those without a valid parent
+        val subjectsByParent = parentMap.entries.groupBy(
+            { it.value }, // group by parent URI
+            { it.key } // add subject URI to the group
+        ).filterKeys { it != null }
+
+        val resultingQuads = ConcurrentHashMap.newKeySet<Quad>()
+
+        // 4. Process each group of siblings in parallel
+        subjectsByParent.values.parallelStream().forEach { siblings ->
+            if (siblings.size < 2) return@forEach
+
+            // 5. Build segmentation cache for the current group of siblings
+            val segmentsCache = siblings.associateWith { subject ->
+                val definition = segmentDefs[subject]
+                val type = segmentTypes[subject]
+                if (definition != null && type != null) {
+                    SegmentationUtil.parseSegmentation(type.toString().removeSuffix("^^String"), definition.toString().removeSuffix("^^String"))
+                } else {
+                    null
+                }
+            }
+
+            // 6. Compare pairs within the group (O(N_group^2))
+            val siblingList = siblings.toList()
+            for (i in siblingList.indices) {
+                for (j in (i + 1) until siblingList.size) {
+                    val subject1 = siblingList[i]
+                    val subject2 = siblingList[j]
+
+                    val segment1 = segmentsCache[subject1]
                     val segment2 = segmentsCache[subject2]
+
                     if (filter(segment1, segment2)) {
-                        pairs.add(Quad(subject1, predicate, subject2))
+                        resultingQuads.add(Quad(subject1, predicate, subject2))
+                    }
+                    // Check the inverse relation as well, as the filter might not be symmetric
+                    if (filter(segment2, segment1)) {
+                        resultingQuads.add(Quad(subject2, predicate, subject1))
                     }
                 }
             }
         }
-        return BasicQuadSet(pairs)
+
+        return BasicQuadSet(resultingQuads)
     }
 }
 

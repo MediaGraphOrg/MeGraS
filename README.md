@@ -87,7 +87,7 @@ docker exec -it timescaledb psql -U postgres
 
 Now, you can create the database and user with the following commands, setting the username and password to your desired values, according to your configuration:
 ````sql
-CREATE USER megras WITH PASSWORD megras;
+CREATE USER megras WITH LOGIN SUPERUSER PASSWORD 'megras';
 CREATE DATABASE megras WITH OWNER megras;
 GRANT ALL PRIVILEGES ON DATABASE megras TO megras;
 ````

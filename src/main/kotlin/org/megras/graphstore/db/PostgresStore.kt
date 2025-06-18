@@ -641,8 +641,64 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         TODO("Not yet implemented")
     }
 
+    private class VectorDistance(
+        private val column: Expression<*>,
+        private val target: VectorValue,
+        private val distance: Distance
+    ) : Op<Float>() {
+        override fun toQueryBuilder(queryBuilder: QueryBuilder) {
+            val op = when (distance) {
+                Distance.COSINE -> "<=>"
+                Distance.DOTPRODUCT -> "<#>"
+            }
+
+            // The PGvector class from the library handles the string representation.
+            val pgVector = when(target) {
+                is FloatVectorValue -> PGvector(target.vector)
+                // pgvector works with float vectors.
+                is DoubleVectorValue -> PGvector(target.vector.map { it.toFloat() }.toFloatArray())
+                is LongVectorValue -> PGvector(target.vector.map { it.toFloat() }.toFloatArray())
+                else -> {TODO("Unsupported vector type: ${target.type}") }
+            }
+
+            queryBuilder.append("(")
+            column.toQueryBuilder(queryBuilder)
+            queryBuilder.append(" $op ")
+            queryBuilder.append(stringLiteral(pgVector.toString()))
+            queryBuilder.append(")")
+        }
+    }
+
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean): QuadSet {
-        return BasicQuadSet() //FIXME currently unsupported
+        val predicateId = getQuadValueId(predicate)
+        if (predicateId.first == null || predicateId.second == null) {
+            return BasicQuadSet()
+        }
+
+        // We are querying, so we only care about existing tables.
+        val vectorTable = getVectorTable(`object`.type, `object`.length) ?: return BasicQuadSet()
+
+        val distanceExpression = VectorDistance(vectorTable.value, `object`, distance)
+
+        val quadIds = transaction {
+            QuadsTable.join(
+                vectorTable,
+                JoinType.INNER,
+                onColumn = QuadsTable.o,
+                otherColumn = vectorTable.id
+            ) {
+                (QuadsTable.oType eq (-vectorTable.typeId + VECTOR_ID_OFFSET))
+            }
+            .slice(QuadsTable.id)
+            .select {
+                (QuadsTable.pType eq predicateId.first!!) and (QuadsTable.p eq predicateId.second!!)
+            }
+            .orderBy(distanceExpression to if (invert) SortOrder.DESC else SortOrder.ASC)
+            .limit(count)
+            .map { it[QuadsTable.id] }
+        }
+
+        return getIds(quadIds)
     }
 
 

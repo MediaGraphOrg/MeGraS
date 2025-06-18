@@ -303,8 +303,8 @@ private fun QuadValue.toPredHtml(): String {
             // Make URI values clickable by replacing angle brackets with HTML entities
             // and wrapping them in an anchor tag
             val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
-            val linkValue = value.toString().replace("#", "%23")
-            "<a href='/predicateinformation/$linkValue' target='_blank'>$displayValue</a>"
+            val linkValue = value
+            "<a href='$linkValue' target='_blank'>$displayValue</a>"
         }
         else -> {
             // For other types (StringValue, DoubleValue, etc.), just return string representation

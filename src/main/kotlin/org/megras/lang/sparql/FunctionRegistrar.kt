@@ -5,6 +5,7 @@ import org.megras.data.fs.FileSystemObjectStore
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.functions.ClipTextFunction
 import org.megras.lang.sparql.functions.CosineSimFunction
+import org.megras.lang.sparql.functions.DayOfWeekFunction
 import org.megras.lang.sparql.functions.accessors.temporal.CreatedAccessor
 import org.megras.lang.sparql.functions.accessors.temporal.EndAccessor
 import org.megras.lang.sparql.functions.accessors.temporal.StartAccessor
@@ -17,6 +18,7 @@ class FunctionRegistrar {
             // * Custom SPARQL functions
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#CLIP_TEXT", ClipTextFunction::class.java)
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#COSINE_SIM", CosineSimFunction::class.java)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#DAYOFWEEK", DayOfWeekFunction::class.java)
 
             // * mm functions
             // ** Temporal accessors

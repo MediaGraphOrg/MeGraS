@@ -28,25 +28,35 @@ sealed class QuadValue : Serializable {
         }
 
         fun of(value: String) = when {
-            value.startsWith('<') && value.endsWith('>') -> if(value.startsWith("<${LocalQuadValue.defaultPrefix}")) {
-                LocalQuadValue(value.substringAfter(LocalQuadValue.defaultPrefix).substringBeforeLast('>'))
-            } else {
-                URIValue(value)
-            }
+            value.startsWith('<') && value.endsWith('>') ->
+                if (value.startsWith("<${LocalQuadValue.defaultPrefix}")) {
+                    LocalQuadValue(value.substringAfter(LocalQuadValue.defaultPrefix).substringBeforeLast('>'))
+                } else if (value.startsWith("<http://localhost/")) {
+                    LocalQuadValue(value.substringAfter("<http://localhost/").substringBeforeLast('>'))
+                } else {
+                    URIValue(value)
+                }
+
             value.endsWith("^^String") -> StringValue(value.substringBeforeLast("^^String"))
             value.endsWith("^^Long") -> LongValue(value.substringBeforeLast("^^Long").toLongOrNull() ?: 0L)
-            value.endsWith("^^Double") -> DoubleValue(value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN)
+            value.endsWith("^^Double") -> DoubleValue(
+                value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN
+            )
+
             value.startsWith("[") -> when { //vectors
                 value.endsWith("]") || value.endsWith("]^^DoubleVector") -> {
                     DoubleVectorValue.parse(value)
                 }
+
                 value.endsWith("]^^LongVector") -> LongVectorValue.parse(value)
                 value.endsWith("]^^FloatVector") -> FloatVectorValue.parse(value)
                 else -> StringValue(value) //not a valid vector after all
 
             }
+
             else -> StringValue(value)
         }
+
         fun of(value: Long) = LongValue(value)
         fun of(value: Double) = DoubleValue(value)
         fun of(prefix: String, uri: String) = URIValue(prefix, uri)
@@ -62,7 +72,7 @@ sealed class QuadValue : Serializable {
 
 }
 
-data class StringValue(val value: String): QuadValue(), Serializable {
+data class StringValue(val value: String) : QuadValue(), Serializable {
     override fun toString(): String = "$value^^String"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -77,7 +87,8 @@ data class StringValue(val value: String): QuadValue(), Serializable {
         return value.hashCode()
     }
 }
-data class LongValue(val value: Long): QuadValue(), Serializable {
+
+data class LongValue(val value: Long) : QuadValue(), Serializable {
     override fun toString(): String = "$value^^Long"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -92,7 +103,8 @@ data class LongValue(val value: Long): QuadValue(), Serializable {
         return value.hashCode()
     }
 }
-data class DoubleValue(val value: Double): QuadValue(), Serializable {
+
+data class DoubleValue(val value: Double) : QuadValue(), Serializable {
     override fun toString(): String = "$value^^Double"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -135,7 +147,7 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
                 val suffix = cleaned.substringAfter(host)
                 val prefix = cleaned.substringBefore(suffix)
                 prefix to suffix
-            }catch (e: URISyntaxException) {
+            } catch (e: URISyntaxException) {
                 "" to cleaned
             }
 
@@ -147,6 +159,7 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
 
     val value: String
         get() = "${prefix}${uri}"
+
     override fun toString() = "<$value>"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -168,20 +181,23 @@ abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Seria
 
     enum class Type(val byte: Byte) {
         Double(0) {
-            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.DoubleVector(length)
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> =
+                org.vitrivr.cottontail.core.types.Types.DoubleVector(length)
         },
         Long(1) {
-            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.LongVector(length)
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> =
+                org.vitrivr.cottontail.core.types.Types.LongVector(length)
         },
         Float(2) {
-            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.FloatVector(length)
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> =
+                org.vitrivr.cottontail.core.types.Types.FloatVector(length)
         }
         ;
 
         abstract fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*>
 
         companion object {
-            fun fromByte(byte: Byte) = when(byte) {
+            fun fromByte(byte: Byte) = when (byte) {
                 0.toByte() -> Double
                 1.toByte() -> Long
                 2.toByte() -> Float

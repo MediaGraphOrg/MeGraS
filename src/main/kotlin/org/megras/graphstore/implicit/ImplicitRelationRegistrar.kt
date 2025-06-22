@@ -29,9 +29,11 @@ import org.megras.graphstore.implicit.handlers.PrecedesSegmentHandler
 import org.megras.graphstore.implicit.handlers.SegmentSiblingHandler
 import org.megras.graphstore.implicit.handlers.StartsSegmentHandler
 import org.megras.graphstore.implicit.handlers.WithinSpatialHandler
+import org.megras.graphstore.implicit.handlers.ClipKnnRegexHandler
 
 class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<ImplicitRelationHandler>()
+    private val regexHandlers = mutableListOf<RegexImplicitRelationHandler>()
 
     init {
 //        register(SamePrefixHandler())
@@ -60,9 +62,8 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         register(BesideSpatialHandler())
         register(DisjointSpatialHandler())
         register(OverlapsSpatialHandler())
-        for (k in 2..4) {
-            register(ClipKnnHandler(k))
-        }
+        // Register regex handler for clipKnn
+        register(ClipKnnRegexHandler())
         register(SegmentSiblingHandler())
     }
 
@@ -70,7 +71,15 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         handlers.add(objectHandler)
     }
 
+    private fun register(regexHandler: RegexImplicitRelationHandler) {
+        regexHandlers.add(regexHandler)
+    }
+
     fun getHandlers(): List<ImplicitRelationHandler> {
         return handlers
+    }
+
+    fun getRegexHandlers(): List<RegexImplicitRelationHandler> {
+        return regexHandlers
     }
 }

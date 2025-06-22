@@ -9,12 +9,44 @@ import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 
-class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<ImplicitRelationHandler>) : MutableQuadSet {
+class ImplicitRelationMutableQuadSet(
+    private val base: MutableQuadSet,
+    handlerList: Collection<ImplicitRelationHandler>,
+    regexHandlerList: Collection<RegexImplicitRelationHandler> = emptyList()
+) : MutableQuadSet {
 
-    private val handlers = handlers.associateBy { it.predicate }
+    private val handlers = handlerList.associateBy { it.predicate }
+    private val regexHandlers = regexHandlerList.toList()
+    private val dynamicHandlerCache = mutableMapOf<String, ImplicitRelationHandler>()
 
     init {
-        handlers.forEach { it.init(this) }
+        handlers.values.forEach { it.init(this) }
+        regexHandlers.forEach { handler ->
+            // If the regex handler needs to be initialized with the quad set
+            try {
+                handler.javaClass.getMethod("init", ImplicitRelationMutableQuadSet::class.java)
+                    .invoke(handler, this)
+            } catch (_: NoSuchMethodException) {}
+        }
+    }
+
+    private fun findHandler(predicate: QuadValue): ImplicitRelationHandler? {
+        if (predicate !is URIValue) return null
+        // Exact match
+        handlers[predicate]?.let { return it }
+        // Regex match
+        for (regexHandler in regexHandlers) {
+            val params = regexHandler.matchPredicate(predicate)
+            if (params != null) {
+                val cacheKey = predicate.value
+                return dynamicHandlerCache.getOrPut(cacheKey) {
+                    val handler = regexHandler.getHandler(params)
+                    handler.init(this)
+                    handler
+                }
+            }
+        }
+        return null
     }
 
     override fun getId(id: Long): Quad? = this.base.getId(id)
@@ -35,11 +67,8 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
     }
 
     override fun filterPredicate(predicate: QuadValue): QuadSet {
-        return if (handlers.containsKey(predicate)) {
-            handlers[predicate]!!.findAll()
-        } else {
-            this.base.filterPredicate(predicate)
-        }
+        val handler = findHandler(predicate)
+        return handler?.findAll() ?: this.base.filterPredicate(predicate)
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet {
@@ -64,7 +93,7 @@ class ImplicitRelationMutableQuadSet(private val base: MutableQuadSet, handlers:
     ): QuadSet {
         val existing = this.base.filter(subjects, predicates, objects)
 
-        val relevantHandlers = predicates?.mapNotNull { this.handlers[it] } ?: this.handlers.values
+        val relevantHandlers = predicates?.mapNotNull { findHandler(it) } ?: handlers.values
 
         if (relevantHandlers.isEmpty()) {
             return existing

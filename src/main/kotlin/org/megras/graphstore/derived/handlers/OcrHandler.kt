@@ -51,6 +51,10 @@ class OcrHandler(private val quadSet: QuadSet, private val objectStore: FileSyst
             }
         }
 
+        if (recognizedText.isBlank()) {
+            return emptyList()
+        }
+
         return listOf(
             StringValue(recognizedText)
         )

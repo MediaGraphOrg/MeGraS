@@ -10,9 +10,7 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
-import kotlin.and
-import kotlin.text.chunked
-import kotlin.text.get
+import java.io.Writer
 
 
 class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
@@ -961,5 +959,21 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         TODO("Not yet implemented")
     }
 
-    //TODO: implement method to dump entire database to a file/stream
+    fun dumpDatabaseToTsv(writer: Writer) {
+        // Write header
+        writer.write("subject\tpredicate\tobject\n")
+
+        print("Dumping database to TSV")
+
+        // Stream all quad IDs in batches
+        val allIds = transaction { QuadsTable.slice(QuadsTable.id).selectAll().map { it[QuadsTable.id] } }
+        allIds.chunked(100000).forEach { chunk ->
+            val quads = getIds(chunk).toSet()
+            for (quad in quads) {
+                writer.write("${quad.subject}\t${quad.predicate}\t${quad.`object`}\n")
+            }
+            writer.flush()
+            print(".") // Print progress indicator
+        }
+    }
 }

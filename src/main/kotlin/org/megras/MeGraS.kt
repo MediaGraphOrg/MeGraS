@@ -15,7 +15,10 @@ import org.megras.graphstore.implicit.ImplicitRelationRegistrar
 import org.megras.lang.sparql.FunctionRegistrar
 import org.megras.segmentation.media.AudioVideoSegmenter
 import org.slf4j.LoggerFactory
+import java.io.BufferedWriter
 import java.io.File
+import java.io.FileWriter
+import java.time.LocalDateTime
 import kotlin.concurrent.thread
 
 object MeGraS {
@@ -65,6 +68,13 @@ object MeGraS {
                     config.postgresConnection.password
                 )
                 postgresStore.setup()
+                if (config.postgresConnection.dumpOnStartup) {
+                    println("${LocalDateTime.now()} Starting dump of Postgres database to TSV...")
+                    val writer = BufferedWriter(FileWriter("dump.tsv"))
+                    postgresStore.dumpDatabaseToTsv(writer)
+                    writer.close()
+                    println("${LocalDateTime.now()} Finished dump of Postgres database to TSV...")
+                }
                 postgresStore
             }
 

@@ -10,6 +10,7 @@ import org.megras.data.graph.VectorValue
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.time.LocalDateTime
 
 class TSVMutableQuadSet(private val tsvFileName : String, private val useCompression: Boolean = false) : MutableQuadSet, PersistableQuadSet {
 
@@ -30,6 +31,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
     }
 
     override fun load() {
+        println("${LocalDateTime.now()} Start loading TSV...")
         print("loading quads from tsv...")
         cache.clear()
 
@@ -73,6 +75,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
         cache.rebuildIndex()
 
         print("done\n")
+        println("${LocalDateTime.now()} End loading TSV...")
         lastStoreTime = System.currentTimeMillis()
 
     }

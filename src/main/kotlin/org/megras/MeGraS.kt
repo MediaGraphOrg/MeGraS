@@ -69,11 +69,15 @@ object MeGraS {
                 )
                 postgresStore.setup()
                 if (config.postgresConnection.dumpOnStartup) {
-                    println("${LocalDateTime.now()} Starting dump of Postgres database to TSV...")
-                    val writer = BufferedWriter(FileWriter("dump.tsv"))
-                    postgresStore.dumpDatabaseToTsv(writer)
-                    writer.close()
-                    println("${LocalDateTime.now()} Finished dump of Postgres database to TSV...")
+                    print("Confirm start dump of Postgres database to TSV? (y/n): ")
+                    val confirmation = readlnOrNull()
+                    if (confirmation?.lowercase() == "y") {
+                        val writer = BufferedWriter(FileWriter("dump.tsv"))
+                        postgresStore.dumpDatabaseToTsv(writer)
+                        writer.close()
+                    } else {
+                        println("Dump skipped.")
+                    }
                 }
                 postgresStore
             }

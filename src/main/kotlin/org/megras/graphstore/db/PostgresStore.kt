@@ -963,17 +963,29 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         // Write header
         writer.write("subject\tpredicate\tobject\n")
 
-        print("Dumping database to TSV")
+        val startTime = System.currentTimeMillis()
 
         // Stream all quad IDs in batches
         val allIds = transaction { QuadsTable.slice(QuadsTable.id).selectAll().map { it[QuadsTable.id] } }
+        val totalQuads = allIds.size.toLong()
+        var quadsProcessed = 0L
+
+        if (totalQuads == 0L) {
+            println("No quads to dump.")
+            return
+        }
+
         allIds.chunked(100000).forEach { chunk ->
             val quads = getIds(chunk).toSet()
             for (quad in quads) {
                 writer.write("${quad.subject}\t${quad.predicate}\t${quad.`object`}\n")
             }
             writer.flush()
-            print(".") // Print progress indicator
+            quadsProcessed += chunk.size
+            val percentage = (quadsProcessed * 100) / totalQuads
+            print("\rProgress: $percentage% ($quadsProcessed / $totalQuads)")
         }
+        val duration = (System.currentTimeMillis() - startTime) / 1000.0
+        println("\nDump complete in $duration seconds.")
     }
 }

@@ -563,6 +563,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
 
         if (mutableIds.isNotEmpty()) {
+            //TODO: optimize to custom SQL
             mutableIds.chunked(10000).forEach { chunk ->
                 transaction {
                     val lookUpQuadIds = QuadsTable.slice(QuadsTable.id, QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o)
@@ -583,6 +584,10 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             }
         }
 
+        return getIds(quadIds)
+    }
+
+    fun getIds(quadIds: Set<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>): QuadSet {
         val quadValueIds = quadIds.flatMap { listOf(it.second.first, it.second.second, it.second.third) }.toSet()
         val quadValues = getQuadValues(quadValueIds)
 
@@ -668,6 +673,46 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         return quadIds
     }
 
+    private fun getSeptupleForFilter(ids: List<Pair<Int, Long>>?, part: Char): Set<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>? {
+        if (ids == null) return null
+        if (ids.isEmpty()) return emptySet()
+
+        val (typeColumn, idColumn) = when (part) {
+            's' -> QuadsTable.sType to QuadsTable.s
+            'p' -> QuadsTable.pType to QuadsTable.p
+            'o' -> QuadsTable.oType to QuadsTable.o
+            else -> throw IllegalArgumentException("part must be 's', 'p', or 'o'")
+        }
+
+        val quadIds = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+        // Each pair in the chunk results in two parameters
+        ids.chunked(10000).forEach { chunk ->
+            transaction {
+                val filter =
+                    chunk.map { (typeColumn eq it.first) and (idColumn eq it.second) }.reduce { acc, op -> acc or op }
+                val chunkResult = QuadsTable.slice(
+                    QuadsTable.id,
+                    QuadsTable.sType,
+                    QuadsTable.s,
+                    QuadsTable.pType,
+                    QuadsTable.p,
+                    QuadsTable.oType,
+                    QuadsTable.o
+                )
+                    .select(filter)
+                    .map {
+                        it[QuadsTable.id] to Triple(
+                            (it[QuadsTable.sType] to it[QuadsTable.s]),
+                            (it[QuadsTable.pType] to it[QuadsTable.p]),
+                            (it[QuadsTable.oType] to it[QuadsTable.o]),
+                        )
+                    }
+                quadIds.addAll(chunkResult)
+            }
+        }
+        return quadIds
+    }
+
     override fun filter(
         subjects: Collection<QuadValue>?,
         predicates: Collection<QuadValue>?,
@@ -705,20 +750,20 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             return BasicQuadSet()
         }
 
-        val subjectQuadIds = getIdsForFilter(subjectFilterIds, 's')
-        val predicateQuadIds = getIdsForFilter(predicateFilterIds, 'p')
-        val objectQuadIds = getIdsForFilter(objectFilterIds, 'o')
+        val subjectSeptuples = getSeptupleForFilter(subjectFilterIds, 's')
+        val predicateSeptuples = getSeptupleForFilter(predicateFilterIds, 'p')
+        val objectSeptuples = getSeptupleForFilter(objectFilterIds, 'o')
 
-        val idSets = listOfNotNull(subjectQuadIds, predicateQuadIds, objectQuadIds)
+        val idSets = listOfNotNull(subjectSeptuples, predicateSeptuples, objectSeptuples)
 
         if (idSets.isEmpty()) {
             return this
         }
 
         // Intersect the ID sets
-        val finalIds = idSets.reduce { acc, set -> acc.intersect(set) }
+        val finalSeptuples = idSets.reduce { acc, set -> acc.intersect(set) }
 
-        return getIds(finalIds)
+        return getIds(finalSeptuples)
     }
 
     override fun toMutable(): MutableQuadSet = this
@@ -915,4 +960,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     override fun retainAll(elements: Collection<Quad>): Boolean {
         TODO("Not yet implemented")
     }
+
+    //TODO: implement method to dump entire database to a file/stream
 }

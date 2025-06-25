@@ -18,7 +18,7 @@ abstract class AbstractDbStore : MutableQuadSet {
         const val BINARY_DATA_TYPE = -9
         const val VECTOR_ID_OFFSET = -10
 
-        const val cacheSize = 10000L
+        const val cacheSize = 1000000L
     }
 
 

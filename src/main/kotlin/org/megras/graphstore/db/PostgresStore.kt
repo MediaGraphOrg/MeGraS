@@ -11,6 +11,7 @@ import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import java.io.Writer
+import java.time.LocalDateTime
 
 
 class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
@@ -964,6 +965,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         writer.write("subject\tpredicate\tobject\n")
 
         val startTime = System.currentTimeMillis()
+        println("${LocalDateTime.now()} Starting database dump to TSV...")
 
         // Stream all quad IDs in batches
         val allIds = transaction { QuadsTable.slice(QuadsTable.id).selectAll().map { it[QuadsTable.id] } }
@@ -978,7 +980,11 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         allIds.chunked(100000).forEach { chunk ->
             val quads = getIds(chunk).toSet()
             for (quad in quads) {
-                writer.write("${quad.subject}\t${quad.predicate}\t${quad.`object`}\n")
+                val formattedSubject = quad.subject.toString()
+                val formattedPredicate = quad.predicate.toString()
+                val formattedObject = formatQuadValueForTsv(quad.`object`)
+                writer.write("$formattedSubject\t$formattedPredicate\t$formattedObject\n")
+
             }
             writer.flush()
             quadsProcessed += chunk.size
@@ -987,5 +993,35 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
         val duration = (System.currentTimeMillis() - startTime) / 1000.0
         println("\nDump complete in $duration seconds.")
+    }
+
+    /**
+     * Extracts the raw value from a QuadValue and formats it according to TSV rules.
+     *
+     * @param quadValue The QuadValue object (StringValue, LongValue, DoubleValue, URIValue, etc.).
+     * @return The TSV-formatted string for the object column.
+     */
+    fun formatQuadValueForTsv(quadValue: QuadValue): String {
+        val rawValue = when (quadValue) {
+            is StringValue -> quadValue.value
+            is LongValue -> quadValue.value.toString()
+            is DoubleValue -> quadValue.value.toString()
+            is URIValue -> quadValue.toString()
+            is DoubleVectorValue -> quadValue.vector.joinToString(separator = ", ", prefix = "[", postfix = "]")
+            is LongVectorValue -> quadValue.vector.joinToString(separator = ", ", prefix = "[", postfix = "]")
+            is FloatVectorValue -> quadValue.vector.joinToString(separator = ", ", prefix = "[", postfix = "]")
+            is TemporalValue -> quadValue.value
+            else -> quadValue.toString()
+        }
+
+        // Apply TSV quoting rules to the extracted rawValue
+        val needsQuoting = rawValue.contains('\t') || rawValue.contains('\n') || rawValue.contains('"') || rawValue.contains(' ') || rawValue.contains(',')
+
+        if (needsQuoting) {
+            val escapedValue = rawValue.replace("\"", "\"\"") // Escape internal " with ""
+            return "\"$escapedValue\"" // Enclose in quotes
+        } else {
+            return rawValue // Return as is
+        }
     }
 }

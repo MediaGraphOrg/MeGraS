@@ -31,8 +31,9 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
     }
 
     override fun load() {
-        println("${LocalDateTime.now()} Start loading TSV...")
-        print("loading quads from tsv...")
+        val startTime = System.currentTimeMillis()
+        println("${LocalDateTime.now()} Starting load from TSV...")
+
         cache.clear()
 
         val tsvFile = File(tsvFileName)
@@ -47,7 +48,18 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
             FileInputStream(tsvFile)
         }
 
-        var i = 0
+        // Count total lines for progress (excluding header)
+        val totalLines = if (useCompression) {
+            BZip2CompressorInputStream(FileInputStream(tsvFile), true).bufferedReader().use { reader ->
+                reader.lineSequence().count() - 1
+            }
+        } else {
+            FileInputStream(tsvFile).bufferedReader().use { reader ->
+                reader.lineSequence().count() - 1
+            }
+        }
+
+        var linesProcessed = 0L
 
         tsvReader.open(inputStream) {
 
@@ -62,11 +74,13 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
                     )
                 )
                 if (buffer.size >= 10000) {
+                    linesProcessed += buffer.size
+
                     cache.addAll(buffer)
                     buffer.clear()
-                }
-                if (++i % 1_000_000 == 0) {
-                    print('.')
+
+                    val percentage = (linesProcessed * 100) / totalLines
+                    print("\rProgress: $percentage% ($linesProcessed / $totalLines)")
                 }
             }
             cache.addAllUnindexed(buffer)
@@ -74,8 +88,8 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
 
         cache.rebuildIndex()
 
-        print("done\n")
-        println("${LocalDateTime.now()} End loading TSV...")
+        val duration = (System.currentTimeMillis() - startTime) / 1000.0
+        println("\nLoad complete in $duration seconds.")
         lastStoreTime = System.currentTimeMillis()
 
     }

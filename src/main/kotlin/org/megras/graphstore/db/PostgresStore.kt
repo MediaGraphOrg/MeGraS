@@ -11,6 +11,7 @@ import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import java.io.Writer
+import java.time.LocalDateTime
 
 
 class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
@@ -964,9 +965,9 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         writer.write("subject\tpredicate\tobject\n")
 
         val startTime = System.currentTimeMillis()
+        println("${LocalDateTime.now()} Starting database dump to TSV...")
 
-        // Stream all quad IDs in batches
-        val allIds = transaction { QuadsTable.slice(QuadsTable.id).selectAll().map { it[QuadsTable.id] } }
+        val allIds = transaction { QuadsTable.selectAll().map { it[QuadsTable.id] } }
         val totalQuads = allIds.size.toLong()
         var quadsProcessed = 0L
 
@@ -978,7 +979,10 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         allIds.chunked(100000).forEach { chunk ->
             val quads = getIds(chunk).toSet()
             for (quad in quads) {
-                writer.write("${quad.subject}\t${quad.predicate}\t${quad.`object`}\n")
+                val formattedSubject = quad.subject.toString()
+                val formattedPredicate = quad.predicate.toString()
+                val formattedObject = formatQuadValueForTsv(quad.`object`)
+                writer.write("$formattedSubject\t$formattedPredicate\t$formattedObject\n")
             }
             writer.flush()
             quadsProcessed += chunk.size
@@ -987,5 +991,32 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
         val duration = (System.currentTimeMillis() - startTime) / 1000.0
         println("\nDump complete in $duration seconds.")
+    }
+
+    /**
+     * Extracts the string representation of a QuadValue, including its type suffix,
+     * and handles any necessary internal escaping for TSV (but no outer quoting if not needed).
+     *
+     * @param quadValue The QuadValue object.
+     * @return The TSV-formatted string for the object column, including suffix and proper internal escaping.
+     */
+    fun formatQuadValueForTsv(quadValue: QuadValue): String {
+        // Get the string representation of the QuadValue, including the desired suffix.
+        val stringRepresentationIncludingSuffix = quadValue.toString()
+
+        // Standard TSV rules still apply for delimiter (tab), newline, and quote character.
+        val needsInternalEscapingAndPossiblyOuterQuoting =
+            stringRepresentationIncludingSuffix.contains('\t') ||
+                    stringRepresentationIncludingSuffix.contains('\n') ||
+                    stringRepresentationIncludingSuffix.contains('"')
+
+        if (needsInternalEscapingAndPossiblyOuterQuoting) {
+            // Escape internal double quotes by doubling them
+            val escapedValue = stringRepresentationIncludingSuffix.replace("\"", "\"\"")
+            return "\"$escapedValue\""
+        } else {
+            // No special characters requiring quoting or escaping, return as is
+            return stringRepresentationIncludingSuffix
+        }
     }
 }

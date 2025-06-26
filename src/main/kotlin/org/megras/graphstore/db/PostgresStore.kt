@@ -967,8 +967,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         val startTime = System.currentTimeMillis()
         println("${LocalDateTime.now()} Starting database dump to TSV...")
 
-        // Stream all quad IDs in batches
-        val allIds = transaction { QuadsTable.slice(QuadsTable.id).selectAll().map { it[QuadsTable.id] } }
+        val allIds = transaction { QuadsTable.selectAll().map { it[QuadsTable.id] } }
         val totalQuads = allIds.size.toLong()
         var quadsProcessed = 0L
 
@@ -984,7 +983,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                 val formattedPredicate = quad.predicate.toString()
                 val formattedObject = formatQuadValueForTsv(quad.`object`)
                 writer.write("$formattedSubject\t$formattedPredicate\t$formattedObject\n")
-
             }
             writer.flush()
             quadsProcessed += chunk.size
@@ -996,32 +994,29 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     }
 
     /**
-     * Extracts the raw value from a QuadValue and formats it according to TSV rules.
+     * Extracts the string representation of a QuadValue, including its type suffix,
+     * and handles any necessary internal escaping for TSV (but no outer quoting if not needed).
      *
-     * @param quadValue The QuadValue object (StringValue, LongValue, DoubleValue, URIValue, etc.).
-     * @return The TSV-formatted string for the object column.
+     * @param quadValue The QuadValue object.
+     * @return The TSV-formatted string for the object column, including suffix and proper internal escaping.
      */
     fun formatQuadValueForTsv(quadValue: QuadValue): String {
-        val rawValue = when (quadValue) {
-            is StringValue -> quadValue.value
-            is LongValue -> quadValue.value.toString()
-            is DoubleValue -> quadValue.value.toString()
-            is URIValue -> quadValue.toString()
-            is DoubleVectorValue -> quadValue.vector.joinToString(separator = ", ", prefix = "[", postfix = "]")
-            is LongVectorValue -> quadValue.vector.joinToString(separator = ", ", prefix = "[", postfix = "]")
-            is FloatVectorValue -> quadValue.vector.joinToString(separator = ", ", prefix = "[", postfix = "]")
-            is TemporalValue -> quadValue.value
-            else -> quadValue.toString()
-        }
+        // Get the string representation of the QuadValue, including the desired suffix.
+        val stringRepresentationIncludingSuffix = quadValue.toString()
 
-        // Apply TSV quoting rules to the extracted rawValue
-        val needsQuoting = rawValue.contains('\t') || rawValue.contains('\n') || rawValue.contains('"') || rawValue.contains(' ') || rawValue.contains(',')
+        // Standard TSV rules still apply for delimiter (tab), newline, and quote character.
+        val needsInternalEscapingAndPossiblyOuterQuoting =
+            stringRepresentationIncludingSuffix.contains('\t') ||
+                    stringRepresentationIncludingSuffix.contains('\n') ||
+                    stringRepresentationIncludingSuffix.contains('"')
 
-        if (needsQuoting) {
-            val escapedValue = rawValue.replace("\"", "\"\"") // Escape internal " with ""
-            return "\"$escapedValue\"" // Enclose in quotes
+        if (needsInternalEscapingAndPossiblyOuterQuoting) {
+            // Escape internal double quotes by doubling them
+            val escapedValue = stringRepresentationIncludingSuffix.replace("\"", "\"\"")
+            return "\"$escapedValue\""
         } else {
-            return rawValue // Return as is
+            // No special characters requiring quoting or escaping, return as is
+            return stringRepresentationIncludingSuffix
         }
     }
 }

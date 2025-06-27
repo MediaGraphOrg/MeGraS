@@ -980,6 +980,10 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             val quads = getIds(chunk).toSet()
             for (quad in quads) {
                 val formattedSubject = quad.subject.toString()
+                // Skip localhost subjects if they are not LocalQuadValue
+                if (formattedSubject.contains("localhost") && quad.subject !is LocalQuadValue) {
+                    continue
+                }
                 val formattedPredicate = quad.predicate.toString()
                 val formattedObject = formatQuadValueForTsv(quad.`object`)
                 writer.write("$formattedSubject\t$formattedPredicate\t$formattedObject\n")

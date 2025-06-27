@@ -153,71 +153,71 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
-            if (vectorValues.isEmpty()) {
-                return emptyMap()
-            }
+        if (vectorValues.isEmpty()) {
+            return emptyMap()
+        }
 
-            val returnMap = HashMap<VectorValue, QuadValueId>(vectorValues.size)
+        val returnMap = HashMap<VectorValue, QuadValueId>(vectorValues.size)
 
-            vectorValues.groupBy { it.type to it.length }.forEach { (properties, vectorList) ->
+        vectorValues.groupBy { it.type to it.length }.forEach { (properties, vectorList) ->
 
-                val vectorsInGroup = vectorList.toSet() // Set<VectorValue>
-                val vectorTable = getOrCreateVectorTable(properties.first, properties.second)
+            val vectorsInGroup = vectorList.toSet() // Set<VectorValue>
+            val vectorTable = getOrCreateVectorTable(properties.first, properties.second)
 
-                val queryResults = mutableListOf<Pair<Long, VectorValue>>()
+            val queryResults = mutableListOf<Pair<Long, VectorValue>>()
 
-                transaction {
-                    when (properties.first) {
-                        VectorValue.Type.Float -> {
-                            @Suppress("UNCHECKED_CAST")
-                            val specificValueColumn = vectorTable.value as Column<FloatVectorValue>
-                            val floatVectors = vectorsInGroup.mapNotNull { it as? FloatVectorValue }
-                            if (floatVectors.isNotEmpty()) {
-                                floatVectors.chunked(10000).forEach { chunk ->
-                                    queryResults.addAll(
-                                        vectorTable.select { specificValueColumn inList chunk }
-                                            .map { it[vectorTable.id] to it[specificValueColumn] }
-                                    )
-                                }
+            transaction {
+                when (properties.first) {
+                    VectorValue.Type.Float -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val specificValueColumn = vectorTable.value as Column<FloatVectorValue>
+                        val floatVectors = vectorsInGroup.mapNotNull { it as? FloatVectorValue }
+                        if (floatVectors.isNotEmpty()) {
+                            floatVectors.chunked(10000).forEach { chunk ->
+                                queryResults.addAll(
+                                    vectorTable.select { specificValueColumn inList chunk }
+                                        .map { it[vectorTable.id] to it[specificValueColumn] }
+                                )
                             }
                         }
-                        VectorValue.Type.Double -> {
-                            @Suppress("UNCHECKED_CAST")
-                            val specificValueColumn = vectorTable.value as Column<DoubleVectorValue>
-                            val doubleVectors = vectorsInGroup.mapNotNull { it as? DoubleVectorValue }
-                            if (doubleVectors.isNotEmpty()) {
-                                doubleVectors.chunked(10000).forEach { chunk ->
-                                    queryResults.addAll(
-                                        vectorTable.select { specificValueColumn inList chunk }
-                                            .map { it[vectorTable.id] to it[specificValueColumn] }
-                                    )
-                                }
+                    }
+                    VectorValue.Type.Double -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val specificValueColumn = vectorTable.value as Column<DoubleVectorValue>
+                        val doubleVectors = vectorsInGroup.mapNotNull { it as? DoubleVectorValue }
+                        if (doubleVectors.isNotEmpty()) {
+                            doubleVectors.chunked(10000).forEach { chunk ->
+                                queryResults.addAll(
+                                    vectorTable.select { specificValueColumn inList chunk }
+                                        .map { it[vectorTable.id] to it[specificValueColumn] }
+                                )
                             }
                         }
-                        VectorValue.Type.Long -> {
-                            @Suppress("UNCHECKED_CAST")
-                            val specificValueColumn = vectorTable.value as Column<LongVectorValue>
-                            val longVectors = vectorsInGroup.mapNotNull { it as? LongVectorValue }
-                            if (longVectors.isNotEmpty()) {
-                                longVectors.chunked(10000).forEach { chunk ->
-                                    queryResults.addAll(
-                                        vectorTable.select { specificValueColumn inList chunk }
-                                            .map { it[vectorTable.id] to it[specificValueColumn] }
-                                    )
-                                }
+                    }
+                    VectorValue.Type.Long -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val specificValueColumn = vectorTable.value as Column<LongVectorValue>
+                        val longVectors = vectorsInGroup.mapNotNull { it as? LongVectorValue }
+                        if (longVectors.isNotEmpty()) {
+                            longVectors.chunked(10000).forEach { chunk ->
+                                queryResults.addAll(
+                                    vectorTable.select { specificValueColumn inList chunk }
+                                        .map { it[vectorTable.id] to it[specificValueColumn] }
+                                )
                             }
                         }
                     }
                 }
-
-                for ((id, value) in queryResults) {
-                    val quadValueId = (-vectorTable.typeId + VECTOR_ID_OFFSET) to id
-                    returnMap[value] = quadValueId
-                }
             }
 
-            return returnMap
+            for ((id, value) in queryResults) {
+                val quadValueId = (-vectorTable.typeId + VECTOR_ID_OFFSET) to id
+                returnMap[value] = quadValueId
+            }
         }
+
+        return returnMap
+    }
 
     override fun insertDoubleValues(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
         val list = doubleValues.toList()
@@ -260,38 +260,38 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         return list.zip(results).toMap()
     }
 
-override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
-    vectorValues.groupBy { it.type to it.length }.forEach { (properties, v) ->
-        val vectorsInGroup = v // v is List<VectorValue>
-        val currentVectorType = properties.first
-        val currentLength = properties.second
-        // getOrCreateVectorTable returns a VectorTable instance where 'value' is Column<out VectorValue>
-        // but its actual underlying type corresponds to currentVectorType
-        val vectorTable = getOrCreateVectorTable(currentVectorType, currentLength)
+    override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
+        vectorValues.groupBy { it.type to it.length }.forEach { (properties, v) ->
+            val vectorsInGroup = v // v is List<VectorValue>
+            val currentVectorType = properties.first
+            val currentLength = properties.second
+            // getOrCreateVectorTable returns a VectorTable instance where 'value' is Column<out VectorValue>
+            // but its actual underlying type corresponds to currentVectorType
+            val vectorTable = getOrCreateVectorTable(currentVectorType, currentLength)
 
-        if (vectorsInGroup.isNotEmpty()) {
-            transaction {
-                vectorTable.batchInsert(vectorsInGroup) { it ->
-                    when (currentVectorType) {
-                        VectorValue.Type.Float -> {
-                            @Suppress("UNCHECKED_CAST")
-                            this[vectorTable.value as Column<FloatVectorValue>] = it as FloatVectorValue
-                        }
-                        VectorValue.Type.Double -> {
-                            @Suppress("UNCHECKED_CAST")
-                            this[vectorTable.value as Column<DoubleVectorValue>] = it as DoubleVectorValue
-                        }
-                        VectorValue.Type.Long -> {
-                            @Suppress("UNCHECKED_CAST")
-                            this[vectorTable.value as Column<LongVectorValue>] = it as LongVectorValue
+            if (vectorsInGroup.isNotEmpty()) {
+                transaction {
+                    vectorTable.batchInsert(vectorsInGroup) { it ->
+                        when (currentVectorType) {
+                            VectorValue.Type.Float -> {
+                                @Suppress("UNCHECKED_CAST")
+                                this[vectorTable.value as Column<FloatVectorValue>] = it as FloatVectorValue
+                            }
+                            VectorValue.Type.Double -> {
+                                @Suppress("UNCHECKED_CAST")
+                                this[vectorTable.value as Column<DoubleVectorValue>] = it as DoubleVectorValue
+                            }
+                            VectorValue.Type.Long -> {
+                                @Suppress("UNCHECKED_CAST")
+                                this[vectorTable.value as Column<LongVectorValue>] = it as LongVectorValue
+                            }
                         }
                     }
                 }
             }
         }
+        return lookUpVectorValueIds(vectorValues)
     }
-    return lookUpVectorValueIds(vectorValues)
-}
 
     class VectorTable(val typeId: Int, type: VectorValue.Type, length: Int) : Table("vector_values_$typeId") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
@@ -562,24 +562,57 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
 
         if (mutableIds.isNotEmpty()) {
-            //TODO: optimize to custom SQL
-            mutableIds.chunked(10000).forEach { chunk ->
-                transaction {
-                    val lookUpQuadIds = QuadsTable.slice(QuadsTable.id, QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o)
-                        .select { QuadsTable.id inList chunk }.map {
-                            it[QuadsTable.id] to Triple(
-                                (it[QuadsTable.sType] to it[QuadsTable.s]),
-                                (it[QuadsTable.pType] to it[QuadsTable.p]),
-                                (it[QuadsTable.oType] to it[QuadsTable.o]),
+            transaction {
+                val lookUpQuadIds = mutableListOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+
+                // 1. Construct the VALUES clause for the derived table with a single column 'id_to_find'
+                val valuesForJoin = mutableIds.joinToString(", ") { "($it)" }
+                val derivedTableName = "ids_to_lookup" // Name for our temporary table
+
+                // 2. Build the raw SQL for the JOIN
+                val rawSql = """
+                    SELECT
+                        ${QuadsTable.tableName}.${QuadsTable.id.name},
+                        ${QuadsTable.tableName}.${QuadsTable.sType.name},
+                        ${QuadsTable.tableName}.${QuadsTable.s.name},
+                        ${QuadsTable.tableName}.${QuadsTable.pType.name},
+                        ${QuadsTable.tableName}.${QuadsTable.p.name},
+                        ${QuadsTable.tableName}.${QuadsTable.oType.name},
+                        ${QuadsTable.tableName}.${QuadsTable.o.name}
+                    FROM
+                        ${QuadsTable.tableName}
+                    JOIN
+                        (VALUES $valuesForJoin) AS $derivedTableName(${QuadsTable.id.name})
+                    ON
+                        ${QuadsTable.tableName}.${QuadsTable.id.name} = $derivedTableName.${QuadsTable.id.name}
+                """.trimIndent()
+
+                // Execute the raw SQL
+                exec(rawSql) { rs: ResultSet ->
+                    while (rs.next()) {
+                        val id = rs.getLong(QuadsTable.id.name)
+                        val sType = rs.getInt(QuadsTable.sType.name)
+                        val s = rs.getLong(QuadsTable.s.name)
+                        val pType = rs.getInt(QuadsTable.pType.name)
+                        val p = rs.getLong(QuadsTable.p.name)
+                        val oType = rs.getInt(QuadsTable.oType.name)
+                        val o = rs.getLong(QuadsTable.o.name)
+
+                        lookUpQuadIds.add(
+                            id to Triple(
+                                (sType to s),
+                                (pType to p),
+                                (oType to o)
                             )
-                        }
-
-                    lookUpQuadIds.forEach {
-                        idCache.put(it.first, it.second)
+                        )
                     }
-
-                    quadIds.addAll(lookUpQuadIds)
                 }
+
+                // Apply results to caches/lists
+                lookUpQuadIds.forEach {
+                    idCache.put(it.first, it.second)
+                }
+                quadIds.addAll(lookUpQuadIds)
             }
         }
 
@@ -823,13 +856,13 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             ) {
                 (QuadsTable.oType eq (-vectorTable.typeId + VECTOR_ID_OFFSET))
             }
-            .slice(QuadsTable.id)
-            .select {
-                (QuadsTable.pType eq predicateId.first!!) and (QuadsTable.p eq predicateId.second!!)
-            }
-            .orderBy(distanceExpression to if (invert) SortOrder.DESC else SortOrder.ASC)
-            .limit(count)
-            .map { it[QuadsTable.id] }
+                .slice(QuadsTable.id)
+                .select {
+                    (QuadsTable.pType eq predicateId.first!!) and (QuadsTable.p eq predicateId.second!!)
+                }
+                .orderBy(distanceExpression to if (invert) SortOrder.DESC else SortOrder.ASC)
+                .limit(count)
+                .map { it[QuadsTable.id] }
         }
 
         return getIds(quadIds)
@@ -853,9 +886,9 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             return BasicQuadSet()
         }
 
-       val textIds = transaction {
-           StringLiteralTable.slice(StringLiteralTable.id).select(FullTextSearch(objectFilterText)).map { it[StringLiteralTable.id] }
-       }
+        val textIds = transaction {
+            StringLiteralTable.slice(StringLiteralTable.id).select(FullTextSearch(objectFilterText)).map { it[StringLiteralTable.id] }
+        }
 
         val quadIds = mutableListOf<Long>()
         textIds.chunked(10000).forEach { chunk ->
@@ -889,60 +922,60 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {
-            if (elements.isEmpty()) {
-                return true
-            }
-
-            val values = elements.flatMap {
-                sequenceOf(
-                    it.subject, it.predicate, it.`object`
-                )
-            }.toSet()
-
-            val valueIdMap = getOrAddQuadValueIds(values)
-
-            val quadIdMap = elements.mapNotNull {
-                val s = valueIdMap[it.subject]
-                val p = valueIdMap[it.predicate]
-                val o = valueIdMap[it.`object`]
-
-                if (s == null || p == null || o == null) {
-                    System.err.println("${it.subject}: $s, ${it.predicate}: $p, ${it.`object`}: $o")
-                    return@mapNotNull null
-                }
-
-                quadHash(s.first, s.second, p.first, p.second, o.first, o.second) to it
-            }.toMap().toMutableMap()
-
-            quadIdMap.keys.chunked(10000).forEach { chunk ->
-                transaction {
-                    QuadsTable.slice(QuadsTable.hash).select { QuadsTable.hash inList chunk }.forEach {
-                        quadIdMap.remove(it[QuadsTable.hash])
-                    }
-                }
-            }
-
-            if (quadIdMap.isEmpty()) {
-                return false
-            }
-
-            transaction {
-                QuadsTable.batchInsert(quadIdMap.values) {
-                    val s = valueIdMap[it.subject]!!
-                    val p = valueIdMap[it.predicate]!!
-                    val o = valueIdMap[it.`object`]!!
-                    this[QuadsTable.sType] = s.first
-                    this[QuadsTable.s] = s.second
-                    this[QuadsTable.pType] = p.first
-                    this[QuadsTable.p] = p.second
-                    this[QuadsTable.oType] = o.first
-                    this[QuadsTable.o] = o.second
-                    this[QuadsTable.hash] = quadHash(s.first, s.second, p.first, p.second, o.first, o.second)
-                }
-            }
-
+        if (elements.isEmpty()) {
             return true
         }
+
+        val values = elements.flatMap {
+            sequenceOf(
+                it.subject, it.predicate, it.`object`
+            )
+        }.toSet()
+
+        val valueIdMap = getOrAddQuadValueIds(values)
+
+        val quadIdMap = elements.mapNotNull {
+            val s = valueIdMap[it.subject]
+            val p = valueIdMap[it.predicate]
+            val o = valueIdMap[it.`object`]
+
+            if (s == null || p == null || o == null) {
+                System.err.println("${it.subject}: $s, ${it.predicate}: $p, ${it.`object`}: $o")
+                return@mapNotNull null
+            }
+
+            quadHash(s.first, s.second, p.first, p.second, o.first, o.second) to it
+        }.toMap().toMutableMap()
+
+        quadIdMap.keys.chunked(10000).forEach { chunk ->
+            transaction {
+                QuadsTable.slice(QuadsTable.hash).select { QuadsTable.hash inList chunk }.forEach {
+                    quadIdMap.remove(it[QuadsTable.hash])
+                }
+            }
+        }
+
+        if (quadIdMap.isEmpty()) {
+            return false
+        }
+
+        transaction {
+            QuadsTable.batchInsert(quadIdMap.values) {
+                val s = valueIdMap[it.subject]!!
+                val p = valueIdMap[it.predicate]!!
+                val o = valueIdMap[it.`object`]!!
+                this[QuadsTable.sType] = s.first
+                this[QuadsTable.s] = s.second
+                this[QuadsTable.pType] = p.first
+                this[QuadsTable.p] = p.second
+                this[QuadsTable.oType] = o.first
+                this[QuadsTable.o] = o.second
+                this[QuadsTable.hash] = quadHash(s.first, s.second, p.first, p.second, o.first, o.second)
+            }
+        }
+
+        return true
+    }
 
     override fun clear() {
         TODO("Not yet implemented")

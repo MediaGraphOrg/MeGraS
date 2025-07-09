@@ -171,6 +171,8 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-kotlin:3.25.3'
 
     implementation 'com.vladsch.flexmark:flexmark-all:0.64.8'
+
+    implementation 'com.drewnoakes:metadata-extractor:2.19.0'
 }
 
 protobuf {

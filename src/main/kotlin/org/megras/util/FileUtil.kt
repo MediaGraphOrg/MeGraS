@@ -1,5 +1,6 @@
 package org.megras.util
 
+import com.drew.imaging.ImageMetadataReader
 import com.github.kokorin.jaffree.StreamType
 import com.github.kokorin.jaffree.ffmpeg.ChannelInput
 import com.github.kokorin.jaffree.ffmpeg.ChannelOutput
@@ -20,6 +21,7 @@ import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
+import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.IdUtil
@@ -54,6 +56,7 @@ object FileUtil {
         //store raw
         val descriptor = objectStore.store(file)
         val oid = IdUtil.generateId(file)
+        val exifData = getExifData(file, oid)
 
         //generate and store canonical
         val canonical = generateCanonicalRepresentation(objectStore, descriptor)
@@ -68,6 +71,7 @@ object FileUtil {
                 Quad(oid, MeGraS.CANONICAL_MIME_TYPE.uri, StringValue(canonical.mimeType.mimeString)),
                 Quad(oid, MeGraS.BOUNDS.uri, StringValue(canonical.bounds.toString()))
             )
+            + exifData
         )
 
         return oid
@@ -291,6 +295,31 @@ object FileUtil {
             }
 
             MimeType.OCTET_STREAM -> rawDescriptor
+        }
+    }
+
+    private fun getExifData(
+        file: PseudoFile,
+        oid: ObjectId
+    ): QuadSet {
+        return BasicMutableQuadSet()
+        // TODO: choose metadata and how to keep it
+        return try {
+            val metadata = ImageMetadataReader.readMetadata(file.inputStream())
+            BasicMutableQuadSet().apply {
+                metadata.directories.forEach { directory ->
+                    directory.tags.forEach { tag ->
+                        add(Quad(
+                            oid,
+                            URIValue("http://megras.org/exif/${directory.name}/${tag.tagName}".replace(" ", "_")),
+                            StringValue(tag.description ?: "")
+                        ))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            //logger.warn("Could not read EXIF data from file ${file.name}: ${e.localizedMessage}")
+            BasicMutableQuadSet()
         }
     }
 

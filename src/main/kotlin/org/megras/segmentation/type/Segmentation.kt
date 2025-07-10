@@ -8,9 +8,18 @@ enum class TranslateDirection {
     NEGATIVE
 }
 
+enum class DirectionalRelationModel {
+    CENTER,
+    BOUNDING_BOX,
+}
+
 sealed interface Segmentation {
     val segmentationType: SegmentationType?
     var bounds: Bounds
+
+    companion object {
+        val DEFAULT_DIRECTIONAL_MODEL: DirectionalRelationModel = DirectionalRelationModel.BOUNDING_BOX
+    }
 
     /**
      * Attempts to compare equivalence of this segmentation to another one.
@@ -46,7 +55,7 @@ sealed interface Segmentation {
     }
 
     fun beside(rhs: Segmentation): Boolean {
-        return ((this.left(rhs) || this.right(rhs)) && !(this.above(rhs) || this.below(rhs)))
+        return this.left(rhs) || this.right(rhs)
     }
 
     fun disjoint(rhs: Segmentation): Boolean{
@@ -58,11 +67,25 @@ sealed interface Segmentation {
     }
 
     fun above(rhs: Segmentation): Boolean {
-        TODO("Not yet implemented")
+        when (DEFAULT_DIRECTIONAL_MODEL) {
+            DirectionalRelationModel.CENTER -> {
+                TODO("Not yet implemented")
+            }
+            DirectionalRelationModel.BOUNDING_BOX -> {
+                return this.bounds.getMinY() > rhs.bounds.getMaxY()
+            }
+        }
     }
 
     fun below(rhs: Segmentation): Boolean {
-        TODO("Not yet implemented")
+        when (DEFAULT_DIRECTIONAL_MODEL) {
+            DirectionalRelationModel.CENTER -> {
+                TODO("Not yet implemented")
+            }
+            DirectionalRelationModel.BOUNDING_BOX -> {
+                return this.bounds.getMaxY() < rhs.bounds.getMinY()
+            }
+        }
     }
 
     fun crosses(rhs: Segmentation): Boolean {
@@ -70,11 +93,27 @@ sealed interface Segmentation {
     }
 
     fun left(rhs: Segmentation): Boolean {
-        TODO("Not yet implemented")
+        when (DEFAULT_DIRECTIONAL_MODEL) {
+            DirectionalRelationModel.CENTER -> {
+                TODO("Not yet implemented")
+            }
+            DirectionalRelationModel.BOUNDING_BOX -> {
+                //TODO: also for Z coordinates
+                return this.bounds.getMaxX() < rhs.bounds.getMinX()
+            }
+        }
     }
 
     fun right(rhs: Segmentation): Boolean {
-        TODO("Not yet implemented")
+        when (DEFAULT_DIRECTIONAL_MODEL) {
+            DirectionalRelationModel.CENTER -> {
+                TODO("Not yet implemented")
+            }
+            DirectionalRelationModel.BOUNDING_BOX -> {
+                //TODO: also for Z coordinates
+                return this.bounds.getMinX() > rhs.bounds.getMaxX()
+            }
+        }
     }
 
     fun touches(rhs: Segmentation): Boolean {

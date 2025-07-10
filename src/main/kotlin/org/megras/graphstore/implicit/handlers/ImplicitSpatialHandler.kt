@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 abstract class AbstractImplicitSpatialHandler(
     relationName: String,
-    private val filter: (Segmentation?, Segmentation?) -> Boolean
+    private val filter: (Segmentation, Segmentation) -> Boolean
 ) : ImplicitRelationHandler {
 
     override val predicate: URIValue = URIValue("${Constants.SPATIAL_SEGMENT_PREFIX}/$relationName")
@@ -76,15 +76,14 @@ abstract class AbstractImplicitSpatialHandler(
     override fun findObjects(subject: URIValue): Set<URIValue> {
         val (segment, candidates, segmentsCache) = getSpatialCandidatesAndCaches(subject) ?: return emptySet()
         return candidates.filter {
-            filter(segment, segmentsCache[it])
+            segment?.let { s -> segmentsCache[it]?.let { c -> filter(s, c) } } == true
         }.toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
         val (segment, candidates, segmentsCache) = getSpatialCandidatesAndCaches(`object`) ?: return emptySet()
         return candidates.filter {
-            // Note: The filter arguments are swapped to check the relation from the candidate's perspective
-            filter(segmentsCache[it], segment)
+            segment?.let { s -> segmentsCache[it]?.let { c -> filter(c, s) } } == true
         }.toSet()
     }
 
@@ -133,12 +132,11 @@ abstract class AbstractImplicitSpatialHandler(
             // 6. Compare pairs within the group (O(N_group^2))
             val siblingList = siblings.toList()
             for (i in siblingList.indices) {
+                val subject1 = siblingList[i]
+                val segment1 = segmentsCache[subject1] ?: continue
                 for (j in (i + 1) until siblingList.size) {
-                    val subject1 = siblingList[i]
                     val subject2 = siblingList[j]
-
-                    val segment1 = segmentsCache[subject1]
-                    val segment2 = segmentsCache[subject2]
+                    val segment2 = segmentsCache[subject2] ?: continue
 
                     if (filter(segment1, segment2)) {
                         resultingQuads.add(Quad(subject1, predicate, subject2))
@@ -158,56 +156,56 @@ abstract class AbstractImplicitSpatialHandler(
 class ContainsSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "contains",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.contains(segment2)
+        segment1.contains(segment2)
     }
 )
 
 class EqualsSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "equals",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.equals(segment2)
+        segment1.equals(segment2)
     }
 )
 
 class IntersectsSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "intersects",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.orthogonalTo(segment2)
+        segment1.orthogonalTo(segment2)
     }
 )
 
 class WithinSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "within",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.within(segment2)
+        segment1.within(segment2)
     }
 )
 
 class CoversSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "covers",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.covers(segment2)
+        segment1.covers(segment2)
     }
 )
 
 class BesideSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "beside",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.beside(segment2)
+        segment1.beside(segment2)
     }
 )
 
 class DisjointSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "disjoint",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.disjoint(segment2)
+        segment1.disjoint(segment2)
     }
 )
 
 class OverlapsSpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "overlaps",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.overlaps(segment2)
+        segment1.overlaps(segment2)
     }
 )
 
@@ -215,7 +213,7 @@ class OverlapsSpatialHandler : AbstractImplicitSpatialHandler(
 class SpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "",
     filter = { segment1, segment2 ->
-        segment1 != null && segment2 != null && segment1.(segment2)
+        segment1.(segment2)
     }
 )
 */

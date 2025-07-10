@@ -1,0 +1,6 @@
+{
+  "device": "cpu",
+  "clip_embedder_model": "openai/clip-vit-base-patch16",
+  "trocr_ocr_model": "microsoft/trocr-base-printed"
+}
+

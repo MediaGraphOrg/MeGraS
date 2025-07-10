@@ -3,6 +3,7 @@ import time
 from concurrent import futures
 import sys
 import os
+import json
 
 # Add the 'generated' directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'generated'))
@@ -19,13 +20,18 @@ from trocr_ocr import TrOCROCR
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
+# Load configuration from config.json
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
+with open(CONFIG_PATH, 'r') as f:
+    config = json.load(f)
+
 class ClipServiceServicer(clip_service_pb2_grpc.ClipServiceServicer):
     """
     Implements the gRPC methods for the ClipService.
     """
-    def __init__(self):
-        self.clip_embedder = CLIPEmbedder(device="cpu") # or "cuda" if GPU is available
-        print("CLIPEmbedder initialized.")
+    def __init__(self, device, model_name):
+        self.clip_embedder = CLIPEmbedder(device=device, model_name=model_name)
+        print(f"CLIPEmbedder initialized with model {model_name} on {device}.")
 
     def GetTextEmbedding(self, request, context):
         """
@@ -58,10 +64,10 @@ class OcrServiceServicer(ocr_service_pb2_grpc.OcrServiceServicer):
     """
     Implements the gRPC methods for the OCRService.
     """
-    def __init__(self):
+    def __init__(self, device, model_name):
         # Initialize TrOCROCR with a suitable device and model for lifelog/printed text
-        self.trocr_ocr = TrOCROCR(device="cpu")
-        print("TrOCROCR initialized.")
+        self.trocr_ocr = TrOCROCR(device=device, model_name=model_name)
+        print(f"TrOCROCR initialized with model {model_name} on {device}.")
 
     def RecognizeText(self, request, context):
         """
@@ -81,11 +87,11 @@ def serve():
 
     # Add CLIP Service
     clip_service_pb2_grpc.add_ClipServiceServicer_to_server(
-        ClipServiceServicer(), server)
+        ClipServiceServicer(device=config["device"], model_name=config["clip_embedder_model"]), server)
 
     # Add OCR Service
     ocr_service_pb2_grpc.add_OcrServiceServicer_to_server(
-        OcrServiceServicer(), server)
+        OcrServiceServicer(device=config["device"], model_name=config["trocr_ocr_model"]), server)
 
     server.add_insecure_port('[::]:50051') # Listen on all interfaces, port 50051
     print("Starting gRPC server on port 50051...")

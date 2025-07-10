@@ -178,3 +178,4 @@ src/main/resources/sandbox.html
 /examples
 **__pycache__
 config.json
+!python_grpc_server/config.json

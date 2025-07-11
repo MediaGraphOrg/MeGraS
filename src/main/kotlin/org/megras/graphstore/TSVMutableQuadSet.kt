@@ -7,12 +7,15 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.LocalDateTime
 
 class TSVMutableQuadSet(private val tsvFileName : String, private val useCompression: Boolean = false) : MutableQuadSet, PersistableQuadSet {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     private val cache = IndexedMutableQuadSet()
     private var lastStoreTime = 0L
@@ -32,7 +35,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
 
     override fun load() {
         val startTime = System.currentTimeMillis()
-        println("${LocalDateTime.now()} Starting load from TSV...")
+        logger.info("${LocalDateTime.now()} Starting load from TSV...")
 
         cache.clear()
 
@@ -85,11 +88,14 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
             }
             cache.addAllUnindexed(buffer)
         }
+        linesProcessed = totalLines.toLong()
+        val percentage = (linesProcessed * 100) / totalLines
+        print("\rProgress: $percentage% ($linesProcessed / $totalLines)\n")
 
         cache.rebuildIndex()
 
         val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        println("\nLoad complete in $duration seconds.")
+        logger.info("Load complete in $duration seconds.")
         lastStoreTime = System.currentTimeMillis()
 
     }

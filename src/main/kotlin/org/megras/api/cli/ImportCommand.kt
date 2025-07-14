@@ -9,9 +9,13 @@ import com.github.ajalt.clikt.parameters.types.int
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.MutableQuadSet
+import org.slf4j.LoggerFactory
 import java.io.File
+import java.time.LocalDateTime
 
 class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "import", help = "imports a TSV file or folder in triple format", printHelpOnEmptyArgs = true) {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     private val fileName: String by option("-f", "--File", help = "Path of TSV file or folder to be read for import")
         .required()
@@ -19,6 +23,7 @@ class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "im
     private val batchSize: Int by option("-b", "--batchSize").int().default(100)
     private val skip: Int by option("-s", "--skip", help = "The number of lines at the beginning of the file to skip").int().default(0)
     private val recursive: Boolean by option("-r", "--recursive", help = "Scan provided folder recursively").flag(default = false)
+    private val whitespaceKeep: Boolean by option("-w", "--whitespaceKeep", help = "Keep whitespaces in URIs").flag(default = false)
 
     override fun run() {
 
@@ -37,7 +42,8 @@ class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "im
 
         fun addFromFile(file: File) {
             var counter = 0
-            println("Adding file from ${file.absolutePath}")
+            val startTime = System.currentTimeMillis()
+            println("${LocalDateTime.now()} Adding file from ${file.absolutePath}")
             file.forEachLine { raw ->
 
                 if (skip-- > 0) {
@@ -46,14 +52,21 @@ class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "im
 
                 val line = raw.split(splitter)
                 if (line.size >= 3) {
-                    val values = line.map { QuadValue.of(it) }
+                    val values = line.map { it ->
+                        // Replace spaces in URIs with underscores
+                        if (!whitespaceKeep && it.startsWith('<') && it.endsWith('>')) {
+                            QuadValue.of(it.replace(" ", "_"))
+                        } else {
+                            QuadValue.of(it)
+                        }
+                    }
                     val quad = Quad(values[0], values[1], values[2])
                     batch.add(quad)
                     ++counter
                     if (batch.size >= batchSize) {
                         quads.addAll(batch)
                         batch.clear()
-                        println("processed $counter lines")
+                        print("\rProcessed $counter lines")
                     }
                 }
             }
@@ -61,8 +74,10 @@ class ImportCommand(private val quads: MutableQuadSet) : CliktCommand(name = "im
             if (batch.isNotEmpty()) {
                 quads.addAll(batch)
             }
+            print("\rProcessed $counter lines\n")
 
-            println("Done reading $counter lines")
+            val duration = (System.currentTimeMillis() - startTime) / 1000.0
+            println("Read complete in $duration seconds.")
         }
 
         if (file.isFile) {

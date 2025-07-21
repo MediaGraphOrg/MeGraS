@@ -56,7 +56,7 @@ object FileUtil {
         //store raw
         val descriptor = objectStore.store(file)
         val oid = IdUtil.generateId(file)
-        val exifData = getExifData(file, oid)
+        val exifData = ExifUtil.getExifData(file, oid)
 
         //generate and store canonical
         val canonical = generateCanonicalRepresentation(objectStore, descriptor)
@@ -295,31 +295,6 @@ object FileUtil {
             }
 
             MimeType.OCTET_STREAM -> rawDescriptor
-        }
-    }
-
-    private fun getExifData(
-        file: PseudoFile,
-        oid: ObjectId
-    ): QuadSet {
-        return BasicMutableQuadSet()
-        // TODO: choose metadata and how to keep it
-        return try {
-            val metadata = ImageMetadataReader.readMetadata(file.inputStream())
-            BasicMutableQuadSet().apply {
-                metadata.directories.forEach { directory ->
-                    directory.tags.forEach { tag ->
-                        add(Quad(
-                            oid,
-                            URIValue("http://megras.org/exif/${directory.name}/${tag.tagName}".replace(" ", "_")),
-                            StringValue(tag.description ?: "")
-                        ))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            //logger.warn("Could not read EXIF data from file ${file.name}: ${e.localizedMessage}")
-            BasicMutableQuadSet()
         }
     }
 

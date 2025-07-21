@@ -152,6 +152,14 @@ open class Bounds(private val bounds: DoubleArray = DoubleArray(8) { Double.NaN 
 
     fun getTDimension(): Double = bounds[7] - bounds[6]
 
+    fun getCenterX(): Double = (getMinX() + getMaxX()) / 2.0
+
+    fun getCenterY(): Double = (getMinY() + getMaxY()) / 2.0
+
+    fun getCenterZ(): Double = (getMinZ() + getMaxZ()) / 2.0
+
+    fun getCenterT(): Double = (getMinT() + getMaxT()) / 2.0
+
     /**
      * converts a 3D spatial bound (x,y,z) to a temporal one (x,y,t)
      */

@@ -67,23 +67,23 @@ sealed interface Segmentation {
     }
 
     fun above(rhs: Segmentation): Boolean {
-        when (DEFAULT_DIRECTIONAL_MODEL) {
+        return when (DEFAULT_DIRECTIONAL_MODEL) {
             DirectionalRelationModel.CENTER -> {
-                TODO("Not yet implemented")
+                this.bounds.getCenterY() > rhs.bounds.getCenterY()
             }
             DirectionalRelationModel.BOUNDING_BOX -> {
-                return this.bounds.getMinY() > rhs.bounds.getMaxY()
+                this.bounds.getMinY() > rhs.bounds.getMaxY()
             }
         }
     }
 
     fun below(rhs: Segmentation): Boolean {
-        when (DEFAULT_DIRECTIONAL_MODEL) {
+        return when (DEFAULT_DIRECTIONAL_MODEL) {
             DirectionalRelationModel.CENTER -> {
-                TODO("Not yet implemented")
+                this.bounds.getCenterY() < rhs.bounds.getCenterY()
             }
             DirectionalRelationModel.BOUNDING_BOX -> {
-                return this.bounds.getMaxY() < rhs.bounds.getMinY()
+                this.bounds.getMaxY() < rhs.bounds.getMinY()
             }
         }
     }
@@ -93,12 +93,12 @@ sealed interface Segmentation {
     }
 
     fun left(rhs: Segmentation): Boolean {
-        when (DEFAULT_DIRECTIONAL_MODEL) {
+        return when (DEFAULT_DIRECTIONAL_MODEL) {
             DirectionalRelationModel.CENTER -> {
-                TODO("Not yet implemented")
+                this.bounds.getCenterX() < rhs.bounds.getCenterX()
             }
             DirectionalRelationModel.BOUNDING_BOX -> {
-                return if (this.bounds.hasZ() && rhs.bounds.hasZ()) {
+                if (this.bounds.hasZ() && rhs.bounds.hasZ()) {
                     this.bounds.getMaxX() < rhs.bounds.getMinX() &&
                     this.bounds.getMaxZ() > rhs.bounds.getMinZ() &&
                     this.bounds.getMinZ() < rhs.bounds.getMaxZ()
@@ -110,9 +110,9 @@ sealed interface Segmentation {
     }
 
     fun right(rhs: Segmentation): Boolean {
-        when (DEFAULT_DIRECTIONAL_MODEL) {
+        return when (DEFAULT_DIRECTIONAL_MODEL) {
             DirectionalRelationModel.CENTER -> {
-                TODO("Not yet implemented")
+                this.bounds.getCenterX() > rhs.bounds.getCenterX()
             }
             DirectionalRelationModel.BOUNDING_BOX -> {
                 return if (this.bounds.hasZ() && rhs.bounds.hasZ()) {

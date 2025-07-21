@@ -35,6 +35,7 @@ import org.megras.graphstore.implicit.handlers.ClipKnnRegexHandler
 import org.megras.graphstore.implicit.handlers.CrossesSpatialHandler
 import org.megras.graphstore.implicit.handlers.LeftSpatialHandler
 import org.megras.graphstore.implicit.handlers.RightSpatialHandler
+import org.megras.graphstore.implicit.handlers.TouchesSpatialHandler
 
 class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<ImplicitRelationHandler>()
@@ -75,8 +76,9 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         register(AboveSpatialHandler())
         register(BelowSpatialHandler())
         register(LeftSpatialHandler())
-        register((RightSpatialHandler()))
+        register(RightSpatialHandler())
         register(CrossesSpatialHandler())
+        register(TouchesSpatialHandler())
     }
 
     private fun register(objectHandler: ImplicitRelationHandler) {

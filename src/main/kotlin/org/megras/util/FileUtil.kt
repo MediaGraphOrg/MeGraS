@@ -1,6 +1,5 @@
 package org.megras.util
 
-import com.drew.imaging.ImageMetadataReader
 import com.github.kokorin.jaffree.StreamType
 import com.github.kokorin.jaffree.ffmpeg.ChannelInput
 import com.github.kokorin.jaffree.ffmpeg.ChannelOutput
@@ -21,7 +20,6 @@ import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
-import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.IdUtil

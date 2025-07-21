@@ -351,6 +351,7 @@ data class TemporalValue(val originalString: String) : Comparable<TemporalValue>
         val formats = listOf(
             DateTimeFormatter.ISO_DATE_TIME, // ISO-8601 format
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"), // Common database format
+            DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss"), // Common database format
             DateTimeFormatter.ISO_DATE // Date only
         )
 
@@ -372,7 +373,7 @@ data class TemporalValue(val originalString: String) : Comparable<TemporalValue>
     }
 
     override fun toString(): String {
-        return dateTime.toString()
+        return dateTime.toString() + "^^TemporalValue"
     }
 
     override fun compareTo(other: TemporalValue): Int {

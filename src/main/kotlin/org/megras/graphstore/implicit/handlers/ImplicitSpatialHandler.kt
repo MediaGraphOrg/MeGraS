@@ -223,6 +223,13 @@ class BelowSpatialHandler : AbstractImplicitSpatialHandler(
     }
 )
 
+class LeftSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "left",
+    filter = { segment1, segment2 ->
+        segment1.left(segment2)
+    }
+)
+
 /* Uncomment and implement if needed
 class SpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "",

@@ -1,6 +1,7 @@
 package org.megras.graphstore.implicit
 
 import org.megras.data.fs.FileSystemObjectStore
+import org.megras.graphstore.implicit.handlers.AboveSpatialHandler
 import org.megras.graphstore.implicit.handlers.SamePrefixHandler
 import org.megras.graphstore.implicit.handlers.ClipNearDuplicateHandler
 import org.megras.graphstore.implicit.handlers.AfterObjectHandler
@@ -38,6 +39,10 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
     init {
 //        register(SamePrefixHandler())
         register(ClipNearDuplicateHandler())
+        register(SegmentSiblingHandler())
+
+        register(ClipKnnRegexHandler())
+
 //        register(AfterObjectHandler())
 //        register(PrecedesObjectHandler())
 //        register(FinishesObjectHandler())
@@ -54,6 +59,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
 //        register(ContainsSegmentHandler())
 //        register(EqualsSegmentHandler())
 //        register(OverlapsSegmentHandler())
+
         register(ContainsSpatialHandler())
         register(EqualsSpatialHandler())
         register(IntersectsSpatialHandler())
@@ -62,9 +68,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         register(BesideSpatialHandler())
         register(DisjointSpatialHandler())
         register(OverlapsSpatialHandler())
-        // Register regex handler for clipKnn
-        register(ClipKnnRegexHandler())
-        register(SegmentSiblingHandler())
+        register(AboveSpatialHandler())
     }
 
     private fun register(objectHandler: ImplicitRelationHandler) {

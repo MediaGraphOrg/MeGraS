@@ -209,6 +209,13 @@ class OverlapsSpatialHandler : AbstractImplicitSpatialHandler(
     }
 )
 
+class AboveSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "above",
+    filter = { segment1, segment2 ->
+        segment1.above(segment2)
+    }
+)
+
 /* Uncomment and implement if needed
 class SpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "",

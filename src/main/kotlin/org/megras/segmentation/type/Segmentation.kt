@@ -89,7 +89,7 @@ sealed interface Segmentation {
     }
 
     fun crosses(rhs: Segmentation): Boolean {
-        TODO("Not yet implemented")
+        return this.orthogonalTo(rhs)
     }
 
     fun left(rhs: Segmentation): Boolean {

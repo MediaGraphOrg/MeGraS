@@ -237,6 +237,13 @@ class RightSpatialHandler : AbstractImplicitSpatialHandler(
     }
 )
 
+class CrossesSpatialHandler : AbstractImplicitSpatialHandler(
+    relationName = "crosses",
+    filter = { segment1, segment2 ->
+        segment1.crosses(segment2)
+    }
+)
+
 /* Uncomment and implement if needed
 class SpatialHandler : AbstractImplicitSpatialHandler(
     relationName = "",

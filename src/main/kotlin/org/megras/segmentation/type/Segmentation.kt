@@ -98,8 +98,13 @@ sealed interface Segmentation {
                 TODO("Not yet implemented")
             }
             DirectionalRelationModel.BOUNDING_BOX -> {
-                //TODO: also for Z coordinates
-                return this.bounds.getMaxX() < rhs.bounds.getMinX()
+                return if (this.bounds.hasZ() && rhs.bounds.hasZ()) {
+                    this.bounds.getMaxX() < rhs.bounds.getMinX() &&
+                    this.bounds.getMaxZ() > rhs.bounds.getMinZ() &&
+                    this.bounds.getMinZ() < rhs.bounds.getMaxZ()
+                } else {
+                    this.bounds.getMaxX() < rhs.bounds.getMinX()
+                }
             }
         }
     }
@@ -110,8 +115,13 @@ sealed interface Segmentation {
                 TODO("Not yet implemented")
             }
             DirectionalRelationModel.BOUNDING_BOX -> {
-                //TODO: also for Z coordinates
-                return this.bounds.getMinX() > rhs.bounds.getMaxX()
+                return if (this.bounds.hasZ() && rhs.bounds.hasZ()) {
+                    this.bounds.getMinX() > rhs.bounds.getMaxX() &&
+                    this.bounds.getMaxZ() > rhs.bounds.getMinZ() &&
+                    this.bounds.getMinZ() < rhs.bounds.getMaxZ()
+                } else {
+                    this.bounds.getMinX() > rhs.bounds.getMaxX()
+                }
             }
         }
     }

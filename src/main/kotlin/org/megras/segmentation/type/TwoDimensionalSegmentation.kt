@@ -105,6 +105,18 @@ class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Doubl
 
     override val isRelative = xmin in 0.0..1.0 && xmax in 0.0..1.0 && ymin in 0.0..1.0 && ymax in 0.0..1.0
 
+    override fun touches(rhs: Segmentation): Boolean {
+        if (rhs is Rect) {
+            return (
+                this.xmin + this.width == rhs.xmin ||
+                this.ymin + this.height == rhs.ymin ||
+                this.xmin == rhs.xmin + rhs.width ||
+                this.ymin == rhs.ymin + rhs.height
+            )
+        }
+        return super.touches(rhs)
+    }
+
     override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {
             return when (direction) {

@@ -4,6 +4,7 @@ import com.google.common.cache.CacheBuilder
 import org.megras.data.graph.*
 import org.megras.graphstore.MutableQuadSet
 import org.megras.util.extensions.toBase64
+import java.io.Writer
 import java.nio.ByteBuffer
 
 abstract class AbstractDbStore : MutableQuadSet {
@@ -759,5 +760,9 @@ abstract class AbstractDbStore : MutableQuadSet {
         insert(s, p, o)
 
         return true
+    }
+
+    open fun dump(writer: Writer, chunkSize: Int) {
+        TODO("Not yet implemented")
     }
 }

@@ -96,7 +96,7 @@ object MeGraS {
 
         FunctionRegistrar.register(quadSet)
 
-        Cli.init(quadSet, objectStore)
+        Cli.init(quadSet, objectStore, slQuadSet)
 
         Cli.loop()
 

@@ -959,7 +959,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         TODO("Not yet implemented")
     }
 
-    fun dump(writer: Writer, chunkSize: Int = 100000) {
+    override fun dump(writer: Writer, chunkSize: Int) {
         // Write header
         writer.write("subject\tpredicate\tobject\n")
 

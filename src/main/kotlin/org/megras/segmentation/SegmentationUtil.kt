@@ -2,7 +2,10 @@ package org.megras.segmentation
 
 import com.ezylang.evalex.Expression
 import de.javagl.obj.ObjReader
+import org.megras.data.graph.URIValue
 import org.megras.data.model.MediaType
+import org.megras.data.schema.MeGraS
+import org.megras.graphstore.MutableQuadSet
 import org.megras.segmentation.type.*
 import java.io.ByteArrayInputStream
 import java.util.*
@@ -243,4 +246,18 @@ object SegmentationUtil {
         }.toList()
     }
 
+    fun getSegmentation(subject: URIValue, quads: MutableQuadSet) : Segmentation? {
+        val segment = quads.filter(
+            setOf(subject),
+            setOf(MeGraS.SEGMENT_DEFINITION.uri, MeGraS.SEGMENT_TYPE.uri),
+            null
+        )
+
+        val definition = (segment.filterPredicate(MeGraS.SEGMENT_DEFINITION.uri).firstOrNull()
+            ?: return null).`object`
+        val type = (segment.filterPredicate(MeGraS.SEGMENT_TYPE.uri).firstOrNull()
+            ?: return null).`object`
+
+        return parseSegmentation(type.toString().replace("^^String", ""), definition.toString().replace("^^String", ""))
+    }
 }

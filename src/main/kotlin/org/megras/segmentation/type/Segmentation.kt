@@ -139,4 +139,8 @@ sealed interface Segmentation {
     fun getDefinition(): String
 
     fun toURI() = "segment/" + getType() + "/" + getDefinition()
+
+    fun getArea(): Double {
+        TODO("Not yet implemented")
+    }
 }

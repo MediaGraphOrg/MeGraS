@@ -5,6 +5,7 @@ import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.functions.ClipTextFunction
 import org.megras.lang.sparql.functions.CosineSimFunction
 import org.megras.lang.sparql.functions.DayOfWeekFunction
+import org.megras.lang.sparql.functions.accessors.spatial.SegmentAreaFunction
 import org.megras.util.Constants
 
 class FunctionRegistrar {
@@ -17,6 +18,8 @@ class FunctionRegistrar {
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#DAYOFWEEK", DayOfWeekFunction::class.java)
 
             // * mm functions
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#SEGMENT_AREA", SegmentAreaFunction::class.java)
+            SegmentAreaFunction.setQuads(quadSet)
         }
     }
 }

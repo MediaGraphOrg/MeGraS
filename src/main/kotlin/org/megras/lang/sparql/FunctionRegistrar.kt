@@ -6,7 +6,9 @@ import org.megras.lang.sparql.functions.ClipTextFunction
 import org.megras.lang.sparql.functions.CosineSimFunction
 import org.megras.lang.sparql.functions.DayOfWeekFunction
 import org.megras.lang.sparql.functions.accessors.spatial.BoundsAreaFunction
+import org.megras.lang.sparql.functions.accessors.spatial.BoundsCenterFunction
 import org.megras.lang.sparql.functions.accessors.spatial.SegmentAreaFunction
+import org.megras.lang.sparql.functions.accessors.spatial.SegmentCenterFunction
 import org.megras.util.Constants
 
 class FunctionRegistrar {
@@ -23,6 +25,10 @@ class FunctionRegistrar {
             SegmentAreaFunction.setQuads(quadSet)
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#BOUNDS_AREA", BoundsAreaFunction::class.java)
             BoundsAreaFunction.setQuads(quadSet)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#BOUNDS_CENTER", BoundsCenterFunction::class.java)
+            BoundsCenterFunction.setQuads(quadSet)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#SEGMENT_CENTER", SegmentCenterFunction::class.java)
+            SegmentCenterFunction.setQuads(quadSet)
         }
     }
 }

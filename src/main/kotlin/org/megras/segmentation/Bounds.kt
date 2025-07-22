@@ -152,13 +152,36 @@ open class Bounds(private val bounds: DoubleArray = DoubleArray(8) { Double.NaN 
 
     fun getTDimension(): Double = bounds[7] - bounds[6]
 
-    fun getCenterX(): Double = (getMinX() + getMaxX()) / 2.0
+    fun getCenter(): DoubleArray =
+        doubleArrayOf(getCenterX(), getCenterY(), getCenterZ(), getCenterT())
 
-    fun getCenterY(): Double = (getMinY() + getMaxY()) / 2.0
+    fun getCenterX(): Double =
+        if (hasX()) {
+            (getMinX() + getMaxX()) / 2.0}
+        else {
+            Double.NaN
+        }
 
-    fun getCenterZ(): Double = (getMinZ() + getMaxZ()) / 2.0
+    fun getCenterY(): Double =
+        if (hasY()) {
+            (getMinY() + getMaxY()) / 2.0}
+        else {
+            Double.NaN
+        }
 
-    fun getCenterT(): Double = (getMinT() + getMaxT()) / 2.0
+    fun getCenterZ(): Double =
+        if (hasZ()) {
+            (getMinZ() + getMaxZ()) / 2.0}
+        else {
+            Double.NaN
+        }
+
+    fun getCenterT(): Double =
+        if (hasT()) {
+            (getMinT() + getMaxT()) / 2.0}
+        else {
+            Double.NaN
+        }
 
     fun getArea(): Double {
         if (this.dimensions < 2) {

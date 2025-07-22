@@ -7,8 +7,14 @@ import org.megras.lang.sparql.functions.CosineSimFunction
 import org.megras.lang.sparql.functions.DayOfWeekFunction
 import org.megras.lang.sparql.functions.accessors.spatial.BoundsAreaFunction
 import org.megras.lang.sparql.functions.accessors.spatial.BoundsCenterFunction
+import org.megras.lang.sparql.functions.accessors.spatial.DepthFunction
+import org.megras.lang.sparql.functions.accessors.spatial.DimensionFunctionBase
+import org.megras.lang.sparql.functions.accessors.spatial.DurationFunction
+import org.megras.lang.sparql.functions.accessors.spatial.HeightFunction
 import org.megras.lang.sparql.functions.accessors.spatial.SegmentAreaFunction
 import org.megras.lang.sparql.functions.accessors.spatial.SegmentCenterFunction
+import org.megras.lang.sparql.functions.accessors.spatial.WidthFunction
+import org.megras.lang.sparql.functions.accessors.spatial.XyztFunction
 import org.megras.util.Constants
 
 class FunctionRegistrar {
@@ -29,6 +35,13 @@ class FunctionRegistrar {
             BoundsCenterFunction.setQuads(quadSet)
             FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#SEGMENT_CENTER", SegmentCenterFunction::class.java)
             SegmentCenterFunction.setQuads(quadSet)
+            DimensionFunctionBase.setQuads(quadSet)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#WIDTH", WidthFunction::class.java)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#HEIGHT", HeightFunction::class.java)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#DEPTH", DepthFunction::class.java)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#DURATION", DurationFunction::class.java)
+            FunctionRegistry.get().put("${Constants.SPARQL_PREFIX}#XYZT", XyztFunction::class.java)
+            XyztFunction.setQuads(quadSet)
         }
     }
 }

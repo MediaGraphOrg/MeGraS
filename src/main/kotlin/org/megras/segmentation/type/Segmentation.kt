@@ -127,7 +127,8 @@ sealed interface Segmentation {
     }
 
     fun touches(rhs: Segmentation): Boolean {
-        TODO("Not yet implemented")
+        // TODO: Implement touches logic in child classes
+        return false
     }
 
     fun translate(by: Bounds, direction: TranslateDirection = TranslateDirection.POSITIVE): Segmentation {

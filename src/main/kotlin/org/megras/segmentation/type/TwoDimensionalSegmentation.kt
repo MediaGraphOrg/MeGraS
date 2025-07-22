@@ -148,10 +148,10 @@ class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Doubl
     override fun touches(rhs: Segmentation): Boolean {
         if (rhs is Rect) {
             return (
-                this.xmin + this.width == rhs.xmin ||
-                this.ymin + this.height == rhs.ymin ||
-                this.xmin == rhs.xmin + rhs.width ||
-                this.ymin == rhs.ymin + rhs.height
+                this.xmax == rhs.xmin ||
+                this.ymax == rhs.ymin ||
+                this.xmin == rhs.xmax ||
+                this.ymin == rhs.ymax
             )
         }
         return super.touches(rhs)

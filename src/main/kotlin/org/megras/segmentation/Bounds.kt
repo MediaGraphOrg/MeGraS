@@ -160,6 +160,21 @@ open class Bounds(private val bounds: DoubleArray = DoubleArray(8) { Double.NaN 
 
     fun getCenterT(): Double = (getMinT() + getMaxT()) / 2.0
 
+    fun getArea(): Double {
+        if (this.dimensions < 2) {
+            throw IllegalArgumentException("At least two dimensions are required.")
+        } else if (this.dimensions > 3) {
+            throw IllegalArgumentException("Too many dimensions.")
+        }
+        val area = when {
+            this.hasX() && this.hasY() -> this.getXYArea()
+            this.hasY() && this.hasZ() -> this.getYZArea()
+            this.hasX() && this.hasZ() -> this.getXZArea()
+            else -> throw IllegalArgumentException("Invalid dimensions.")
+        }
+        return area
+    }
+
     fun getXYArea(): Double {
         if (!this.hasX() || !this.hasY()) {
             throw IllegalStateException("Bounds must have both X and Y dimensions to calculate area.")

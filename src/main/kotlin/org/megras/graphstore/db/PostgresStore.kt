@@ -11,7 +11,6 @@ import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import java.io.Writer
-import java.time.LocalDateTime
 
 
 class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
@@ -960,12 +959,9 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         TODO("Not yet implemented")
     }
 
-    fun dumpDatabaseToTsv(writer: Writer) {
+    fun dump(writer: Writer, chunkSize: Int = 100000) {
         // Write header
         writer.write("subject\tpredicate\tobject\n")
-
-        val startTime = System.currentTimeMillis()
-        println("${LocalDateTime.now()} Starting database dump to TSV...")
 
         val allIds = transaction { QuadsTable.selectAll().map { it[QuadsTable.id] } }
         val totalQuads = allIds.size.toLong()
@@ -976,7 +972,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             return
         }
 
-        allIds.chunked(100000).forEach { chunk ->
+        allIds.chunked(chunkSize).forEach { chunk ->
             val quads = getIds(chunk).toSet()
             for (quad in quads) {
                 val formattedSubject = quad.subject.toString()
@@ -993,8 +989,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             val percentage = (quadsProcessed * 100) / totalQuads
             print("\rProgress: $percentage% ($quadsProcessed / $totalQuads)")
         }
-        val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        println("\nDump complete in $duration seconds.")
     }
 
     /**

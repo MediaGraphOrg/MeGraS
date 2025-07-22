@@ -27,5 +27,4 @@ class SegmentAreaFunction : FunctionBase1() {
 
         return NodeValue.makeDouble(area)
     }
-
 }

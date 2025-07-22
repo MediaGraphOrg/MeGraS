@@ -160,6 +160,27 @@ open class Bounds(private val bounds: DoubleArray = DoubleArray(8) { Double.NaN 
 
     fun getCenterT(): Double = (getMinT() + getMaxT()) / 2.0
 
+    fun getXYArea(): Double {
+        if (!this.hasX() || !this.hasY()) {
+            throw IllegalStateException("Bounds must have both X and Y dimensions to calculate area.")
+        }
+        return this.getXDimension() * this.getYDimension()
+    }
+
+    fun getYZArea(): Double {
+        if (!this.hasY() || !this.hasZ()) {
+            throw IllegalStateException("Bounds must have both Y and Z dimensions to calculate area.")
+        }
+        return this.getYDimension() * this.getZDimension()
+    }
+
+    fun getXZArea(): Double {
+        if (!this.hasX() || !this.hasZ()) {
+            throw IllegalStateException("Bounds must have both X and Z dimensions to calculate area.")
+        }
+        return this.getXDimension() * this.getZDimension()
+    }
+
     /**
      * converts a 3D spatial bound (x,y,z) to a temporal one (x,y,t)
      */

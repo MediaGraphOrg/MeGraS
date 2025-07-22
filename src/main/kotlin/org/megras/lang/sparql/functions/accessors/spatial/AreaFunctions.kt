@@ -6,6 +6,7 @@ import org.megras.data.graph.URIValue
 import org.megras.graphstore.MutableQuadSet
 import org.megras.lang.sparql.SparqlUtil
 import org.megras.segmentation.BoundsUtil
+import org.megras.segmentation.SegmentationUtil
 
 class BoundsAreaFunction : FunctionBase1() {
     companion object {
@@ -23,6 +24,28 @@ class BoundsAreaFunction : FunctionBase1() {
         val bounds = BoundsUtil.getBounds(subject, quads)
             ?: throw IllegalArgumentException("Invalid subject. No bounds found.")
         val area = bounds.getArea()
+
+        return NodeValue.makeDouble(area)
+    }
+}
+
+class SegmentAreaFunction : FunctionBase1() {
+    companion object {
+        private lateinit var quads: MutableQuadSet
+
+        fun setQuads(quadSet: MutableQuadSet) {
+            this.quads = quadSet
+        }
+    }
+
+    override fun exec(arg: NodeValue): NodeValue {
+        val subject = SparqlUtil.toQuadValue(arg.asNode()) as URIValue?
+            ?: throw IllegalArgumentException("Invalid subject. Expected a URI.")
+
+        val segmentation = SegmentationUtil.getSegmentation(subject, quads)
+            ?: throw IllegalArgumentException("Invalid subject. No segmentation found.")
+
+        val area = segmentation.getArea()
 
         return NodeValue.makeDouble(area)
     }

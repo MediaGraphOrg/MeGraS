@@ -89,7 +89,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
             cache.addAllUnindexed(buffer)
         }
         linesProcessed = totalLines.toLong()
-        val percentage = (linesProcessed * 100) / totalLines
+        val percentage = if (totalLines == 0) 100 else (linesProcessed * 100) / totalLines
         print("\rProgress: $percentage% ($linesProcessed / $totalLines)\n")
 
         cache.rebuildIndex()

@@ -14,6 +14,7 @@ import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.data.schema.SchemaOrg
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.media.AudioVideoSegmenter
 import org.megras.segmentation.media.DocumentSegmenter
@@ -261,7 +262,7 @@ object SegmentationUtil {
         }.toList()
     }
 
-    fun getSegmentation(subject: URIValue, quads: MutableQuadSet) : Segmentation? {
+    fun getSegmentation(subject: URIValue, quads: QuadSet) : Segmentation? {
         val segment = quads.filter(
             setOf(subject),
             setOf(MeGraS.SEGMENT_DEFINITION.uri, MeGraS.SEGMENT_TYPE.uri),
@@ -344,6 +345,16 @@ object SegmentationUtil {
         objectStore: FileSystemObjectStore,
         quads: MutableQuadSet
     ): LocalQuadValue {
+        return segment(objectId, objectId, segmentation, objectStore, quads)
+    }
+
+    fun segment(
+        subject: URIValue,
+        segmentation: Segmentation,
+        objectStore: FileSystemObjectStore,
+        quads: MutableQuadSet
+    ): LocalQuadValue {
+        val objectId = subject.suffix()
         return segment(objectId, objectId, segmentation, objectStore, quads)
     }
 }

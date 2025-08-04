@@ -2,11 +2,26 @@ package org.megras.segmentation
 
 import com.ezylang.evalex.Expression
 import de.javagl.obj.ObjReader
+import org.megras.data.fs.FileSystemObjectStore
+import org.megras.data.fs.ObjectStoreResult
+import org.megras.data.fs.StoredObjectDescriptor
+import org.megras.data.fs.StoredObjectId
+import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.Quad
+import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
+import org.megras.data.schema.SchemaOrg
 import org.megras.graphstore.MutableQuadSet
+import org.megras.id.ObjectId
+import org.megras.segmentation.media.AudioVideoSegmenter
+import org.megras.segmentation.media.DocumentSegmenter
+import org.megras.segmentation.media.ImageSegmenter
+import org.megras.segmentation.media.MeshSegmenter
+import org.megras.segmentation.media.TextSegmenter
 import org.megras.segmentation.type.*
+import org.megras.util.HashUtil
 import java.io.ByteArrayInputStream
 import java.util.*
 import javax.imageio.ImageIO
@@ -259,5 +274,76 @@ object SegmentationUtil {
             ?: return null).`object`
 
         return parseSegmentation(type.toString().replace("^^String", ""), definition.toString().replace("^^String", ""))
+    }
+
+    fun segment(
+        objectId: String,
+        documentId: String,
+        segmentation: Segmentation,
+        objectStore: FileSystemObjectStore,
+        quads: MutableQuadSet
+    ): LocalQuadValue {
+        fun getStoredObjectInCache(objectId: String): ObjectStoreResult? {
+            val canonicalId = quads.filter(
+                setOf(ObjectId(objectId)),
+                setOf(MeGraS.CANONICAL_ID.uri),
+                null
+            ).firstOrNull()?.`object` as? StringValue ?: return null
+            val osId = StoredObjectId.of(canonicalId.value) ?: return null
+            return objectStore.get(osId)
+        }
+
+        val storedObject = getStoredObjectInCache(objectId)
+            ?: throw IllegalArgumentException("Unknown objectId")
+        val mediaType = MediaType.mimeTypeMap[storedObject.descriptor.mimeType]
+            ?: throw IllegalArgumentException("Unknown media type")
+
+        // Perform segmentation
+        val segmentResult = when (mediaType) {
+            MediaType.TEXT -> TextSegmenter.segment(storedObject.inputStream(), segmentation)
+            MediaType.IMAGE -> ImageSegmenter.segment(storedObject.inputStream(), segmentation)
+            MediaType.AUDIO,
+            MediaType.VIDEO -> AudioVideoSegmenter.segment(storedObject, segmentation)
+            MediaType.DOCUMENT -> DocumentSegmenter.segment(storedObject.inputStream(), segmentation)
+            MediaType.MESH -> MeshSegmenter.segment(storedObject.inputStream(), segmentation)
+            MediaType.UNKNOWN -> throw IllegalArgumentException("Unknown media type")
+        } ?: throw IllegalArgumentException("Invalid segmentation")
+
+        val inStream = ByteArrayInputStream(segmentResult.segment)
+        val cachedObjectId = objectStore.idFromStream(inStream)
+        val descriptor = StoredObjectDescriptor(
+            cachedObjectId,
+            storedObject.descriptor.mimeType,
+            segmentResult.segment.size.toLong(),
+            segmentResult.bounds
+        )
+        inStream.reset()
+        objectStore.store(inStream, descriptor)
+
+        val cacheId = HashUtil.hashToBase64(documentId + segmentation.toURI(), HashUtil.HashType.MD5)
+        val cacheObject = LocalQuadValue("${objectId}/c/$cacheId")
+
+        quads.addAll(
+            listOf(
+                Quad(cacheObject, MeGraS.CANONICAL_ID.uri, StringValue(descriptor.id.id)),
+                Quad(cacheObject, MeGraS.BOUNDS.uri, StringValue(segmentResult.bounds.toString())),
+                Quad(cacheObject, MeGraS.SEGMENT_OF.uri, ObjectId(documentId)),
+                Quad(cacheObject, MeGraS.SEGMENT_TYPE.uri, StringValue(segmentation.getType())),
+                Quad(cacheObject, MeGraS.SEGMENT_DEFINITION.uri, StringValue(segmentation.getDefinition())),
+                Quad(cacheObject, MeGraS.SEGMENT_BOUNDS.uri, StringValue(segmentation.bounds.toString()))
+            )
+        )
+        quads.add(Quad(LocalQuadValue(objectId + "/" + segmentation.toURI()), SchemaOrg.SAME_AS.uri, cacheObject))
+
+        return cacheObject
+    }
+
+    fun segment(
+        objectId: String,
+        segmentation: Segmentation,
+        objectStore: FileSystemObjectStore,
+        quads: MutableQuadSet
+    ): LocalQuadValue {
+        return segment(objectId, objectId, segmentation, objectStore, quads)
     }
 }

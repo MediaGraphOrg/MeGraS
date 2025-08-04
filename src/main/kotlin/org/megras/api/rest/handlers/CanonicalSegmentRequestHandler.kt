@@ -20,11 +20,9 @@ import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationUtil
-import org.megras.segmentation.media.*
 import org.megras.segmentation.type.*
 import org.megras.util.HashUtil
 import org.slf4j.LoggerFactory
-import java.io.ByteArrayInputStream
 
 class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
 
@@ -180,42 +178,8 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
         }
 
         // perform segmentation operation
-        val segmentResult: SegmentationResult = when(mediaType) {
-            MediaType.TEXT -> TextSegmenter.segment(storedObject.inputStream(), segmentation)
-            MediaType.IMAGE -> ImageSegmenter.segment(storedObject.inputStream(), segmentation)
-            MediaType.AUDIO,
-            MediaType.VIDEO -> AudioVideoSegmenter.segment(storedObject, segmentation)
-            MediaType.DOCUMENT -> DocumentSegmenter.segment(storedObject.inputStream(), segmentation)
-            MediaType.MESH -> MeshSegmenter.segment(storedObject.inputStream(), segmentation)
-            MediaType.UNKNOWN -> throw RestErrorStatus.unknownMediaType
-        } ?: throw RestErrorStatus.invalidSegmentation
+        val cacheObject = SegmentationUtil.segment(objectId, documentId, segmentation, objectStore, quads)
 
-        val inStream = ByteArrayInputStream(segmentResult.segment)
-
-        val cachedObjectId = objectStore.idFromStream(inStream)
-        val descriptor = StoredObjectDescriptor(
-            cachedObjectId,
-            storedObject.descriptor.mimeType,
-            segmentResult.segment.size.toLong(),
-            segmentResult.bounds
-        )
-
-        inStream.reset()
-        objectStore.store(inStream, descriptor)
-
-        val cacheId = HashUtil.hashToBase64(documentId + segmentation.toURI(), HashUtil.HashType.MD5)
-        val cacheObject = LocalQuadValue("$objectId/c/$cacheId")
-
-        quads.addAll(
-            listOf(
-                Quad(cacheObject, MeGraS.CANONICAL_ID.uri, StringValue(descriptor.id.id)),
-                Quad(cacheObject, MeGraS.BOUNDS.uri, StringValue(segmentResult.bounds.toString())), // bounds of the resulting medium
-                Quad(cacheObject, MeGraS.SEGMENT_OF.uri, ObjectId(documentId)),
-                Quad(cacheObject, MeGraS.SEGMENT_TYPE.uri, StringValue(segmentation.getType())),
-                Quad(cacheObject, MeGraS.SEGMENT_DEFINITION.uri, StringValue(segmentation.getDefinition())),
-                Quad(cacheObject, MeGraS.SEGMENT_BOUNDS.uri, StringValue(segmentation.bounds.toString())), // bounds of the segmentation
-            )
-        )
         currentPaths.forEach { currentPath ->
             quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, cacheObject))
         }

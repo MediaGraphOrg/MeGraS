@@ -69,12 +69,11 @@ The `FILE` backend is the simplest backend available in MeGraS and requires no a
 
 ## COTTONTAIL Backend
 The `COTTONTAIL` backend requires a running instance of Cottontail DB.
-TODO: add more details about the Cottontail DB setup and configuration.
+A detailed set-up guide (from source or Docker) can be found here: [Cottontail DB README](https://github.com/vitrivr/cottontaildb/blob/master/README.md)
 
 ## POSTGRES Backend
 The `POSTGRES` backend requires a running instance of PostgreSQL.
 To set up the database, we recommend that you use the following [docker image](https://docs.timescale.com/self-hosted/latest/install/installation-docker) which contains a preconfigured PostgreSQL instance with the required extensions:
-
 ````bash
 docker run -d --name timescaledb -p 5432:5432 -e POSTGRES_PASSWORD=password timescale/timescaledb-ha:pg17
 ````

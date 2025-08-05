@@ -1,6 +1,8 @@
 package org.megras.util
 
-import com.drew.imaging.ImageMetadataReader
+import com.thebuzzmedia.exiftool.ExifToolBuilder
+import com.thebuzzmedia.exiftool.Tag
+import com.thebuzzmedia.exiftool.exceptions.ExifToolNotFoundException
 import org.megras.data.fs.file.PseudoFile
 import org.megras.data.graph.Quad
 import org.megras.data.graph.StringValue
@@ -10,22 +12,25 @@ import org.megras.data.graph.DoubleValue
 import org.megras.data.graph.DoubleVectorValue
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.TemporalValue
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.io.File
 import java.time.format.DateTimeParseException
 import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
+import org.slf4j.LoggerFactory
+import java.io.FileOutputStream
+import java.io.IOException
+import kotlin.io.use
 
 object ExifUtil {
-    private val dateTimePatterns = listOf(
-        "yyyy:MM:dd HH:mm:ss",
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy/MM/dd HH:mm:ss"
-    )
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
-    private fun parseValue(description: String): QuadValue {
-        val trimmed = description.trim()
+    private fun parseValue(value: String): QuadValue? {
+        val trimmed = value.trim()
+        // Return null for invalid date string
+        if (trimmed == "0000:00:00 00:00:00") {
+            return null
+        }
         // Try Vector: matches (a, b, c) or a b c or a, b, c
         val vectorRegex = Regex("^\\(? *-?\\d*\\.?\\d+( *[, ] *-?\\d*\\.?\\d+)* *\\)?$")
         if (vectorRegex.matches(trimmed)) {
@@ -43,13 +48,10 @@ object ExifUtil {
         if (trimmed.matches(Regex("^-?\\d*\\.\\d+$"))) {
             return DoubleValue(trimmed.toDouble())
         }
-        // Try DateTime
-        for (pattern in dateTimePatterns) {
-            try {
-                LocalDateTime.parse(trimmed, DateTimeFormatter.ofPattern(pattern))
-                return TemporalValue(trimmed)
-            } catch (_: DateTimeParseException) {}
-        }
+        // Try parsing as LocalDateTime
+        try {
+            return TemporalValue(trimmed)
+        } catch (_: Exception) {}
         // Fallback to String
         return StringValue(trimmed)
     }
@@ -58,22 +60,56 @@ object ExifUtil {
         file: PseudoFile,
         oid: ObjectId
     ): QuadSet {
-        return try {
-            val metadata = ImageMetadataReader.readMetadata(file.inputStream())
-            BasicMutableQuadSet().apply {
-                metadata.directories.forEach { directory ->
-                    directory.tags.forEach { tag ->
-                        add(Quad(
-                            oid,
-                            URIValue(Constants.EXIF_PREFIX + "/" + tag.tagName.replace(" ", "")),
-                            parseValue(tag.description)
-                        ))
+        val tempFile: File = try {
+            File.createTempFile("temp-exif-${file.name}-", ".tmp")
+        } catch (_: IOException) {
+            logger.error("Failed to create temporary file.")
+            return BasicMutableQuadSet()
+        }
+
+        try {
+            // Copy the contents of the InputStream to the temporary file
+            file.inputStream().use { inputStream ->
+                FileOutputStream(tempFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+
+            val quads = BasicMutableQuadSet()
+            ExifToolBuilder().build().use { tool ->
+                // Get all metadata for the specified file
+                val metadata: Map<Tag, String> = tool.getImageMeta(tempFile)
+
+                // Check if any metadata was found
+                if (metadata.isEmpty()) {
+                    logger.info("No metadata found for the file: ${tempFile.absolutePath}")
+                } else {
+                    quads.apply{
+                        metadata.forEach {tag, value ->
+                            if (value.isNotEmpty()) {
+                                val parsedValue = parseValue(value)
+                                if (parsedValue != null) {
+                                    add(
+                                        Quad(
+                                            oid,
+                                            URIValue(Constants.EXIF_PREFIX + "/" + tag.name),
+                                            parsedValue
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
+            return quads
         } catch (e: Exception) {
-            println("Error reading EXIF data for file '${file.name}': ${e.message}")
-            BasicMutableQuadSet()
+            when (e) {
+                is IOException -> logger.error("Error reading EXIF data from file: ${file.name}, ${e.message}")
+                is ExifToolNotFoundException -> logger.error("ExifTool not found. Please ensure it is installed and in your PATH.")
+                else -> logger.error("Unexpected error: ${e.message}")
+            }
+            return BasicMutableQuadSet()
         }
     }
 }

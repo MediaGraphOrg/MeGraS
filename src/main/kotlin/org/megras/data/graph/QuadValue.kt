@@ -4,8 +4,13 @@ import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoField
+import java.util.Date
 
 sealed class QuadValue : Serializable {
 
@@ -332,55 +337,82 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
     }
 }
 
-data class TemporalValue(val originalString: String) : Comparable<TemporalValue>, QuadValue(), Serializable {
-    private val dateTime: LocalDateTime
+data class TemporalValue(val dateTime: OffsetDateTime) : Comparable<TemporalValue>, QuadValue(), Serializable {
 
     val value: String
         get() = dateTime.toString()
 
-    init {
-        val value = if (originalString.contains("^^")) {
-            originalString.substringBefore("^^").trim()
-        } else {
-            originalString
-        }
-        dateTime = parseDateTime(value)
-    }
+    constructor(originalString: String) : this(parseDateTime(originalString))
 
-    private fun parseDateTime(value: String): LocalDateTime {
-        val formats = listOf(
-            DateTimeFormatter.ISO_DATE_TIME, // ISO-8601 format
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"), // Common database format
-            DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss"), // Common database format
-            DateTimeFormatter.ISO_DATE // Date only
-        )
+    constructor(ldt: LocalDateTime) : this(ldt.atZone(ZoneId.systemDefault()).toOffsetDateTime())
 
-        formats.forEach { formatter ->
-            try {
-                return LocalDateTime.parse(value, formatter)
-            } catch (e: DateTimeParseException) {
-                // Ignore and try the next format
+    companion object {
+        private fun parseDateTime(value: String): OffsetDateTime {
+            val cleanValue = if (value.contains("^^")) {
+                value.substringBefore("^^").trim()
+            } else {
+                value
             }
-        }
 
-        // Try parsing as a Unix timestamp (milliseconds)
-        return try {
-            val instant = java.time.Instant.ofEpochMilli(value.toLong())
-            LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Unsupported date-time format: $value")
+            // Try parsing as OffsetDateTime directly
+            try {
+                // Default parser handles ISO_OFFSET_DATE_TIME
+                return OffsetDateTime.parse(cleanValue)
+            } catch (_: DateTimeParseException) {}
+
+            // Formatter for yyyy:MM:dd HH:mm:ss with optional milliseconds and required offset
+            val offsetFormatter = DateTimeFormatterBuilder()
+                .appendPattern("yyyy:MM:dd HH:mm:ss")
+                .optionalStart()
+                .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                .optionalEnd()
+                .appendPattern("XXX")
+                .toFormatter()
+
+            try {
+                return OffsetDateTime.parse(cleanValue, offsetFormatter)
+            } catch (_: DateTimeParseException) {}
+
+            // Try parsing as LocalDateTime and convert
+            val localFormats = listOf(
+                DateTimeFormatter.ISO_DATE_TIME,
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                DateTimeFormatterBuilder()
+                    .appendPattern("yyyy:MM:dd HH:mm:ss")
+                    .optionalStart()
+                    .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                    .optionalEnd()
+                    .toFormatter(),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"),
+                DateTimeFormatter.ISO_DATE
+            )
+
+            for (formatter in localFormats) {
+                try {
+                    val ldt = LocalDateTime.parse(cleanValue, formatter)
+                    return ldt.atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                } catch (_: DateTimeParseException) {}
+            }
+
+            // Try parsing as a Unix timestamp (milliseconds)
+            return try {
+                val instant = java.time.Instant.ofEpochMilli(cleanValue.toLong())
+                OffsetDateTime.ofInstant(instant, ZoneId.systemDefault())
+            } catch (_: Exception) {
+                throw IllegalArgumentException("Unsupported date-time format: $cleanValue")
+            }
         }
     }
 
     override fun toString(): String {
-        return dateTime.toString() + "^^TemporalValue"
+        return "$dateTime^^TemporalValue"
     }
 
     override fun compareTo(other: TemporalValue): Int {
         return dateTime.compareTo(other.dateTime)
     }
 
-    operator fun compareTo(other: LocalDateTime): Int {
+    operator fun compareTo(other: OffsetDateTime): Int {
         return dateTime.compareTo(other)
     }
 }

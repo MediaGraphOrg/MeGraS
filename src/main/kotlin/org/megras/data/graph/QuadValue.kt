@@ -10,7 +10,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoField
-import java.util.Date
 
 sealed class QuadValue : Serializable {
 
@@ -29,6 +28,8 @@ sealed class QuadValue : Serializable {
             is DoubleArray -> of(value)
             is LongArray -> of(value)
             is FloatArray -> of(value)
+            is LocalDateTime -> of(value)
+            is OffsetDateTime -> of(value)
             else -> of(value.toString())
         }
 
@@ -47,6 +48,7 @@ sealed class QuadValue : Serializable {
             value.endsWith("^^Double") -> DoubleValue(
                 value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN
             )
+            value.endsWith("^^Temporal") -> TemporalValue(value.substringBeforeLast("^^Temporal"))
 
             value.startsWith("[") -> when { //vectors
                 value.endsWith("]") || value.endsWith("]^^DoubleVector") -> {
@@ -71,6 +73,8 @@ sealed class QuadValue : Serializable {
         fun of(value: List<Long>) = LongVectorValue(value)
         fun of(value: List<Float>) = FloatVectorValue(value)
         fun of(value: FloatArray) = FloatVectorValue(value)
+        fun of(value: OffsetDateTime) = TemporalValue(value)
+        fun of(value: LocalDateTime) = TemporalValue(value)
 
 
     }
@@ -405,7 +409,7 @@ data class TemporalValue(val dateTime: OffsetDateTime) : Comparable<TemporalValu
     }
 
     override fun toString(): String {
-        return "$dateTime^^TemporalValue"
+        return "$dateTime^^Temporal"
     }
 
     override fun compareTo(other: TemporalValue): Int {

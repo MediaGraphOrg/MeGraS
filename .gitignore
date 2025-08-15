@@ -174,6 +174,7 @@ gradle-app.setting
 /store/
 src/main/kotlin/org/megras/Playground.kt
 *.tsv
+src/main/resources/log4j2.xml
 src/main/resources/sandbox.html
 /examples
 **__pycache__

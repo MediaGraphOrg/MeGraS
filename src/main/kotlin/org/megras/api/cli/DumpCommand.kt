@@ -23,18 +23,18 @@ class DumpCommand(private val quads: MutableQuadSet) : CliktCommand(name = "dump
 
     override fun run() {
         if (quads !is AbstractDbStore) {
-            println("Dump is only supported for database stores.")
+            System.err.println("Dump is only supported for database stores.")
             return
         }
 
         val startTime = System.currentTimeMillis()
-        println("${LocalDateTime.now()} Starting database dump to TSV ...")
+        logger.info("Starting database dump to TSV ...")
 
         val writer = BufferedWriter(FileWriter(fileName))
         quads.dump(writer, batchSize)
         writer.close()
 
         val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        println("\nDump complete in $duration seconds.")
+        println("Dump complete in $duration seconds.")
     }
 }

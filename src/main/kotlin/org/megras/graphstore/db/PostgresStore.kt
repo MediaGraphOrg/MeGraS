@@ -10,11 +10,14 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
+import org.slf4j.LoggerFactory
 import java.io.Writer
 
 
 class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
     AbstractDbStore() {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     object QuadsTable : Table("quads") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
@@ -968,7 +971,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         var quadsProcessed = 0L
 
         if (totalQuads == 0L) {
-            println("No quads to dump.")
+            logger.info("No quads to dump.")
             return
         }
 
@@ -987,7 +990,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             writer.flush()
             quadsProcessed += chunk.size
             val percentage = (quadsProcessed * 100) / totalQuads
-            print("\rProgress: $percentage% ($quadsProcessed / $totalQuads)")
+            logger.info("Progress: $percentage% ($quadsProcessed / $totalQuads)")
         }
     }
 

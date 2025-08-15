@@ -35,7 +35,7 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
 
     override fun load() {
         val startTime = System.currentTimeMillis()
-        logger.info("${LocalDateTime.now()} Starting load from TSV...")
+        logger.info("Starting load from TSV...")
 
         cache.clear()
 
@@ -83,19 +83,19 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
                     buffer.clear()
 
                     val percentage = (linesProcessed * 100) / totalLines
-                    print("\rProgress: $percentage% ($linesProcessed / $totalLines)")
+                    logger.info("Progress: $percentage% ($linesProcessed / $totalLines)")
                 }
             }
             cache.addAllUnindexed(buffer)
         }
         linesProcessed = totalLines.toLong()
-        val percentage = if (totalLines == 0) 100 else (linesProcessed * 100) / totalLines
-        print("\rProgress: $percentage% ($linesProcessed / $totalLines)\n")
+        //val percentage = if (totalLines == 0) 100 else (linesProcessed * 100) / totalLines
+        //logger.info("Progress: $percentage% ($linesProcessed / $totalLines)")
 
         cache.rebuildIndex()
 
         val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        logger.info("Load complete in $duration seconds.")
+        println("Load complete in $duration seconds: $totalLines")
         lastStoreTime = System.currentTimeMillis()
 
     }

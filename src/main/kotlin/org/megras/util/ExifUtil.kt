@@ -105,9 +105,9 @@ object ExifUtil {
             return quads
         } catch (e: Exception) {
             when (e) {
-                is IOException -> logger.error("Error reading EXIF data from file: ${file.name}, ${e.message}")
-                is ExifToolNotFoundException -> logger.error("ExifTool not found. Please ensure it is installed and in your PATH.")
-                else -> logger.error("Unexpected error: ${e.message}")
+                is IOException -> System.err.println("Error reading EXIF data from file: ${file.name}, ${e.message}")
+                is ExifToolNotFoundException -> System.err.println("ExifTool not found. Please ensure it is installed and in your PATH.")
+                else -> System.err.println("Unexpected error: ${e.message}")
             }
             return BasicMutableQuadSet()
         }

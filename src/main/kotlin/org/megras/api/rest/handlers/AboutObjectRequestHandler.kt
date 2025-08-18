@@ -7,9 +7,11 @@ import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
+import org.megras.data.graph.VectorValue
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.BasicMutableQuadSet
@@ -218,33 +220,101 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             }
         }
 
-        // construct a list of all the relevant triples in a html table
-        // Make the link clickable, only if it is a URI
-        // Ensure that the URIs are displayed correctly
-        // e.g., <http://localhost:8080/ig4eHDw8PBwehl44EMsGGVowgwnovvt3-tTGOdJd4baxnIRMdrTy6sg> <http://megras.org/schema#canonicalMimeType> image/png^^String
+        // Helper to escape a string for HTML display
+        fun esc(s: String): String = s
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+
+        // Extract a predicate namespace (up to last '#' or '/') to group by; return null if not a URI
+        fun predicateNamespace(p: QuadValue): String? = when (p) {
+            is URIValue -> {
+                val s = p.value
+                val idxHash = s.lastIndexOf('#')
+                val idxSlash = s.lastIndexOf('/')
+                val idx = if (idxHash > idxSlash) idxHash else idxSlash
+                if (idx >= 0) s.substring(0, idx + 1) else s
+            }
+            else -> null
+        }
+
+        // Helper to render a single quad row, optionally as part of a collapsible group
+        fun appendRow(q: Quad, groupClass: String? = null, hidden: Boolean = false, isLastInGroup: Boolean = false) {
+            if (groupClass != null) {
+                val extraClass = if (isLastInGroup) " group-last-row" else ""
+                buf.append("<tr class='" + groupClass + " group-content" + extraClass + "'" + (if (hidden) " style='display:none;'" else "") + ">")
+            } else {
+                buf.append("<tr>")
+            }
+            buf.append("<td>" + q.subject.toHtml() + "</td>")
+            buf.append("<td>" + q.predicate.toPredHtml() + "</td>")
+            buf.append("<td>" + q.`object`.toHtml() + "</td>")
+            buf.append("</tr>\n")
+        }
+
+        // Sort a list of quads alphabetically by predicate for consistent rendering
+        fun rowsSortedByPredicate(rows: List<Quad>): List<Quad> =
+            rows.sortedBy { it.predicate.toString().lowercase() }
+
+        // construct a list of all the relevant triples in a html table with collapsible predicate groups
         buf.append("<br><h2>Node Neighborhood</h2>")
         buf.append("\n<table>\n")
         buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
-        relevant.sortedBy { it.subject.toString().length }.forEach {
-            buf.append("<tr>")
-            buf.append("<td>${it.subject.toHtml()}</td>")
-            buf.append("<td>${it.predicate.toPredHtml()}</td>")
-            buf.append("<td>${it.`object`.toHtml()}</td>")
-            buf.append("</tr>\n")
+
+        val relevantList = relevant // grouping + per-group sort handles order
+        val groupsByNs = relevantList.groupBy { predicateNamespace(it.predicate) }
+        var groupCounter = 0
+
+        // First, render groups (namespace != null) that have 3 or more rows as collapsible sections, sorted with MeGraS first
+        val preferredNs = MeGraS.PREFIX
+        groupsByNs
+            .filter { it.key != null && it.value.size >= 3 }
+            .toList()
+            .sortedWith(compareBy<Pair<String?, List<Quad>>> { it.first != preferredNs }.thenBy { it.first!! })
+            .forEach { (ns, rows) ->
+                val nsDisplay = esc(ns!!.replace(LocalQuadValue.defaultPrefix, "/"))
+                val gid = "nodepred-group-" + (++groupCounter)
+                buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'>> " + nsDisplay + " (" + rows.size + ")</td></tr>\n")
+                val sorted = rowsSortedByPredicate(rows)
+                sorted.forEachIndexed { idx, q ->
+                    appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                }
+            }
+
+        // Then, render all remaining rows (no namespace or singleton groups) as normal rows, globally sorted by predicate
+        val ungroupedRows = groupsByNs.flatMap { (ns, rows) ->
+            val shouldGroup = ns != null && rows.size >= 3
+            if (!shouldGroup) rows else emptyList()
         }
+        rowsSortedByPredicate(ungroupedRows).forEach { q -> appendRow(q) }
         buf.append("</table>\n")
 
         if (extended.isNotEmpty()) {
             buf.append("<br><h2>Ancestor Neighborhood</h2>")
             buf.append("\n<table>\n")
             buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
-            extended.sortedBy { it.subject.toString().length }.forEach {
-                buf.append("<tr>")
-                buf.append("<td>${it.subject.toHtml()}</td>")
-                buf.append("<td>${it.predicate.toPredHtml()}</td>")
-                buf.append("<td>${it.`object`.toHtml()}</td>")
-                buf.append("</tr>\n")
-            }
+
+            val extendedList = extended // grouping + per-group sort handles order
+            val groupsBySubject = extendedList.groupBy { it.subject }
+            var ancCounter = 0
+
+            // Render subject groups with 3+ rows as collapsible, sorted by subject
+            groupsBySubject
+                .filter { it.value.size >= 3 }
+                .toList()
+                .sortedBy { it.first.toString() }
+                .forEach { (subj, rows) ->
+                    val gid = "ancestor-subj-group-" + (++ancCounter)
+                    buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'>> " + subj.toHtml() + " (" + rows.size + ")</td></tr>\n")
+                    val sorted = rowsSortedByPredicate(rows)
+                    sorted.forEachIndexed { idx, q ->
+                        appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                    }
+                }
+
+            // Render singleton subjects as normal rows, globally sorted by predicate
+            val singletonRows = groupsBySubject.filter { it.value.size < 3 }.flatMap { it.value }
+            rowsSortedByPredicate(singletonRows).forEach { q -> appendRow(q) }
             buf.append("</table>\n")
         }
 
@@ -255,7 +325,24 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         }
         buf.append("</textarea>")*/
 
-        buf.append("""
+        buf.append(
+            """
+            <style>
+                /* Visual indicator for the last row in a group */
+                .group-last-row td { border-bottom: 2px solid #dcdcdc; }
+            </style>
+            <script>
+                function toggleGroup(groupId) {
+                    var rows = document.getElementsByClassName(groupId);
+                    var anyVisible = false;
+                    for (var i = 0; i < rows.length; i++) {
+                        if (rows[i].style.display !== 'none') { anyVisible = true; break; }
+                    }
+                    for (var i = 0; i < rows.length; i++) {
+                        rows[i].style.display = anyVisible ? 'none' : '';
+                    }
+                }
+            </script>
             </body>
             </html>
         """.trimIndent())
@@ -271,13 +358,13 @@ private fun QuadValue.toHtml(): String {
     // if it is a literal, return the value
     // if it is a vector, return the value as a string and add a tooltip with the full value
     return when (this) {
-        is org.megras.data.graph.URIValue -> {
+        is URIValue -> {
             // Make URI values clickable by replacing angle brackets with HTML entities
             // and wrapping them in an anchor tag
             val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
             "<a href='$value/about'>$displayValue</a>"
         }
-        is org.megras.data.graph.VectorValue -> {
+        is VectorValue -> {
             // For vector values, show them in a more readable form with a tooltip
             val shortDisplay = if (length > 8) {
                 "[${toString().substring(1, 50)}...]"

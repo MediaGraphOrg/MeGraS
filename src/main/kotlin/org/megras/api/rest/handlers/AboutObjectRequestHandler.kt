@@ -54,6 +54,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
           """
               <!DOCTYPE html>
               <head>
+                  <meta charset="UTF-8">
                   <title>About '$objectId'</title>
                   <link rel="stylesheet" type="text/css" href="/static/styles.css">
               </head>
@@ -80,7 +81,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         }
 
         val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(objectId)).map { it.subject as URIValue }.toSet()
-        val imgBounds = Bounds(
+        val itemBounds = Bounds(
             quads.filter(setOf(objectId), setOf(MeGraS.BOUNDS.uri), null)
                 .firstOrNull()?.`object`.toString().removeSuffix("^^String")
         )
@@ -116,7 +117,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                 val svgPath = segmentation.getDefinition()
                                 val coords = svgPath.split(",").map { it.toDouble() }
                                 val x = coords[0]
-                                val y = imgBounds.getMaxY() - coords[3]
+                                val y = itemBounds.getMaxY() - coords[3]
                                 val width = coords[1] - coords[0]
                                 val height = coords[3] - coords[2]
                                 svg += """
@@ -131,7 +132,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                     .map { it.replace("(", "").replace(")", "") }
                                     .map { point ->
                                         val (x, y) = point.split(",").map(String::toDouble)
-                                        "$x,${imgBounds.getMaxY() - y}"
+                                        "$x,${itemBounds.getMaxY() - y}"
                                     }
                                 svg += """
                                     <a xlink:href='$aboutUrl' target='_blank'>
@@ -145,7 +146,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                     val command = it.groupValues[1]
                                     val x = it.groupValues[2].toDouble()
                                     val y = it.groupValues[3].toDouble()
-                                    "$command$x,${imgBounds.getMaxY() - y}"
+                                    "$command$x,${itemBounds.getMaxY() - y}"
                                 }
                                 svg += """
                                     <a xlink:href='$aboutUrl' target='_blank'>
@@ -212,7 +213,211 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 )
             }
 
-            MediaType.TEXT.name, MediaType.DOCUMENT.name -> {
+            MediaType.TEXT.name -> {
+                // Build absolute character intervals from child segments (CHARACTER)
+                val charIntervals: MutableList<Pair<Int, Int>> = mutableListOf()
+                // Also keep mapping to child about URLs for click-through
+                val charLinks: MutableList<Triple<Int, Int, String>> = mutableListOf()
+                if (children.isNotEmpty()) {
+                    children.forEach { child ->
+                        val seg = getSegmentation(child)
+                        when (seg) {
+                            is org.megras.segmentation.type.Character -> {
+                                val absSeg = if (seg.isRelative) {
+                                    // Convert to absolute using this object's bounds (T dimension = text length)
+                                    (seg.toAbsolute(itemBounds) as? org.megras.segmentation.type.Character) ?: seg
+                                } else seg
+                                val aboutUrl = "${child.value}/about"
+                                // Parse definition "l-h,l-h,..." to intervals
+                                absSeg.getDefinition().split(",").forEach { part ->
+                                    val r = part.trim()
+                                    if (r.isNotEmpty()) {
+                                        val bounds = r.split("-")
+                                        if (bounds.size == 2) {
+                                            val l = bounds[0].toDoubleOrNull()?.toInt()
+                                            val h = bounds[1].toDoubleOrNull()?.toInt()
+                                            if (l != null && h != null && h > l) {
+                                                charIntervals.add(l to h)
+                                                charLinks.add(Triple(l, h, aboutUrl))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else -> { /* ignore non-character segments for text preview */ }
+                        }
+                    }
+                }
+
+                // JSON for client-side highlighting
+                val intervalsJson = charIntervals.joinToString(prefix = "[", postfix = "]") { "[${it.first},${it.second}]" }
+                // JSON for clickable segments: [ [l,h,"/child/about"], ... ]
+                val segmentsJson = charLinks.joinToString(prefix = "[", postfix = "]") {
+                    val url = it.third.replace("\\", "\\\\").replace("\"", "\\\"")
+                    "[${it.first},${it.second},\"$url\"]"
+                }
+
+                buf.append(
+                    """
+                    <div class='media-container'>
+                        <div style="position: relative; display: block; text-align: left;">
+                            <pre id="text-preview" class="text-preview" style="margin: 0; max-height: 600px; overflow: auto; padding: 12px; border-radius: 4px;">
+                                Loading text…
+                            </pre>
+                        </div>
+                        <button class="segments-toggle-btn" onclick="toggleTextSegments()">Toggle Segments</button>
+                    </div>
+                    <script>
+                        (function(){
+                            const src = '${objectId.toPath()}';
+                            const preview = document.getElementById('text-preview');
+                            const intervals = $intervalsJson; // [ [start,end], ... ] absolute character offsets
+                            const clickable = $segmentsJson;   // [ [start,end,href], ... ]
+
+                            function computeDisjointWithLinks(ranges){
+                                // Build events with href associations
+                                const events = [];
+                                ranges.forEach(r => {
+                                    if (Array.isArray(r) && r.length >= 2){
+                                        const s = r[0]|0, e = r[1]|0; if (e > s){
+                                            const href = r[2];
+                                            events.push({ pos: s, type: 'start', href });
+                                            events.push({ pos: e, type: 'end', href });
+                                        }
+                                    }
+                                });
+                                if (events.length === 0) return [];
+                                events.sort((a,b) => a.pos - b.pos || (a.type==='end'? -1:1)); // end before start at same pos when closing region first
+                                const out = [];
+                                const active = new Map(); // href -> count
+                                let prev = events[0].pos;
+                                let i = 0;
+                                while (i < events.length){
+                                    const pos = events[i].pos;
+                                    if (pos > prev && active.size > 0){
+                                        out.push({ start: prev, end: pos, hrefs: Array.from(active.keys()) });
+                                    }
+                                    // process all events at this pos
+                                    while (i < events.length && events[i].pos === pos){
+                                        const ev = events[i];
+                                        if (ev.type === 'start') {
+                                            active.set(ev.href, (active.get(ev.href) || 0) + 1);
+                                        } else {
+                                            const cur = (active.get(ev.href) || 0) - 1;
+                                            if (cur <= 0) active.delete(ev.href); else active.set(ev.href, cur);
+                                        }
+                                        i++;
+                                    }
+                                    prev = pos;
+                                }
+                                return out;
+                            }
+
+                            function computeDisjoint(regs){
+                                // Sweep-line to produce disjoint segments with coverage count
+                                const events = [];
+                                regs.forEach(r => { if (Array.isArray(r) && r.length===2){ events.push([r[0], +1]); events.push([r[1], -1]); }});
+                                if (events.length === 0) return [];
+                                events.sort((a,b) => a[0]-b[0] || b[1]-a[1]); // start(+1) before end(-1) at same pos
+                                const out = [];
+                                let cur = 0, prev = events[0][0];
+                                for (let i=0;i<events.length;i++){
+                                    const [pos, delta] = events[i];
+                                    if (pos > prev && cur > 0) out.push({start: prev, end: pos, count: cur});
+                                    cur += delta;
+                                    prev = pos;
+                                }
+                                return out;
+                            }
+
+                            function render(text){
+                                // Build content with highlighted spans
+                                const regions = computeDisjoint(intervals);
+                                const linkRegions = computeDisjointWithLinks(clickable);
+                                // Clamp to text length
+                                const len = text.length;
+                                regions.forEach(r => { r.start = Math.max(0, Math.min(len, r.start)); r.end = Math.max(0, Math.min(len, r.end)); });
+                                linkRegions.forEach(r => { r.start = Math.max(0, Math.min(len, r.start)); r.end = Math.max(0, Math.min(len, r.end)); });
+                                // Merge invalid/empty
+                                const filtered = regions.filter(r => r.end > r.start).sort((a,b)=>a.start-b.start);
+                                const frag = document.createDocumentFragment();
+                                let pos = 0;
+                                for (let i=0;i<filtered.length;i++){
+                                    const r = filtered[i];
+                                    if (r.start > pos) frag.appendChild(document.createTextNode(text.slice(pos, r.start)));
+                                    const span = document.createElement('span');
+                                    span.className = 'text-segment' + (r.count > 1 ? ' overlap' : '');
+                                    span.appendChild(document.createTextNode(text.slice(r.start, r.end)));
+                                    // find hrefs for this region (by overlap with linkRegions)
+                                    const hrefs = [];
+                                    for (let j=0;j<linkRegions.length;j++){
+                                        const lr = linkRegions[j];
+                                        if (lr.end <= r.start) continue;
+                                        if (lr.start >= r.end) break;
+                                        lr.hrefs.forEach(h => { if (!hrefs.includes(h)) hrefs.push(h); });
+                                    }
+                                    if (hrefs.length > 0){
+                                        span.style.cursor = 'pointer';
+                                        span.addEventListener('click', function(ev){
+                                            // open first matching about link in new tab
+                                            const href = hrefs[0];
+                                            if (href) window.open(href, '_blank');
+                                            ev.stopPropagation();
+                                            ev.preventDefault();
+                                        });
+                                        span.title = hrefs.length === 1 ? 'Open segment details' : 'Multiple segments overlap; opening first';
+                                    }
+                                    frag.appendChild(span);
+                                    pos = r.end;
+                                }
+                                if (pos < len) frag.appendChild(document.createTextNode(text.slice(pos)));
+                                // Replace content safely (preserve whitespace and not interpret as HTML)
+                                preview.textContent = '';
+                                preview.innerHTML = '';
+                                preview.appendChild(frag);
+                            }
+
+                            function init(){
+                                fetch(src, { credentials: 'same-origin' }).then(r => r.text()).then(t => {
+                                    render(t);
+                                }).catch(() => {
+                                    // Fallback: show without highlighting
+                                    preview.textContent = 'Failed to load text.';
+                                });
+                            }
+
+                            window.toggleTextSegments = function(){
+                                const hidden = preview.classList.toggle('segments-hidden');
+                                // When hidden, also remove tooltips and disable keyboard focus hints
+                                const spans = preview.querySelectorAll('.text-segment');
+                                spans.forEach(function(span){
+                                    if (hidden) {
+                                        if (span.hasAttribute('title')) {
+                                            span.setAttribute('data-title', span.getAttribute('title') || '');
+                                            span.removeAttribute('title');
+                                        }
+                                    } else {
+                                        const t = span.getAttribute('data-title');
+                                        if (t !== null) {
+                                            if (t) span.setAttribute('title', t);
+                                            span.removeAttribute('data-title');
+                                        }
+                                    }
+                                });
+                            };
+
+                            if (document.readyState === 'loading') {
+                                document.addEventListener('DOMContentLoaded', init);
+                            } else {
+                                init();
+                            }
+                        })();
+                    </script>
+                """.trimIndent()
+                )
+            }
+
+            MediaType.DOCUMENT.name -> {
                 buf.append("<div class='media-container'><embed src='${objectId.toPath()}'></div>")
             }
 
@@ -368,6 +573,11 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 /* Visual indicator for the last row in a group */
                 .group-last-row td { border-bottom: 2px solid #dcdcdc; }
                 .tw-arrow { display: inline-block; width: 1ch; text-align: center; margin-right: 6px; }
+                /* Text preview and segment styles */
+                .text-preview { background: #fff; color: inherit; white-space: pre-wrap; font: inherit; }
+                .text-segment { background-color: rgba(255, 215, 0, 0.35); border-bottom: 2px solid rgba(255, 215, 0, 0.85); cursor: pointer; }
+                .text-segment.overlap { background-color: rgba(255, 215, 0, 0.55); box-shadow: inset 0 -3px 0 rgba(255, 215, 0, 0.85); }
+                .segments-hidden .text-segment { background: transparent !important; border-color: transparent !important; box-shadow: none !important; pointer-events: none; cursor: text; }
             </style>
             <script>
                 function toggleGroup(groupId) {

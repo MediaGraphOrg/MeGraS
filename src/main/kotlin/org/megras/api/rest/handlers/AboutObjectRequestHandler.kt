@@ -262,31 +262,58 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
 
         val relevantList = relevant // grouping + per-group sort handles order
-        val groupsByNs = relevantList.groupBy { predicateNamespace(it.predicate) }
-        var groupCounter = 0
+        // Special-case: collect all segmentOf predicate rows into their own group ("Segments")
+        val segmentOfUri = "http://megras.org/schema#segmentOf"
+        val segmentOfGroupRows = relevantList.filter { it.predicate is URIValue && it.predicate.value == segmentOfUri }
+        val baseList = relevantList.filterNot { it.predicate is URIValue && it.predicate.value == segmentOfUri }
+        val groupsByNs = baseList.groupBy { predicateNamespace(it.predicate) }
 
-        // First, render groups (namespace != null) that have 3 or more rows as collapsible sections, sorted with MeGraS first
-        val preferredNs = MeGraS.PREFIX
-        groupsByNs
-            .filter { it.key != null && it.value.size >= 3 }
-            .toList()
-            .sortedWith(compareBy<Pair<String?, List<Quad>>> { it.first != preferredNs }.thenBy { it.first!! })
-            .forEach { (ns, rows) ->
-                val nsDisplay = esc(ns!!.replace(LocalQuadValue.defaultPrefix, "/"))
+        // Determine which namespaces would be grouped (size >= 3)
+        val groupedCandidates = groupsByNs.filter { it.key != null && it.value.size >= 3 }
+        // Remaining rows that would not be grouped
+        val ungroupedRowsNode = groupsByNs.flatMap { (ns, rows) ->
+            val shouldGroup = ns != null && rows.size >= 3
+            if (!shouldGroup) rows else emptyList()
+        }
+
+        // Do not group if there is only one group and no other triples
+        val potentialGroupCount = groupedCandidates.size + if (segmentOfGroupRows.isNotEmpty()) 1 else 0
+        val doGroupNode = potentialGroupCount > 1 || ungroupedRowsNode.isNotEmpty()
+
+        if (doGroupNode) {
+            var groupCounter = 0
+
+            // Render the special Segments group first if present
+            if (segmentOfGroupRows.isNotEmpty()) {
                 val gid = "nodepred-group-" + (++groupCounter)
-                buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'>> " + nsDisplay + " (" + rows.size + ")</td></tr>\n")
-                val sorted = rowsSortedByPredicate(rows)
+                buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'><span id='tw-" + gid + "' class='tw-arrow'>&gt;</span> Segments (" + segmentOfGroupRows.size + ")</td></tr>\n")
+                val sorted = rowsSortedByPredicate(segmentOfGroupRows)
                 sorted.forEachIndexed { idx, q ->
                     appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
                 }
             }
 
-        // Then, render all remaining rows (no namespace or singleton groups) as normal rows, globally sorted by predicate
-        val ungroupedRows = groupsByNs.flatMap { (ns, rows) ->
-            val shouldGroup = ns != null && rows.size >= 3
-            if (!shouldGroup) rows else emptyList()
+            // Render predicate-namespace groups (3+ items), with MeGraS namespace first
+            val preferredNs = "http://megras.org/schema#"
+            groupedCandidates
+                .toList()
+                .sortedWith(compareBy<Pair<String?, List<Quad>>> { it.first != preferredNs }.thenBy { it.first!! })
+                .forEach { (ns, rows) ->
+                    val nsDisplay = esc(ns!!.replace(LocalQuadValue.defaultPrefix, "/"))
+                    val gid = "nodepred-group-" + (++groupCounter)
+                    buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'><span id='tw-" + gid + "' class='tw-arrow'>&gt;</span> " + nsDisplay + " (" + rows.size + ")</td></tr>\n")
+                    val sorted = rowsSortedByPredicate(rows)
+                    sorted.forEachIndexed { idx, q ->
+                        appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                    }
+                }
+
+            // Then, render all remaining rows (no namespace or small groups) as normal rows, globally sorted by predicate
+            rowsSortedByPredicate(ungroupedRowsNode).forEach { q -> appendRow(q) }
+        } else {
+            // Render all rows flat if only one would-be group and nothing else
+            rowsSortedByPredicate(relevantList.toList()).forEach { q -> appendRow(q) }
         }
-        rowsSortedByPredicate(ungroupedRows).forEach { q -> appendRow(q) }
         buf.append("</table>\n")
 
         if (extended.isNotEmpty()) {
@@ -296,25 +323,35 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
 
             val extendedList = extended // grouping + per-group sort handles order
             val groupsBySubject = extendedList.groupBy { it.subject }
-            var ancCounter = 0
 
-            // Render subject groups with 3+ rows as collapsible, sorted by subject
-            groupsBySubject
-                .filter { it.value.size >= 3 }
-                .toList()
-                .sortedBy { it.first.toString() }
-                .forEach { (subj, rows) ->
-                    val gid = "ancestor-subj-group-" + (++ancCounter)
-                    buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'>> " + subj.toHtml() + " (" + rows.size + ")</td></tr>\n")
-                    val sorted = rowsSortedByPredicate(rows)
-                    sorted.forEachIndexed { idx, q ->
-                        appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
-                    }
-                }
-
-            // Render singleton subjects as normal rows, globally sorted by predicate
+            // Determine which subjects would be grouped (size >= 3)
+            val groupedSubjects = groupsBySubject.filter { it.value.size >= 3 }
             val singletonRows = groupsBySubject.filter { it.value.size < 3 }.flatMap { it.value }
-            rowsSortedByPredicate(singletonRows).forEach { q -> appendRow(q) }
+
+            // Do not group if there is only one group and no other triples
+            val doGroupAncestor = groupedSubjects.size > 1 || singletonRows.isNotEmpty()
+
+            if (doGroupAncestor) {
+                var ancCounter = 0
+                // Render subject groups with 3+ rows as collapsible, sorted by subject
+                groupedSubjects
+                    .toList()
+                    .sortedBy { it.first.toString() }
+                    .forEach { (subj, rows) ->
+                        val gid = "ancestor-subj-group-" + (++ancCounter)
+                        buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'><span id='tw-" + gid + "' class='tw-arrow'>&gt;</span> " + subj.toHtml() + " (" + rows.size + ")</td></tr>\n")
+                        val sorted = rowsSortedByPredicate(rows)
+                        sorted.forEachIndexed { idx, q ->
+                            appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                        }
+                    }
+
+                // Render singleton subjects as normal rows, globally sorted by predicate
+                rowsSortedByPredicate(singletonRows).forEach { q -> appendRow(q) }
+            } else {
+                // Only one would-be group and nothing else: render all rows flat
+                rowsSortedByPredicate(extendedList.toList()).forEach { q -> appendRow(q) }
+            }
             buf.append("</table>\n")
         }
 
@@ -330,6 +367,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             <style>
                 /* Visual indicator for the last row in a group */
                 .group-last-row td { border-bottom: 2px solid #dcdcdc; }
+                .tw-arrow { display: inline-block; width: 1ch; text-align: center; margin-right: 6px; }
             </style>
             <script>
                 function toggleGroup(groupId) {
@@ -341,6 +379,8 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                     for (var i = 0; i < rows.length; i++) {
                         rows[i].style.display = anyVisible ? 'none' : '';
                     }
+                    var tw = document.getElementById('tw-' + groupId);
+                    if (tw) { tw.textContent = anyVisible ? '>' : 'v'; }
                 }
             </script>
             </body>
@@ -386,7 +426,7 @@ private fun QuadValue.toPredHtml(): String {
     // if it is a literal, return the value
     // if it is a vector, return the value as a string and add a tooltip with the full value
     return when (this) {
-        is org.megras.data.graph.URIValue -> {
+        is URIValue -> {
             // Make URI values clickable by replacing angle brackets with HTML entities
             // and wrapping them in an anchor tag
             val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")

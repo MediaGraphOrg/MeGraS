@@ -75,8 +75,7 @@ data class Config(
         val port: Int = 5432,
         val database: String = "megras",
         val user: String,
-        val password: String,
-        val dumpOnStartup: Boolean = false
+        val password: String
     )
 
     @Serializable

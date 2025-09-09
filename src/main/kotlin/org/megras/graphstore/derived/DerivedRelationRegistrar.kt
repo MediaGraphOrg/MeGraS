@@ -6,6 +6,7 @@ import org.megras.data.graph.URIValue
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.handlers.AverageColorHandler
 import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
+import org.megras.graphstore.derived.handlers.ExtractedTextHandler
 import org.megras.graphstore.derived.handlers.OcrHandler
 import org.megras.graphstore.derived.handlers.PageHandler
 
@@ -17,6 +18,7 @@ class DerivedRelationRegistrar(private val quads: QuadSet, private val objectSto
         register(ClipEmbeddingHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(OcrHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(PageHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
+        register(ExtractedTextHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
     }
 
     private fun register(handler: DerivedRelationHandler<QuadValue>) {

@@ -12,6 +12,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.ServiceConfig
 import org.megras.util.services.DoclingClient
 import java.io.File
 
@@ -27,7 +28,7 @@ class ExtractedTextHandler(private val quadSet: QuadSet, private val objectStore
     override fun canDerive(subject: URIValue): Boolean {
         val osr = FileUtil.getOsr(subject, this.quadSet, this.objectStore) ?: return false
 
-        return when (MediaType.mimeTypeMap[osr.descriptor.mimeType]) { //TODO: could also extract strings from text files
+        return when (MediaType.mimeTypeMap[osr.descriptor.mimeType]) {
             MediaType.DOCUMENT -> true
             MediaType.TEXT -> true
             else -> false
@@ -42,7 +43,7 @@ class ExtractedTextHandler(private val quadSet: QuadSet, private val objectStore
         return when (MediaType.mimeTypeMap[osr.descriptor.mimeType]) {
             MediaType.DOCUMENT -> {
                 val extractedText: String = runBlocking {
-                    val client = DoclingClient("localhost", 50051)
+                    val client = DoclingClient(ServiceConfig.grpcHost, ServiceConfig.grpcPort)
                     try {
                         val extractedText: String = client.extractText(path)
                         return@runBlocking extractedText
@@ -63,7 +64,7 @@ class ExtractedTextHandler(private val quadSet: QuadSet, private val objectStore
                 val outName = "${srcName}-extracted.txt"
                 val bytes = extractedText.toByteArray(Charsets.UTF_8)
                 val pseudo = PseudoFile(bytes, outName)
-                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo, metaSkip = true)
+                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo)
                 listOf(id)
             }
             MediaType.TEXT -> {

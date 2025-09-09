@@ -13,6 +13,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.ServiceConfig
 import org.megras.util.services.DoclingClient
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -43,7 +44,7 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
         val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
         val tables: List<Map<String, Any?>> = runBlocking {
-            val client = DoclingClient("localhost", 50051)
+            val client = DoclingClient(ServiceConfig.grpcHost, ServiceConfig.grpcPort)
             try {
                 client.extractTablesAsMaps(path)
             } catch (e: Exception) {
@@ -132,4 +133,3 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
         return ids
     }
 }
-

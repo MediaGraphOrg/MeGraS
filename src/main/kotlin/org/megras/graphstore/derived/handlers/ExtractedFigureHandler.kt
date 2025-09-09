@@ -1,5 +1,7 @@
 package org.megras.graphstore.derived.handlers
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import kotlinx.coroutines.runBlocking
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.rendering.PDFRenderer
@@ -13,6 +15,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.ServiceConfig
 import org.megras.util.services.DoclingClient
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -43,11 +46,14 @@ class ExtractedFigureHandler(private val quadSet: QuadSet, private val objectSto
     override fun derive(subject: URIValue): Collection<LocalQuadValue> {
         val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
-        // Use DoclingClient to extract figures; render crops and store them.
+        // Use DoclingClient to extract figures; then render crops and store them.
         val figures: List<Map<String, Any?>> = runBlocking {
-            val client = DoclingClient("localhost", 50051)
+            val client = DoclingClient(ServiceConfig.grpcHost, ServiceConfig.grpcPort)
             try {
                 val figs = client.extractFiguresAsMaps(path)
+                val mapper = ObjectMapper().registerKotlinModule()
+                val json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(figs)
+                println("Docling figures JSON for '$path':\n$json")
                 figs
             } catch (e: Exception) {
                 println("Error extracting figures for '$path': ${e.message}")

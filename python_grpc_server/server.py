@@ -30,6 +30,9 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
 with open(CONFIG_PATH, 'r') as f:
     config = json.load(f)
 
+GRPC_HOST = config.get("grpc_host", "0.0.0.0")
+GRPC_PORT = int(config.get("grpc_port", 50051))
+
 class ClipServiceServicer(clip_service_pb2_grpc.ClipServiceServicer):
     """
     Implements the gRPC methods for the ClipService.
@@ -147,11 +150,14 @@ def serve():
         OcrServiceServicer(device=config["device"], model_name=config["trocr_ocr_model"]), server)
 
     # Add Docling Service (threads and langs optional in config)
+    docling_threads = config.get("docling_threads", 4)
+    docling_langs = config.get("docling_ocr_langs", ["en"])
     docling_service_pb2_grpc.add_DoclingServiceServicer_to_server(
-        DoclingServiceServicer(), server)
+        DoclingServiceServicer(num_threads=docling_threads, ocr_langs=docling_langs), server)
 
-    server.add_insecure_port('[::]:50051') # Listen on all interfaces, port 50051
-    print("Starting gRPC server on port 50051...")
+    bind_addr = f"{GRPC_HOST}:{GRPC_PORT}"
+    server.add_insecure_port(bind_addr)
+    print(f"Starting gRPC server on {bind_addr}...")
     server.start()
     try:
         while True:

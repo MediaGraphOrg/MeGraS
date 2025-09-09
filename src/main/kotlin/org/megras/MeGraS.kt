@@ -14,6 +14,7 @@ import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.graphstore.implicit.ImplicitRelationRegistrar
 import org.megras.lang.sparql.FunctionRegistrar
 import org.megras.segmentation.media.AudioVideoSegmenter
+import org.megras.util.ServiceConfig
 import org.slf4j.LoggerFactory
 import java.io.File
 import kotlin.concurrent.thread
@@ -35,6 +36,9 @@ object MeGraS {
         ) ?: Config().also {
             logger.info("using default config")
         }
+
+        // Initialize service config (gRPC host/port)
+        ServiceConfig.setFrom(config)
 
         AudioVideoSegmenter.setConfig(config)
 

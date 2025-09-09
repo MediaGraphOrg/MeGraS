@@ -14,7 +14,8 @@ data class Config(
     val fileStore: FileGraphStorage? = FileGraphStorage(),
     val ffmpeg: FfmpegConfig = FfmpegConfig(),
     val cottontailConnection: CottontailConnection? = null,
-    val postgresConnection: PostgresConnection? = null
+    val postgresConnection: PostgresConnection? = null,
+    val grpcConnection: GrpcConnection = GrpcConnection()
 ) {
 
     init {
@@ -82,6 +83,12 @@ data class Config(
     data class FfmpegConfig(
         val ffmpegPath: String? = null,
         val ffprobePath: String? = null
+    )
+
+    @Serializable
+    data class GrpcConnection(
+        val host: String = "localhost",
+        val port: Int = 50051
     )
 
 }

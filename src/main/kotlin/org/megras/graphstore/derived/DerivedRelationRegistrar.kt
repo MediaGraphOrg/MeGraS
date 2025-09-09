@@ -2,13 +2,13 @@ package org.megras.graphstore.derived
 
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.graph.QuadValue
-import org.megras.data.graph.URIValue
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.handlers.AverageColorHandler
 import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
 import org.megras.graphstore.derived.handlers.ExtractedTextHandler
 import org.megras.graphstore.derived.handlers.OcrHandler
 import org.megras.graphstore.derived.handlers.PageHandler
+import org.megras.graphstore.derived.handlers.ExtractedFigureHandler
 
 class DerivedRelationRegistrar(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<DerivedRelationHandler<QuadValue>>()
@@ -19,6 +19,7 @@ class DerivedRelationRegistrar(private val quads: QuadSet, private val objectSto
         register(OcrHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(PageHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(ExtractedTextHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
+        register(ExtractedFigureHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
     }
 
     private fun register(handler: DerivedRelationHandler<QuadValue>) {

@@ -21,6 +21,8 @@ from clip_embedder import CLIPEmbedder
 from trocr_ocr import TrOCROCR
 from docling_extractor import DoclingExtractor
 
+from google.protobuf import struct_pb2
+
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
 # Load configuration from config.json
@@ -101,10 +103,22 @@ class DoclingServiceServicer(docling_service_pb2_grpc.DoclingServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             return docling_service_pb2.ExtractTextResponse()
 
+    def _list_of_dicts_to_listvalue(self, items):
+        lv = struct_pb2.ListValue()
+        for obj in items:
+            # Convert Python dict to Struct, then wrap as Value
+            struct = struct_pb2.Struct()
+            struct.update(obj)
+            v = struct_pb2.Value()
+            v.struct_value.CopyFrom(struct)
+            lv.values.append(v)
+        return lv
+
     def ExtractFigures(self, request, context):
         try:
             figures = self.extractor.extract_figures(request.pdf_data)
-            return docling_service_pb2.ExtractFiguresResponse(figures_json=json.dumps(figures))
+            figures_lv = self._list_of_dicts_to_listvalue(figures)
+            return docling_service_pb2.ExtractFiguresResponse(figures=figures_lv)
         except Exception as e:
             context.set_details(f"Error extracting figures: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -113,7 +127,8 @@ class DoclingServiceServicer(docling_service_pb2_grpc.DoclingServiceServicer):
     def ExtractTables(self, request, context):
         try:
             tables = self.extractor.extract_tables(request.pdf_data)
-            return docling_service_pb2.ExtractTablesResponse(tables_json=json.dumps(tables))
+            tables_lv = self._list_of_dicts_to_listvalue(tables)
+            return docling_service_pb2.ExtractTablesResponse(tables=tables_lv)
         except Exception as e:
             context.set_details(f"Error extracting tables: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)

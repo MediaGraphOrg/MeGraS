@@ -64,14 +64,14 @@ class DoclingServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ExtractFigures(self, request, context):
-        """Extracts figures metadata from a PDF file (JSON-encoded response).
+        """Extracts figures metadata from a PDF file as a JSON array of objects.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ExtractTables(self, request, context):
-        """Extracts tables metadata from a PDF file (JSON-encoded response).
+        """Extracts tables metadata from a PDF file as a JSON array of objects.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

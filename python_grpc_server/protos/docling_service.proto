@@ -2,15 +2,17 @@ syntax = "proto3";
 
 package org.megras.util.services;
 
+import "google/protobuf/struct.proto";
+
 // DoclingService extracts content from PDF files.
 service DoclingService {
   // Extracts plain text from a PDF file.
   rpc ExtractText (PdfRequest) returns (ExtractTextResponse);
 
-  // Extracts figures metadata from a PDF file (JSON-encoded response).
+  // Extracts figures metadata from a PDF file as a JSON array of objects.
   rpc ExtractFigures (PdfRequest) returns (ExtractFiguresResponse);
 
-  // Extracts tables metadata from a PDF file (JSON-encoded response).
+  // Extracts tables metadata from a PDF file as a JSON array of objects.
   rpc ExtractTables (PdfRequest) returns (ExtractTablesResponse);
 }
 
@@ -24,13 +26,12 @@ message ExtractTextResponse {
   string text = 1;
 }
 
-// Response with extracted figures as a JSON string (array of objects).
+// Response with extracted figures as a JSON array (each item is an object), using protobuf Struct/ListValue.
 message ExtractFiguresResponse {
-  string figures_json = 1;
+  google.protobuf.ListValue figures = 1;
 }
 
-// Response with extracted tables as a JSON string (array of objects).
+// Response with extracted tables as a JSON array (each item is an object), using protobuf Struct/ListValue.
 message ExtractTablesResponse {
-  string tables_json = 1;
+  google.protobuf.ListValue tables = 1;
 }
-

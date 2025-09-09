@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package org.megras.util.services;
+
+// DoclingService extracts content from PDF files.
+service DoclingService {
+  // Extracts plain text from a PDF file.
+  rpc ExtractText (PdfRequest) returns (ExtractTextResponse);
+
+  // Extracts figures metadata from a PDF file (JSON-encoded response).
+  rpc ExtractFigures (PdfRequest) returns (ExtractFiguresResponse);
+
+  // Extracts tables metadata from a PDF file (JSON-encoded response).
+  rpc ExtractTables (PdfRequest) returns (ExtractTablesResponse);
+}
+
+// Request message containing the PDF bytes.
+message PdfRequest {
+  bytes pdf_data = 1; // Raw PDF file bytes
+}
+
+// Response with extracted plain text.
+message ExtractTextResponse {
+  string text = 1;
+}
+
+// Response with extracted figures as a JSON string (array of objects).
+message ExtractFiguresResponse {
+  string figures_json = 1;
+}
+
+// Response with extracted tables as a JSON string (array of objects).
+message ExtractTablesResponse {
+  string tables_json = 1;
+}
+

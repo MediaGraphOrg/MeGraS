@@ -13,10 +13,13 @@ import clip_service_pb2
 import clip_service_pb2_grpc
 import ocr_service_pb2
 import ocr_service_pb2_grpc
+import docling_service_pb2
+import docling_service_pb2_grpc
 
 # Import service classes
 from clip_embedder import CLIPEmbedder
 from trocr_ocr import TrOCROCR
+from docling_extractor import DoclingExtractor
 
 _ONE_DAY_IN_SECONDS = 60 * 60 * 24
 
@@ -82,6 +85,41 @@ class OcrServiceServicer(ocr_service_pb2_grpc.OcrServiceServicer):
             return ocr_service_pb2.RecognizeTextResponse() # Return an empty response on error
 
 
+class DoclingServiceServicer(docling_service_pb2_grpc.DoclingServiceServicer):
+    """Implements DoclingService for PDF content extraction."""
+
+    def __init__(self, num_threads: int = 4, ocr_langs=None):
+        self.extractor = DoclingExtractor(num_threads=num_threads, ocr_langs=ocr_langs or ["en"])
+        print(f"DoclingExtractor initialized with {num_threads} threads and langs {ocr_langs or ['en']}.")
+
+    def ExtractText(self, request, context):
+        try:
+            text = self.extractor.extract_text(request.pdf_data)
+            return docling_service_pb2.ExtractTextResponse(text=text)
+        except Exception as e:
+            context.set_details(f"Error extracting text: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return docling_service_pb2.ExtractTextResponse()
+
+    def ExtractFigures(self, request, context):
+        try:
+            figures = self.extractor.extract_figures(request.pdf_data)
+            return docling_service_pb2.ExtractFiguresResponse(figures_json=json.dumps(figures))
+        except Exception as e:
+            context.set_details(f"Error extracting figures: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return docling_service_pb2.ExtractFiguresResponse()
+
+    def ExtractTables(self, request, context):
+        try:
+            tables = self.extractor.extract_tables(request.pdf_data)
+            return docling_service_pb2.ExtractTablesResponse(tables_json=json.dumps(tables))
+        except Exception as e:
+            context.set_details(f"Error extracting tables: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return docling_service_pb2.ExtractTablesResponse()
+
+
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
@@ -92,6 +130,10 @@ def serve():
     # Add OCR Service
     ocr_service_pb2_grpc.add_OcrServiceServicer_to_server(
         OcrServiceServicer(device=config["device"], model_name=config["trocr_ocr_model"]), server)
+
+    # Add Docling Service (threads and langs optional in config)
+    docling_service_pb2_grpc.add_DoclingServiceServicer_to_server(
+        DoclingServiceServicer(), server)
 
     server.add_insecure_port('[::]:50051') # Listen on all interfaces, port 50051
     print("Starting gRPC server on port 50051...")

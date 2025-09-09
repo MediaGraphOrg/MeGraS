@@ -22,24 +22,21 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x64ocling_service.proto\x12\x18org.megras.util.services\x1a\x1cgoogle/protobuf/struct.proto\"\x1e\n\nPdfRequest\x12\x10\n\x08pdf_data\x18\x01 \x01(\x0c\"#\n\x13\x45xtractTextResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\"E\n\x16\x45xtractFiguresResponse\x12+\n\x07\x66igures\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.ListValue\"C\n\x15\x45xtractTablesResponse\x12*\n\x06tables\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.ListValue2\xc6\x02\n\x0e\x44oclingService\x12\x62\n\x0b\x45xtractText\x12$.org.megras.util.services.PdfRequest\x1a-.org.megras.util.services.ExtractTextResponse\x12h\n\x0e\x45xtractFigures\x12$.org.megras.util.services.PdfRequest\x1a\x30.org.megras.util.services.ExtractFiguresResponse\x12\x66\n\rExtractTables\x12$.org.megras.util.services.PdfRequest\x1a/.org.megras.util.services.ExtractTablesResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x64ocling_service.proto\x12\x18org.megras.util.services\"\x1e\n\nPdfRequest\x12\x10\n\x08pdf_data\x18\x01 \x01(\x0c\"#\n\x13\x45xtractTextResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\"&\n\x16\x45xtractDocJsonResponse\x12\x0c\n\x04json\x18\x01 \x01(\t2\xde\x01\n\x0e\x44oclingService\x12\x62\n\x0b\x45xtractText\x12$.org.megras.util.services.PdfRequest\x1a-.org.megras.util.services.ExtractTextResponse\x12h\n\x0e\x45xtractDocJson\x12$.org.megras.util.services.PdfRequest\x1a\x30.org.megras.util.services.ExtractDocJsonResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'docling_service_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_PDFREQUEST']._serialized_start=81
-  _globals['_PDFREQUEST']._serialized_end=111
-  _globals['_EXTRACTTEXTRESPONSE']._serialized_start=113
-  _globals['_EXTRACTTEXTRESPONSE']._serialized_end=148
-  _globals['_EXTRACTFIGURESRESPONSE']._serialized_start=150
-  _globals['_EXTRACTFIGURESRESPONSE']._serialized_end=219
-  _globals['_EXTRACTTABLESRESPONSE']._serialized_start=221
-  _globals['_EXTRACTTABLESRESPONSE']._serialized_end=288
-  _globals['_DOCLINGSERVICE']._serialized_start=291
-  _globals['_DOCLINGSERVICE']._serialized_end=617
+  _globals['_PDFREQUEST']._serialized_start=51
+  _globals['_PDFREQUEST']._serialized_end=81
+  _globals['_EXTRACTTEXTRESPONSE']._serialized_start=83
+  _globals['_EXTRACTTEXTRESPONSE']._serialized_end=118
+  _globals['_EXTRACTDOCJSONRESPONSE']._serialized_start=120
+  _globals['_EXTRACTDOCJSONRESPONSE']._serialized_end=158
+  _globals['_DOCLINGSERVICE']._serialized_start=161
+  _globals['_DOCLINGSERVICE']._serialized_end=383
 # @@protoc_insertion_point(module_scope)

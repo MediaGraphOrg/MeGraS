@@ -40,15 +40,10 @@ class DoclingServiceStub(object):
                 request_serializer=docling__service__pb2.PdfRequest.SerializeToString,
                 response_deserializer=docling__service__pb2.ExtractTextResponse.FromString,
                 _registered_method=True)
-        self.ExtractFigures = channel.unary_unary(
-                '/org.megras.util.services.DoclingService/ExtractFigures',
+        self.ExtractDocJson = channel.unary_unary(
+                '/org.megras.util.services.DoclingService/ExtractDocJson',
                 request_serializer=docling__service__pb2.PdfRequest.SerializeToString,
-                response_deserializer=docling__service__pb2.ExtractFiguresResponse.FromString,
-                _registered_method=True)
-        self.ExtractTables = channel.unary_unary(
-                '/org.megras.util.services.DoclingService/ExtractTables',
-                request_serializer=docling__service__pb2.PdfRequest.SerializeToString,
-                response_deserializer=docling__service__pb2.ExtractTablesResponse.FromString,
+                response_deserializer=docling__service__pb2.ExtractDocJsonResponse.FromString,
                 _registered_method=True)
 
 
@@ -63,15 +58,8 @@ class DoclingServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ExtractFigures(self, request, context):
-        """Extracts figures metadata from a PDF file as a JSON array of objects.
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ExtractTables(self, request, context):
-        """Extracts tables metadata from a PDF file as a JSON array of objects.
+    def ExtractDocJson(self, request, context):
+        """Extracts the full Docling JSON for a PDF file as a raw JSON string.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -85,15 +73,10 @@ def add_DoclingServiceServicer_to_server(servicer, server):
                     request_deserializer=docling__service__pb2.PdfRequest.FromString,
                     response_serializer=docling__service__pb2.ExtractTextResponse.SerializeToString,
             ),
-            'ExtractFigures': grpc.unary_unary_rpc_method_handler(
-                    servicer.ExtractFigures,
+            'ExtractDocJson': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExtractDocJson,
                     request_deserializer=docling__service__pb2.PdfRequest.FromString,
-                    response_serializer=docling__service__pb2.ExtractFiguresResponse.SerializeToString,
-            ),
-            'ExtractTables': grpc.unary_unary_rpc_method_handler(
-                    servicer.ExtractTables,
-                    request_deserializer=docling__service__pb2.PdfRequest.FromString,
-                    response_serializer=docling__service__pb2.ExtractTablesResponse.SerializeToString,
+                    response_serializer=docling__service__pb2.ExtractDocJsonResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -135,7 +118,7 @@ class DoclingService(object):
             _registered_method=True)
 
     @staticmethod
-    def ExtractFigures(request,
+    def ExtractDocJson(request,
             target,
             options=(),
             channel_credentials=None,
@@ -148,36 +131,9 @@ class DoclingService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/org.megras.util.services.DoclingService/ExtractFigures',
+            '/org.megras.util.services.DoclingService/ExtractDocJson',
             docling__service__pb2.PdfRequest.SerializeToString,
-            docling__service__pb2.ExtractFiguresResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def ExtractTables(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/org.megras.util.services.DoclingService/ExtractTables',
-            docling__service__pb2.PdfRequest.SerializeToString,
-            docling__service__pb2.ExtractTablesResponse.FromString,
+            docling__service__pb2.ExtractDocJsonResponse.FromString,
             options,
             channel_credentials,
             insecure,

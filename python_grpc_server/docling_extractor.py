@@ -68,16 +68,7 @@ class DoclingExtractor:
         conv_result = self._convert_bytes(pdf_bytes)
         return conv_result.document.export_to_dict()
 
-    def extract_figures(self, pdf_bytes: bytes) -> List[Dict[str, Any]]:
+    def export_json(self, pdf_bytes: bytes) -> str:
+        """Return the full Docling document as a JSON string."""
         data = self._export_dict(pdf_bytes)
-        figures = []
-        if isinstance(data, dict) and "pictures" in data and isinstance(data["pictures"], list):
-            figures = list(data["pictures"])  # shallow copy
-        return figures
-
-    def extract_tables(self, pdf_bytes: bytes) -> List[Dict[str, Any]]:
-        data = self._export_dict(pdf_bytes)
-        tables = []
-        if isinstance(data, dict) and "tables" in data and isinstance(data["tables"], list):
-            tables = list(data["tables"])  # shallow copy
-        return tables
+        return json.dumps(data)

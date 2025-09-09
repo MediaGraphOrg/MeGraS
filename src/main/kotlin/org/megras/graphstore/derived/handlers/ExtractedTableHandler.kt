@@ -1,10 +1,9 @@
 package org.megras.graphstore.derived.handlers
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import kotlinx.coroutines.runBlocking
-import org.apache.pdfbox.pdmodel.PDDocument
-import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.fs.file.PseudoFile
 import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.URIValue
 import org.megras.data.model.MediaType
@@ -13,15 +12,9 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.PdfCropUtil
 import org.megras.util.ServiceConfig
 import org.megras.util.services.DoclingClient
-import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
-import java.io.File
-import javax.imageio.ImageIO
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
 
 class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<LocalQuadValue> {
     override val predicate: URIValue = getPredicate()
@@ -46,7 +39,12 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
         val tables: List<Map<String, Any?>> = runBlocking {
             val client = DoclingClient(ServiceConfig.grpcHost, ServiceConfig.grpcPort)
             try {
-                client.extractTablesAsMaps(path)
+                val json = client.extractDocJson(path)
+                val mapper = ObjectMapper().registerKotlinModule()
+                @Suppress("UNCHECKED_CAST")
+                val root = mapper.readValue(json, Map::class.java) as Map<String, Any?>
+                val tbls = (root["tables"] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
+                tbls
             } catch (e: Exception) {
                 println("Error extracting tables for '$path': ${e.message}")
                 emptyList()
@@ -60,76 +58,16 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
         }
 
         return try {
-            storeTableCrops(path, tables)
+            PdfCropUtil.storeCrops(
+                pdfPath = path,
+                items = tables,
+                namePrefix = "table",
+                quadSet = quadSet as MutableQuadSet,
+                objectStore = objectStore
+            )
         } catch (e: Exception) {
             println("Error storing table crops for '$path': ${e.message}")
             emptyList()
         }
-    }
-
-    private fun storeTableCrops(pdfPath: String, tables: List<Map<String, Any?>>): List<LocalQuadValue> {
-        val ids = mutableListOf<LocalQuadValue>()
-        val baseName = File(pdfPath).nameWithoutExtension.ifBlank { "document" }
-
-        PDDocument.load(File(pdfPath)).use { doc ->
-            val renderer = PDFRenderer(doc)
-            for ((idx, tbl) in tables.withIndex()) {
-                val prov = (tbl["prov"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: continue
-                val pageNo = (prov["page_no"] as? Number)?.toInt() ?: continue // 1-based
-                val bbox = prov["bbox"] as? Map<*, *> ?: continue
-                val l = (bbox["l"] as? Number)?.toDouble() ?: continue
-                val r = (bbox["r"] as? Number)?.toDouble() ?: continue
-                val t = (bbox["t"] as? Number)?.toDouble() ?: continue
-                val b = (bbox["b"] as? Number)?.toDouble() ?: continue
-
-                val pageIndex = pageNo - 1
-                if (pageIndex < 0 || pageIndex >= doc.numberOfPages) continue
-                val page = doc.getPage(pageIndex)
-                val mediaBox = page.mediaBox
-                val pageWidthPt = mediaBox.width.toDouble()
-                val pageHeightPt = mediaBox.height.toDouble()
-
-                val dpi = 150f
-                val pageImage: BufferedImage = renderer.renderImageWithDPI(pageIndex, dpi)
-                val imgW = pageImage.width
-                val imgH = pageImage.height
-
-                val scaleX = imgW / pageWidthPt
-                val scaleY = imgH / pageHeightPt
-
-                val leftPx = ((l - mediaBox.lowerLeftX) * scaleX).roundToInt()
-                val rightPx = ((r - mediaBox.lowerLeftX) * scaleX).roundToInt()
-                val topPx = (imgH - ((t - mediaBox.lowerLeftY) * scaleY)).roundToInt()
-                val bottomPx = (imgH - ((b - mediaBox.lowerLeftY) * scaleY)).roundToInt()
-
-                var x = max(0, min(leftPx, rightPx))
-                var y = max(0, min(topPx, bottomPx))
-                var w = max(0, kotlin.math.abs(rightPx - leftPx))
-                var h = max(0, kotlin.math.abs(bottomPx - topPx))
-
-                if (w == 0 || h == 0) continue
-
-                if (x + w > imgW) w = imgW - x
-                if (y + h > imgH) h = imgH - y
-                if (w <= 0 || h <= 0) continue
-
-                val sub = try {
-                    pageImage.getSubimage(x, y, w, h)
-                } catch (e: Exception) {
-                    println("Skipping invalid crop (x=$x, y=$y, w=$w, h=$h) for page ${pageIndex + 1}: ${e.message}")
-                    continue
-                }
-
-                val baos = ByteArrayOutputStream()
-                ImageIO.write(sub, "PNG", baos)
-                val bytes = baos.toByteArray()
-                val name = "${baseName}-page${pageIndex + 1}-table${idx}.png"
-                val pseudo = PseudoFile(bytes, name)
-                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo, metaSkip = true)
-                ids.add(id)
-            }
-        }
-
-        return ids
     }
 }

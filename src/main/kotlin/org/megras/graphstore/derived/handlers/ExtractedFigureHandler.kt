@@ -127,7 +127,7 @@ class ExtractedFigureHandler(private val quadSet: QuadSet, private val objectSto
                 val bytes = baos.toByteArray()
                 val name = "${baseName}-page${pageIndex + 1}-figure${idx}.png"
                 val pseudo = PseudoFile(bytes, name)
-                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo)
+                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo, metaSkip = true)
                 ids.add(id)
             }
         }

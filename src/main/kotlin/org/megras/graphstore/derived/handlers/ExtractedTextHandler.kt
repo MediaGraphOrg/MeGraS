@@ -63,7 +63,7 @@ class ExtractedTextHandler(private val quadSet: QuadSet, private val objectStore
                 val outName = "${srcName}-extracted.txt"
                 val bytes = extractedText.toByteArray(Charsets.UTF_8)
                 val pseudo = PseudoFile(bytes, outName)
-                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo)
+                val id = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, pseudo, metaSkip = true)
                 listOf(id)
             }
             MediaType.TEXT -> {

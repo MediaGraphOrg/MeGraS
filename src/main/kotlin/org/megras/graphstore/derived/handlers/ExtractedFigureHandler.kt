@@ -53,7 +53,6 @@ class ExtractedFigureHandler(private val quadSet: QuadSet, private val objectSto
                 val figs = client.extractFiguresAsMaps(path)
                 val mapper = ObjectMapper().registerKotlinModule()
                 val json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(figs)
-                println("Docling figures JSON for '$path':\n$json")
                 figs
             } catch (e: Exception) {
                 println("Error extracting figures for '$path': ${e.message}")

@@ -10,6 +10,7 @@ import org.megras.graphstore.derived.handlers.OcrHandler
 import org.megras.graphstore.derived.handlers.PageHandler
 import org.megras.graphstore.derived.handlers.ExtractedFigureHandler
 import org.megras.graphstore.derived.handlers.ExtractedTableHandler
+import org.megras.graphstore.derived.handlers.ExtractedDocJsonHandler
 
 class DerivedRelationRegistrar(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<DerivedRelationHandler<QuadValue>>()
@@ -20,6 +21,7 @@ class DerivedRelationRegistrar(private val quads: QuadSet, private val objectSto
         register(OcrHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(PageHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(ExtractedTextHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
+        register(ExtractedDocJsonHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(ExtractedFigureHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(ExtractedTableHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
     }

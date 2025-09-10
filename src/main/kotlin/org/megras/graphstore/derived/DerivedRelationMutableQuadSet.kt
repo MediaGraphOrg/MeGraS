@@ -303,5 +303,8 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
     override fun retainAll(elements: Collection<Quad>): Boolean = this.base.retainAll(elements)
 
+}
 
+interface QuadSetAware {
+    fun setQuadSet(quadSet: QuadSet)
 }

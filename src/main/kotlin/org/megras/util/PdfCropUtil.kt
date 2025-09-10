@@ -49,6 +49,8 @@ object PdfCropUtil {
                 val t = (bbox["t"] as? Number)?.toDouble() ?: continue
                 val b = (bbox["b"] as? Number)?.toDouble() ?: continue
                 val caption = item["captions"]?.toString()?.removeSurrounding("[", "]") ?: ""
+                val reference = item["self_ref"]?.toString() ?: ""
+                val ordinal = reference.substringAfterLast("/").toLongOrNull()
 
                 val pageIndex = pageNo - 1
                 if (pageIndex < 0 || pageIndex >= doc.numberOfPages) continue
@@ -91,14 +93,26 @@ object PdfCropUtil {
                 val name = "${baseName}-page${pageIndex + 1}-${namePrefix}${idx}.png"
                 val pseudo = PseudoFile(bytes, name)
                 val id = FileUtil.addFile(objectStore, quadSet, pseudo, metaSkip = true)
-                quadSet.addAll(
-                    listOf(
-                        Quad(id, MeGraS.SEGMENT_OF.uri, subject),
-                        Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString())),
-                        Quad(id, URIValue(Constants.NLP_PREFIX + "/pageNumber"), LongValue(pageIndex.toLong())),
-                        Quad(id, URIValue(Constants.NLP_PREFIX + "/caption"), StringValue(caption))
-                    )
+
+                val metaQuads = mutableListOf(
+                    Quad(id, MeGraS.SEGMENT_OF.uri, subject),
+                    Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString())),
+                    Quad(id, URIValue(Constants.NLP_PREFIX + "/pageNumber"), LongValue(pageIndex.toLong()))
                 )
+                if (caption.isNotBlank()) {
+                    metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/caption"), StringValue(caption)))
+                }
+                if (namePrefix.isNotBlank()) {
+                    metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/label"), StringValue(namePrefix)))
+                }
+                if (reference.isNotBlank()) {
+                    metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/reference"), StringValue(reference)))
+                }
+                if (ordinal != null) {
+                    metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/ordinal"), LongValue(ordinal)))
+                }
+
+                quadSet.addAll(metaQuads)
                 ids.add(id)
             }
         }
@@ -106,4 +120,3 @@ object PdfCropUtil {
         return ids
     }
 }
-

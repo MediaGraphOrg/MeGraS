@@ -18,6 +18,7 @@ import org.megras.util.ServiceConfig
 import org.slf4j.LoggerFactory
 import java.io.File
 import kotlin.concurrent.thread
+import org.megras.graphstore.derived.QuadSetAware
 
 object MeGraS {
 
@@ -95,6 +96,13 @@ object MeGraS {
         quadSet = DerivedRelationMutableQuadSet(quadSet, derivedRelationRegistrar.getHandlers())
         val implicitRelationRegistrar = ImplicitRelationRegistrar(objectStore)
         quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers(), implicitRelationRegistrar.getRegexHandlers())
+
+        // Inject the final (derived + implicit) QuadSet into handlers that need to query derived relations internally
+        derivedRelationRegistrar.getHandlers().forEach { handler ->
+            if (handler is QuadSetAware) {
+                handler.setQuadSet(quadSet)
+            }
+        }
 
         RestApi.init(config, objectStore, quadSet, slQuadSet)
 

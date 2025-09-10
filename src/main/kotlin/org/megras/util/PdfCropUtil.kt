@@ -97,7 +97,7 @@ object PdfCropUtil {
                 val metaQuads = mutableListOf(
                     Quad(id, MeGraS.SEGMENT_OF.uri, subject),
                     Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString())),
-                    Quad(id, URIValue(Constants.NLP_PREFIX + "/pageNumber"), LongValue(pageIndex.toLong()))
+                    Quad(id, URIValue(Constants.NLP_PREFIX + "/pageNumber"), LongValue(pageNo.toLong()))
                 )
                 if (caption.isNotBlank()) {
                     metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/caption"), StringValue(caption)))

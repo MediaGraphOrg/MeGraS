@@ -11,6 +11,7 @@ import org.megras.graphstore.derived.handlers.PageHandler
 import org.megras.graphstore.derived.handlers.FigureHandler
 import org.megras.graphstore.derived.handlers.TableHandler
 import org.megras.graphstore.derived.handlers.DocumentModelJsonHandler
+import org.megras.graphstore.derived.handlers.ParagraphHandler
 
 class DerivedRelationRegistrar(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<DerivedRelationHandler<QuadValue>>()
@@ -24,6 +25,7 @@ class DerivedRelationRegistrar(private val quads: QuadSet, private val objectSto
         register(DocumentModelJsonHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(FigureHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(TableHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
+        register(ParagraphHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
     }
 
     private fun register(handler: DerivedRelationHandler<QuadValue>) {

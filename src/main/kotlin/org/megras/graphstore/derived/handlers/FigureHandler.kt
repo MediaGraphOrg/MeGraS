@@ -15,7 +15,7 @@ import org.megras.util.Constants
 import org.megras.util.FileUtil
 import org.megras.util.PdfCropUtil
 
-class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<LocalQuadValue>, QuadSetAware {
+class FigureHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<LocalQuadValue>, QuadSetAware {
     override val predicate: URIValue = getPredicate()
 
     private var effectiveQuadSet: QuadSet = quadSet
@@ -26,12 +26,13 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
 
     companion object {
         fun getPredicate(): URIValue {
-            return URIValue("${Constants.DERIVED_PREFIX}/extractedTable")
+            return URIValue("${Constants.DERIVED_PREFIX}/figure")
         }
     }
 
     override fun canDerive(subject: URIValue): Boolean {
         val osr = FileUtil.getOsr(subject, this.effectiveQuadSet, this.objectStore) ?: return false
+
         return when (MediaType.mimeTypeMap[osr.descriptor.mimeType]) {
             MediaType.DOCUMENT -> true
             else -> false
@@ -42,39 +43,39 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
         val path = FileUtil.getPath(subject, this.effectiveQuadSet, this.objectStore) ?: return emptyList()
 
         // Obtain cached Docling JSON via derived relation (will compute-and-cache if missing). Target only the JSON predicate to avoid recursion.
-        val docJsonPredicate = ExtractedDocJsonHandler.getPredicate()
+        val docJsonPredicate = DocumentModelJsonHandler.getPredicate()
         val json: String = (effectiveQuadSet
             .filter(listOf(subject), listOf(docJsonPredicate), null)
             .filterPredicate(docJsonPredicate)
             .firstOrNull()?.`object` as? StringValue)?.value ?: ""
 
-        val tables: List<Map<String, Any?>> = try {
+        val figures: List<Map<String, Any?>> = try {
             if (json.isBlank()) emptyList() else {
                 val mapper = ObjectMapper().registerKotlinModule()
                 @Suppress("UNCHECKED_CAST")
                 val root = mapper.readValue(json, Map::class.java) as Map<String, Any?>
 
-                (root["tables"] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
+                (root["pictures"] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
             }
         } catch (e: Exception) {
-            println("Error parsing tables for '$path': ${e.message}")
+            println("Error parsing figures for '$path': ${e.message}")
             emptyList()
         }
 
-        if (tables.isEmpty()) {
+        if (figures.isEmpty()) {
             return emptyList()
         }
 
         return try {
             PdfCropUtil.storeCrops(
                 subject = subject,
-                items = tables,
-                namePrefix = "table",
+                items = figures,
+                namePrefix = "figure",
                 quadSet = effectiveQuadSet as MutableQuadSet,
                 objectStore = objectStore
             )
         } catch (e: Exception) {
-            println("Error storing table crops for '$path': ${e.message}")
+            println("Error storing figure crops for '$path': ${e.message}")
             emptyList()
         }
     }

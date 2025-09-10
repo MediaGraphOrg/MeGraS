@@ -16,12 +16,12 @@ import org.megras.util.ServiceConfig
 import org.megras.util.services.DoclingClient
 import java.io.File
 
-class ExtractedTextHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<QuadValue> {
+class TextHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<QuadValue> {
     override val predicate: URIValue = getPredicate()
 
     companion object {
         fun getPredicate(): URIValue {
-            return URIValue("${Constants.DERIVED_PREFIX}/extractedText")
+            return URIValue("${Constants.DERIVED_PREFIX}/text")
         }
     }
 

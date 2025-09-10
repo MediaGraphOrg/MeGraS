@@ -15,12 +15,12 @@ import org.megras.util.FileUtil
 import org.megras.util.ServiceConfig
 import org.megras.util.services.DoclingClient
 
-class ExtractedDocJsonHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<QuadValue> {
+class DocumentModelJsonHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<QuadValue> {
     override val predicate: URIValue = getPredicate()
 
     companion object {
         fun getPredicate(): URIValue {
-            return URIValue("${Constants.DERIVED_PREFIX}/extractedDocJson")
+            return URIValue("${Constants.DERIVED_PREFIX}/documentModelJson")
         }
     }
 

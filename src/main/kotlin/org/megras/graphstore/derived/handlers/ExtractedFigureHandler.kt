@@ -89,7 +89,7 @@ class ExtractedFigureHandler(private val quadSet: QuadSet, private val objectSto
 
         return try {
             PdfCropUtil.storeCrops(
-                pdfPath = path,
+                subject = subject,
                 items = figures,
                 namePrefix = "figure",
                 quadSet = quadSet as MutableQuadSet,

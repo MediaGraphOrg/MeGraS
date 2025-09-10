@@ -5,7 +5,12 @@ import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.file.PseudoFile
 import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.Quad
+import org.megras.data.graph.StringValue
+import org.megras.data.graph.URIValue
+import org.megras.data.schema.MeGraS
 import org.megras.graphstore.MutableQuadSet
+import org.megras.segmentation.Bounds
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -21,13 +26,14 @@ object PdfCropUtil {
      * The stored files are named: <baseName>-page<page>-<prefix><index>.png
      */
     fun storeCrops(
-        pdfPath: String,
+        subject: URIValue,
         items: List<Map<String, Any?>>, // Each item should contain prov -> [ { page_no, bbox{l,r,t,b} } ]
         namePrefix: String,
         quadSet: MutableQuadSet,
         objectStore: FileSystemObjectStore,
         dpi: Float = 150f
     ): List<LocalQuadValue> {
+        val pdfPath = FileUtil.getPath(subject, quadSet, objectStore)!!
         val ids = mutableListOf<LocalQuadValue>()
         val baseName = File(pdfPath).nameWithoutExtension.ifBlank { "document" }
 
@@ -83,6 +89,12 @@ object PdfCropUtil {
                 val name = "${baseName}-page${pageIndex + 1}-${namePrefix}${idx}.png"
                 val pseudo = PseudoFile(bytes, name)
                 val id = FileUtil.addFile(objectStore, quadSet, pseudo, metaSkip = true)
+                quadSet.addAll(
+                    listOf(
+                        Quad(id, MeGraS.SEGMENT_OF.uri, subject),
+                        Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString()))
+                    )
+                )
                 ids.add(id)
             }
         }

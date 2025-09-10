@@ -88,7 +88,7 @@ class ExtractedTableHandler(private val quadSet: QuadSet, private val objectStor
 
         return try {
             PdfCropUtil.storeCrops(
-                pdfPath = path,
+                subject = subject,
                 items = tables,
                 namePrefix = "table",
                 quadSet = quadSet as MutableQuadSet,

@@ -5,6 +5,7 @@ import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.file.PseudoFile
 import org.megras.data.graph.LocalQuadValue
+import org.megras.data.graph.LongValue
 import org.megras.data.graph.Quad
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
@@ -47,6 +48,7 @@ object PdfCropUtil {
                 val r = (bbox["r"] as? Number)?.toDouble() ?: continue
                 val t = (bbox["t"] as? Number)?.toDouble() ?: continue
                 val b = (bbox["b"] as? Number)?.toDouble() ?: continue
+                val caption = item["captions"]?.toString()?.removeSurrounding("[", "]") ?: ""
 
                 val pageIndex = pageNo - 1
                 if (pageIndex < 0 || pageIndex >= doc.numberOfPages) continue
@@ -92,7 +94,9 @@ object PdfCropUtil {
                 quadSet.addAll(
                     listOf(
                         Quad(id, MeGraS.SEGMENT_OF.uri, subject),
-                        Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString()))
+                        Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString())),
+                        Quad(id, URIValue(Constants.NLP_PREFIX + "/pageNumber"), LongValue(pageIndex.toLong())),
+                        Quad(id, URIValue(Constants.NLP_PREFIX + "/caption"), StringValue(caption))
                     )
                 )
                 ids.add(id)

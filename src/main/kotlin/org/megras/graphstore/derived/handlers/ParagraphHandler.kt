@@ -97,7 +97,7 @@ class ParagraphHandler(private val quadSet: QuadSet, private val objectStore: Fi
             val bytes = textStr.toByteArray(Charsets.UTF_8)
             val pseudo = PseudoFile(bytes, outName)
 
-            val id = FileUtil.addFile(objectStore, mqs, pseudo)
+            val id = FileUtil.addFile(objectStore, mqs, pseudo, metaSkip = true)
 
             // Attach segment metadata back to the source PDF
             val metaQuads = mutableListOf(

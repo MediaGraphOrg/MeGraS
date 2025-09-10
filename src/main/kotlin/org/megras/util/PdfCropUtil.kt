@@ -11,6 +11,7 @@ import org.megras.data.graph.StringValue
 import org.megras.data.graph.URIValue
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.derived.handlers.ParagraphHandler
 import org.megras.segmentation.Bounds
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -38,6 +39,24 @@ object PdfCropUtil {
         val ids = mutableListOf<LocalQuadValue>()
         val baseName = File(pdfPath).nameWithoutExtension.ifBlank { "document" }
 
+        // Ensure paragraphs are derived and build a lookup from text self_ref -> paragraph id
+        val paragraphPredicate = ParagraphHandler.getPredicate()
+        val paragraphQuads = quadSet
+            .filter(listOf(subject), listOf(paragraphPredicate), null)
+        val refToParagraph = mutableMapOf<String, LocalQuadValue>()
+        paragraphQuads.forEach { q ->
+            val pid = q.`object` as? LocalQuadValue ?: return@forEach
+            // find the self_ref stored as NLP_PREFIX/reference on the paragraph id
+            val refQuad = quadSet
+                .filterSubject(pid)
+                .filterPredicate(URIValue(Constants.NLP_PREFIX + "/reference"))
+                .firstOrNull()
+            val ref = (refQuad?.`object` as? StringValue)?.value
+            if (!ref.isNullOrBlank()) {
+                refToParagraph[ref] = pid
+            }
+        }
+
         PDDocument.load(File(pdfPath)).use { doc ->
             val renderer = PDFRenderer(doc)
             for ((idx, item) in items.withIndex()) {
@@ -48,7 +67,17 @@ object PdfCropUtil {
                 val r = (bbox["r"] as? Number)?.toDouble() ?: continue
                 val t = (bbox["t"] as? Number)?.toDouble() ?: continue
                 val b = (bbox["b"] as? Number)?.toDouble() ?: continue
-                val caption = item["captions"]?.toString()?.removeSurrounding("[", "]") ?: ""
+                // captions can be a list of refs or strings; we resolve only refs to paragraph documents
+                val captionRefs: List<String> = when (val caps = item["captions"]) {
+                    is List<*> -> caps.mapNotNull { cap ->
+                        when (cap) {
+                            is Map<*, *> -> (cap["\$ref"] as? String)
+                            is String -> cap.takeIf { it.startsWith("/") || it.startsWith("#") }
+                            else -> null
+                        }
+                    }
+                    else -> emptyList()
+                }
                 val reference = item["self_ref"]?.toString() ?: ""
                 val ordinal = reference.substringAfterLast("/").toLongOrNull()
 
@@ -99,9 +128,7 @@ object PdfCropUtil {
                     Quad(id, MeGraS.SEGMENT_BOUNDS.uri, StringValue(Bounds("$l,$r,$t,$b,-,-,$pageIndex,$pageIndex").toString())),
                     Quad(id, URIValue(Constants.NLP_PREFIX + "/pageNumber"), LongValue(pageNo.toLong()))
                 )
-                if (caption.isNotBlank()) {
-                    metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/caption"), StringValue(caption)))
-                }
+
                 if (namePrefix.isNotBlank()) {
                     metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/label"), StringValue(namePrefix)))
                 }
@@ -110,6 +137,15 @@ object PdfCropUtil {
                 }
                 if (ordinal != null) {
                     metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/ordinal"), LongValue(ordinal)))
+                }
+
+                // Link crop to caption paragraph documents, if available
+                if (captionRefs.isNotEmpty()) {
+                    captionRefs.forEach { refStr ->
+                        refToParagraph[refStr]?.let { pid ->
+                            metaQuads.add(Quad(id, URIValue(Constants.NLP_PREFIX + "/caption"), pid))
+                        }
+                    }
                 }
 
                 quadSet.addAll(metaQuads)

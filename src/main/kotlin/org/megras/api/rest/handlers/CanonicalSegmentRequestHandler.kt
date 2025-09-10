@@ -6,7 +6,6 @@ import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.ObjectStoreResult
-import org.megras.data.fs.StoredObjectDescriptor
 import org.megras.data.fs.StoredObjectId
 import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.Quad
@@ -157,21 +156,19 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
 
         var previousOrthogonalSegmentation: Segmentation? = null
         if (segmentId != null) {
-            val relevant = quads.filterSubject(LocalQuadValue(documentId))
-            if (relevant.size > 0) {
-                val previousSegmentation = getSegmentationForCached(relevant, LocalQuadValue(documentId))
-                if (previousSegmentation != null) {
-                    if (previousSegmentation.orthogonalTo(segmentation)) {
-                        previousOrthogonalSegmentation = previousSegmentation
-                    } else {
-                        // if this segmentation is equivalent to previous, skip and redirect to it
-                        if (previousSegmentation.equivalentTo(segmentation.translate(previousSegmentation.bounds))) {
-                            currentPaths.forEach { currentPath ->
-                                quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, LocalQuadValue(documentId)))
-                            }
-                            redirect(ctx, LocalQuadValue(objectId).uri, nextSegmentation)
-                            return
+            // Avoid filterSubject here to prevent triggering derived relation computation
+            val previousSegmentation = getSegmentationForCached(quads, LocalQuadValue(documentId))
+            if (previousSegmentation != null) {
+                if (previousSegmentation.orthogonalTo(segmentation)) {
+                    previousOrthogonalSegmentation = previousSegmentation
+                } else {
+                    // if this segmentation is equivalent to previous, skip and redirect to it
+                    if (previousSegmentation.equivalentTo(segmentation.translate(previousSegmentation.bounds))) {
+                        currentPaths.forEach { currentPath ->
+                            quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, LocalQuadValue(documentId)))
                         }
+                        redirect(ctx, LocalQuadValue(objectId).uri, nextSegmentation)
+                        return
                     }
                 }
             }
@@ -352,9 +349,11 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
     }
 
     private fun getSegmentationForCached(quads: QuadSet, cacheObject: QuadValue): Segmentation? {
-        val segmentTypeQuad = quads.filter(listOf(cacheObject), listOf(MeGraS.SEGMENT_TYPE.uri), null).first()
+        val segmentTypeQuad = quads.filter(listOf(cacheObject), listOf(MeGraS.SEGMENT_TYPE.uri), null).firstOrNull()
+            ?: return null
         val potentialMatchType = segmentTypeQuad.`object` as StringValue
-        val segmentDefinitionQuad = quads.filter(listOf(cacheObject), listOf(MeGraS.SEGMENT_DEFINITION.uri), null).first()
+        val segmentDefinitionQuad = quads.filter(listOf(cacheObject), listOf(MeGraS.SEGMENT_DEFINITION.uri), null).firstOrNull()
+            ?: return null
         val potentialMatchDefinition = segmentDefinitionQuad.`object` as StringValue
         return SegmentationUtil.parseSegmentation(potentialMatchType.value, potentialMatchDefinition.value)
     }

@@ -20,6 +20,7 @@ import org.megras.data.graph.URIValue
 import org.megras.data.mime.MimeType
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
+import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.IdUtil
@@ -37,7 +38,7 @@ object FileUtil {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
-    fun addFile(objectStore: FileSystemObjectStore, quads: MutableQuadSet, file: PseudoFile): ObjectId {
+    fun addFile(objectStore: FileSystemObjectStore, quads: MutableQuadSet, file: PseudoFile, metaSkip: Boolean = false): ObjectId {
 
         val existing = objectStore.exists(file)
 
@@ -54,6 +55,11 @@ object FileUtil {
         //store raw
         val descriptor = objectStore.store(file)
         val oid = IdUtil.generateId(file)
+        val exifData = if (!metaSkip) {
+            ExifUtil.getExifData(file, oid)
+        } else {
+            emptyList()
+        }
 
         //generate and store canonical
         val canonical = generateCanonicalRepresentation(objectStore, descriptor)
@@ -68,6 +74,7 @@ object FileUtil {
                 Quad(oid, MeGraS.CANONICAL_MIME_TYPE.uri, StringValue(canonical.mimeType.mimeString)),
                 Quad(oid, MeGraS.BOUNDS.uri, StringValue(canonical.bounds.toString()))
             )
+            + exifData
         )
 
         return oid

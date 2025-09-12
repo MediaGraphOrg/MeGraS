@@ -51,6 +51,10 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
             }
         }
 
+        if (embedding.isEmpty()) {
+            return emptyList()
+        }
+
         return listOf(
             FloatVectorValue(embedding)
         )

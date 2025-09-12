@@ -20,10 +20,10 @@ enum class MeGraS(suffix: String) {
     ;
 
     companion object {
-        private const val prefix = "http://megras.org/schema#"
+        const val PREFIX = "http://megras.org/schema#"
     }
 
-    val uri = URIValue(MeGraS.prefix, suffix)
+    val uri = URIValue(MeGraS.PREFIX, suffix)
 
 
 }

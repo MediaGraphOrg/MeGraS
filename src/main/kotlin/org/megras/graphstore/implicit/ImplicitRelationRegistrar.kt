@@ -1,6 +1,7 @@
 package org.megras.graphstore.implicit
 
 import org.megras.data.fs.FileSystemObjectStore
+import org.megras.graphstore.implicit.handlers.AboveSpatialHandler
 import org.megras.graphstore.implicit.handlers.SamePrefixHandler
 import org.megras.graphstore.implicit.handlers.ClipNearDuplicateHandler
 import org.megras.graphstore.implicit.handlers.AfterObjectHandler
@@ -12,6 +13,7 @@ import org.megras.graphstore.implicit.handlers.OverlapsObjectHandler
 import org.megras.graphstore.implicit.handlers.PrecedesObjectHandler
 import org.megras.graphstore.implicit.handlers.StartsObjectHandler
 import org.megras.graphstore.implicit.handlers.AfterSegmentHandler
+import org.megras.graphstore.implicit.handlers.BelowSpatialHandler
 import org.megras.graphstore.implicit.handlers.BesideSpatialHandler
 import org.megras.graphstore.implicit.handlers.ClipKnnHandler
 import org.megras.graphstore.implicit.handlers.ContainsSegmentHandler
@@ -29,13 +31,23 @@ import org.megras.graphstore.implicit.handlers.PrecedesSegmentHandler
 import org.megras.graphstore.implicit.handlers.SegmentSiblingHandler
 import org.megras.graphstore.implicit.handlers.StartsSegmentHandler
 import org.megras.graphstore.implicit.handlers.WithinSpatialHandler
+import org.megras.graphstore.implicit.handlers.ClipKnnRegexHandler
+import org.megras.graphstore.implicit.handlers.CrossesSpatialHandler
+import org.megras.graphstore.implicit.handlers.LeftSpatialHandler
+import org.megras.graphstore.implicit.handlers.RightSpatialHandler
+import org.megras.graphstore.implicit.handlers.TouchesSpatialHandler
 
 class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<ImplicitRelationHandler>()
+    private val regexHandlers = mutableListOf<RegexImplicitRelationHandler>()
 
     init {
 //        register(SamePrefixHandler())
         register(ClipNearDuplicateHandler())
+        register(SegmentSiblingHandler())
+
+        register(ClipKnnRegexHandler())
+
 //        register(AfterObjectHandler())
 //        register(PrecedesObjectHandler())
 //        register(FinishesObjectHandler())
@@ -52,6 +64,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
 //        register(ContainsSegmentHandler())
 //        register(EqualsSegmentHandler())
 //        register(OverlapsSegmentHandler())
+
         register(ContainsSpatialHandler())
         register(EqualsSpatialHandler())
         register(IntersectsSpatialHandler())
@@ -60,17 +73,27 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         register(BesideSpatialHandler())
         register(DisjointSpatialHandler())
         register(OverlapsSpatialHandler())
-        for (k in 2..4) {
-            register(ClipKnnHandler(k))
-        }
-        register(SegmentSiblingHandler())
+        register(AboveSpatialHandler())
+        register(BelowSpatialHandler())
+        register(LeftSpatialHandler())
+        register(RightSpatialHandler())
+        register(CrossesSpatialHandler())
+        register(TouchesSpatialHandler())
     }
 
     private fun register(objectHandler: ImplicitRelationHandler) {
         handlers.add(objectHandler)
     }
 
+    private fun register(regexHandler: RegexImplicitRelationHandler) {
+        regexHandlers.add(regexHandler)
+    }
+
     fun getHandlers(): List<ImplicitRelationHandler> {
         return handlers
+    }
+
+    fun getRegexHandlers(): List<RegexImplicitRelationHandler> {
+        return regexHandlers
     }
 }

@@ -4,8 +4,12 @@ import java.io.Serializable
 import java.net.URI
 import java.net.URISyntaxException
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoField
 
 sealed class QuadValue : Serializable {
 
@@ -24,29 +28,42 @@ sealed class QuadValue : Serializable {
             is DoubleArray -> of(value)
             is LongArray -> of(value)
             is FloatArray -> of(value)
+            is LocalDateTime -> of(value)
+            is OffsetDateTime -> of(value)
             else -> of(value.toString())
         }
 
         fun of(value: String) = when {
-            value.startsWith('<') && value.endsWith('>') -> if(value.startsWith("<${LocalQuadValue.defaultPrefix}")) {
-                LocalQuadValue(value.substringAfter(LocalQuadValue.defaultPrefix).substringBeforeLast('>'))
-            } else {
-                URIValue(value)
-            }
+            value.startsWith('<') && value.endsWith('>') ->
+                if (value.startsWith("<${LocalQuadValue.defaultPrefix}")) {
+                    LocalQuadValue(value.substringAfter(LocalQuadValue.defaultPrefix).substringBeforeLast('>'))
+                } else if (value.startsWith("<http://localhost/")) {
+                    LocalQuadValue(value.substringAfter("<http://localhost/").substringBeforeLast('>'))
+                } else {
+                    URIValue(value)
+                }
+
             value.endsWith("^^String") -> StringValue(value.substringBeforeLast("^^String"))
             value.endsWith("^^Long") -> LongValue(value.substringBeforeLast("^^Long").toLongOrNull() ?: 0L)
-            value.endsWith("^^Double") -> DoubleValue(value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN)
+            value.endsWith("^^Double") -> DoubleValue(
+                value.substringBeforeLast("^^Double").toDoubleOrNull() ?: Double.NaN
+            )
+            value.endsWith("^^Temporal") -> TemporalValue(value.substringBeforeLast("^^Temporal"))
+
             value.startsWith("[") -> when { //vectors
                 value.endsWith("]") || value.endsWith("]^^DoubleVector") -> {
                     DoubleVectorValue.parse(value)
                 }
+
                 value.endsWith("]^^LongVector") -> LongVectorValue.parse(value)
                 value.endsWith("]^^FloatVector") -> FloatVectorValue.parse(value)
                 else -> StringValue(value) //not a valid vector after all
 
             }
+
             else -> StringValue(value)
         }
+
         fun of(value: Long) = LongValue(value)
         fun of(value: Double) = DoubleValue(value)
         fun of(prefix: String, uri: String) = URIValue(prefix, uri)
@@ -56,13 +73,15 @@ sealed class QuadValue : Serializable {
         fun of(value: List<Long>) = LongVectorValue(value)
         fun of(value: List<Float>) = FloatVectorValue(value)
         fun of(value: FloatArray) = FloatVectorValue(value)
+        fun of(value: OffsetDateTime) = TemporalValue(value)
+        fun of(value: LocalDateTime) = TemporalValue(value)
 
 
     }
 
 }
 
-data class StringValue(val value: String): QuadValue(), Serializable {
+data class StringValue(val value: String) : QuadValue(), Serializable {
     override fun toString(): String = "$value^^String"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -77,7 +96,8 @@ data class StringValue(val value: String): QuadValue(), Serializable {
         return value.hashCode()
     }
 }
-data class LongValue(val value: Long): QuadValue(), Serializable {
+
+data class LongValue(val value: Long) : QuadValue(), Serializable {
     override fun toString(): String = "$value^^Long"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -92,7 +112,8 @@ data class LongValue(val value: Long): QuadValue(), Serializable {
         return value.hashCode()
     }
 }
-data class DoubleValue(val value: Double): QuadValue(), Serializable {
+
+data class DoubleValue(val value: Double) : QuadValue(), Serializable {
     override fun toString(): String = "$value^^Double"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -135,7 +156,7 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
                 val suffix = cleaned.substringAfter(host)
                 val prefix = cleaned.substringBefore(suffix)
                 prefix to suffix
-            }catch (e: URISyntaxException) {
+            } catch (e: URISyntaxException) {
                 "" to cleaned
             }
 
@@ -147,6 +168,7 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
 
     val value: String
         get() = "${prefix}${uri}"
+
     override fun toString() = "<$value>"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -168,20 +190,23 @@ abstract class VectorValue(val type: Type, val length: Int) : QuadValue(), Seria
 
     enum class Type(val byte: Byte) {
         Double(0) {
-            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.DoubleVector(length)
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> =
+                org.vitrivr.cottontail.core.types.Types.DoubleVector(length)
         },
         Long(1) {
-            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.LongVector(length)
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> =
+                org.vitrivr.cottontail.core.types.Types.LongVector(length)
         },
         Float(2) {
-            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> = org.vitrivr.cottontail.core.types.Types.FloatVector(length)
+            override fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*> =
+                org.vitrivr.cottontail.core.types.Types.FloatVector(length)
         }
         ;
 
         abstract fun cottontailType(length: Int): org.vitrivr.cottontail.core.types.Types<*>
 
         companion object {
-            fun fromByte(byte: Byte) = when(byte) {
+            fun fromByte(byte: Byte) = when (byte) {
                 0.toByte() -> Double
                 1.toByte() -> Long
                 2.toByte() -> Float
@@ -316,54 +341,82 @@ class LongVectorValue(val vector: LongArray) : VectorValue(Type.Long, vector.siz
     }
 }
 
-data class TemporalValue(val originalString: String) : Comparable<TemporalValue>, QuadValue(), Serializable {
-    private val dateTime: LocalDateTime
+data class TemporalValue(val dateTime: OffsetDateTime) : Comparable<TemporalValue>, QuadValue(), Serializable {
 
     val value: String
         get() = dateTime.toString()
 
-    init {
-        val value = if (originalString.contains("^^")) {
-            originalString.substringBefore("^^").trim()
-        } else {
-            originalString
-        }
-        dateTime = parseDateTime(value)
-    }
+    constructor(originalString: String) : this(parseDateTime(originalString))
 
-    private fun parseDateTime(value: String): LocalDateTime {
-        val formats = listOf(
-            DateTimeFormatter.ISO_DATE_TIME, // ISO-8601 format
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"), // Common database format
-            DateTimeFormatter.ISO_DATE // Date only
-        )
+    constructor(ldt: LocalDateTime) : this(ldt.atZone(ZoneId.systemDefault()).toOffsetDateTime())
 
-        formats.forEach { formatter ->
-            try {
-                return LocalDateTime.parse(value, formatter)
-            } catch (e: DateTimeParseException) {
-                // Ignore and try the next format
+    companion object {
+        private fun parseDateTime(value: String): OffsetDateTime {
+            val cleanValue = if (value.contains("^^")) {
+                value.substringBefore("^^").trim()
+            } else {
+                value
             }
-        }
 
-        // Try parsing as a Unix timestamp (milliseconds)
-        return try {
-            val instant = java.time.Instant.ofEpochMilli(value.toLong())
-            LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Unsupported date-time format: $value")
+            // Try parsing as OffsetDateTime directly
+            try {
+                // Default parser handles ISO_OFFSET_DATE_TIME
+                return OffsetDateTime.parse(cleanValue)
+            } catch (_: DateTimeParseException) {}
+
+            // Formatter for yyyy:MM:dd HH:mm:ss with optional milliseconds and required offset
+            val offsetFormatter = DateTimeFormatterBuilder()
+                .appendPattern("yyyy:MM:dd HH:mm:ss")
+                .optionalStart()
+                .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                .optionalEnd()
+                .appendPattern("XXX")
+                .toFormatter()
+
+            try {
+                return OffsetDateTime.parse(cleanValue, offsetFormatter)
+            } catch (_: DateTimeParseException) {}
+
+            // Try parsing as LocalDateTime and convert
+            val localFormats = listOf(
+                DateTimeFormatter.ISO_DATE_TIME,
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                DateTimeFormatterBuilder()
+                    .appendPattern("yyyy:MM:dd HH:mm:ss")
+                    .optionalStart()
+                    .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                    .optionalEnd()
+                    .toFormatter(),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"),
+                DateTimeFormatter.ISO_DATE
+            )
+
+            for (formatter in localFormats) {
+                try {
+                    val ldt = LocalDateTime.parse(cleanValue, formatter)
+                    return ldt.atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                } catch (_: DateTimeParseException) {}
+            }
+
+            // Try parsing as a Unix timestamp (milliseconds)
+            return try {
+                val instant = java.time.Instant.ofEpochMilli(cleanValue.toLong())
+                OffsetDateTime.ofInstant(instant, ZoneId.systemDefault())
+            } catch (_: Exception) {
+                throw IllegalArgumentException("Unsupported date-time format: $cleanValue")
+            }
         }
     }
 
     override fun toString(): String {
-        return dateTime.toString()
+        return "$dateTime^^Temporal"
     }
 
     override fun compareTo(other: TemporalValue): Int {
         return dateTime.compareTo(other.dateTime)
     }
 
-    operator fun compareTo(other: LocalDateTime): Int {
+    operator fun compareTo(other: OffsetDateTime): Int {
         return dateTime.compareTo(other)
     }
 }

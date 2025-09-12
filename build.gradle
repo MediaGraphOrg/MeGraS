@@ -33,8 +33,7 @@ shadowJar {
     manifest {
         attributes 'Main-Class': application.mainClass.get()
     }
-    // Optional: If you have conflicting dependencies, you might need to relocate them
-    // relocate 'org.some.conflicting.package', 'shadow.org.some.conflicting.package'
+    mergeServiceFiles()
 }
 
 dependencies {
@@ -68,7 +67,7 @@ dependencies {
     implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: log4jVersion
     implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j-impl', version: log4jVersion
     implementation group: 'org.apache.logging.log4j', name: 'log4j-jul', version: log4jVersion
-    implementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.6'
+    //implementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.6'
 
     /* Apache commons */
     implementation group: 'commons-codec', name: 'commons-codec', version: '1.17.0'
@@ -171,6 +170,8 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-kotlin:3.25.3'
 
     implementation 'com.vladsch.flexmark:flexmark-all:0.64.8'
+
+    implementation 'com.github.mjeanroy:exiftool-lib:3.1.0'
 }
 
 protobuf {

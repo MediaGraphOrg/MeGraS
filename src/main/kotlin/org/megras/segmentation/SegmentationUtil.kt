@@ -31,7 +31,8 @@ import kotlin.math.round
 object SegmentationUtil {
 
     fun shouldSwap(first: SegmentationType?, second: SegmentationType?): Boolean {
-        return (first != SegmentationType.TIME && second == SegmentationType.TIME) ||
+        val isTemporalLikeSecond = second == SegmentationType.TIME || second == SegmentationType.PAGE || second == SegmentationType.CHARACTER
+        return (first != SegmentationType.TIME && isTemporalLikeSecond) ||
             (first == SegmentationType.COLOR && second != SegmentationType.COLOR)
     }
 
@@ -334,7 +335,11 @@ object SegmentationUtil {
                 Quad(cacheObject, MeGraS.SEGMENT_BOUNDS.uri, StringValue(segmentation.bounds.toString()))
             )
         )
-        quads.add(Quad(LocalQuadValue(objectId + "/" + segmentation.toURI()), SchemaOrg.SAME_AS.uri, cacheObject))
+
+        // Ensure path subject points to only the latest cache object
+        val pathSubject = LocalQuadValue(objectId + "/" + segmentation.toURI())
+        quads.removeAll(quads.filter(listOf(pathSubject), listOf(SchemaOrg.SAME_AS.uri), null))
+        quads.add(Quad(pathSubject, SchemaOrg.SAME_AS.uri, cacheObject))
 
         return cacheObject
     }

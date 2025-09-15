@@ -9,6 +9,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.ServiceConfig
 import org.megras.util.services.ClipEmbedderClient
 
 class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<FloatVectorValue> {
@@ -38,7 +39,7 @@ class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore
         val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
         val embedding: List<Float> = runBlocking {
-            val client = ClipEmbedderClient("localhost", 50051)
+            val client = ClipEmbedderClient(ServiceConfig.grpcHost, ServiceConfig.grpcPort)
             try {
                 val embedding: List<Float> = client.getImageEmbedding(path)
                 return@runBlocking embedding

@@ -4,3 +4,4 @@ transformers
 torch
 Pillow
 requests
+docling

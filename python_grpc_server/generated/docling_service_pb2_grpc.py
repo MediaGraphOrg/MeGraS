@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import clip_service_pb2 as clip__service__pb2
+import docling_service_pb2 as docling__service__pb2
 
 GRPC_GENERATED_VERSION = '1.74.0'
 GRPC_VERSION = grpc.__version__
@@ -18,15 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in clip_service_pb2_grpc.py depends on'
+        + f' but the generated code in docling_service_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ClipServiceStub(object):
-    """Define the service for CLIP embeddings
+class DoclingServiceStub(object):
+    """DoclingService extracts content from PDF files.
     """
 
     def __init__(self, channel):
@@ -35,63 +35,63 @@ class ClipServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.GetTextEmbedding = channel.unary_unary(
-                '/org.megras.util.services.ClipService/GetTextEmbedding',
-                request_serializer=clip__service__pb2.TextRequest.SerializeToString,
-                response_deserializer=clip__service__pb2.EmbeddingResponse.FromString,
+        self.ExtractText = channel.unary_unary(
+                '/org.megras.util.services.DoclingService/ExtractText',
+                request_serializer=docling__service__pb2.PdfRequest.SerializeToString,
+                response_deserializer=docling__service__pb2.ExtractTextResponse.FromString,
                 _registered_method=True)
-        self.GetImageEmbedding = channel.unary_unary(
-                '/org.megras.util.services.ClipService/GetImageEmbedding',
-                request_serializer=clip__service__pb2.ImageRequest.SerializeToString,
-                response_deserializer=clip__service__pb2.EmbeddingResponse.FromString,
+        self.ExtractDocJson = channel.unary_unary(
+                '/org.megras.util.services.DoclingService/ExtractDocJson',
+                request_serializer=docling__service__pb2.PdfRequest.SerializeToString,
+                response_deserializer=docling__service__pb2.ExtractDocJsonResponse.FromString,
                 _registered_method=True)
 
 
-class ClipServiceServicer(object):
-    """Define the service for CLIP embeddings
+class DoclingServiceServicer(object):
+    """DoclingService extracts content from PDF files.
     """
 
-    def GetTextEmbedding(self, request, context):
-        """Method to get text embeddings
+    def ExtractText(self, request, context):
+        """Extracts plain text from a PDF file.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetImageEmbedding(self, request, context):
-        """Method to get image embeddings
+    def ExtractDocJson(self, request, context):
+        """Extracts the full Docling JSON for a PDF file as a raw JSON string.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_ClipServiceServicer_to_server(servicer, server):
+def add_DoclingServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'GetTextEmbedding': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetTextEmbedding,
-                    request_deserializer=clip__service__pb2.TextRequest.FromString,
-                    response_serializer=clip__service__pb2.EmbeddingResponse.SerializeToString,
+            'ExtractText': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExtractText,
+                    request_deserializer=docling__service__pb2.PdfRequest.FromString,
+                    response_serializer=docling__service__pb2.ExtractTextResponse.SerializeToString,
             ),
-            'GetImageEmbedding': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetImageEmbedding,
-                    request_deserializer=clip__service__pb2.ImageRequest.FromString,
-                    response_serializer=clip__service__pb2.EmbeddingResponse.SerializeToString,
+            'ExtractDocJson': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExtractDocJson,
+                    request_deserializer=docling__service__pb2.PdfRequest.FromString,
+                    response_serializer=docling__service__pb2.ExtractDocJsonResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'org.megras.util.services.ClipService', rpc_method_handlers)
+            'org.megras.util.services.DoclingService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('org.megras.util.services.ClipService', rpc_method_handlers)
+    server.add_registered_method_handlers('org.megras.util.services.DoclingService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class ClipService(object):
-    """Define the service for CLIP embeddings
+class DoclingService(object):
+    """DoclingService extracts content from PDF files.
     """
 
     @staticmethod
-    def GetTextEmbedding(request,
+    def ExtractText(request,
             target,
             options=(),
             channel_credentials=None,
@@ -104,9 +104,9 @@ class ClipService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/org.megras.util.services.ClipService/GetTextEmbedding',
-            clip__service__pb2.TextRequest.SerializeToString,
-            clip__service__pb2.EmbeddingResponse.FromString,
+            '/org.megras.util.services.DoclingService/ExtractText',
+            docling__service__pb2.PdfRequest.SerializeToString,
+            docling__service__pb2.ExtractTextResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -118,7 +118,7 @@ class ClipService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetImageEmbedding(request,
+    def ExtractDocJson(request,
             target,
             options=(),
             channel_credentials=None,
@@ -131,9 +131,9 @@ class ClipService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/org.megras.util.services.ClipService/GetImageEmbedding',
-            clip__service__pb2.ImageRequest.SerializeToString,
-            clip__service__pb2.EmbeddingResponse.FromString,
+            '/org.megras.util.services.DoclingService/ExtractDocJson',
+            docling__service__pb2.PdfRequest.SerializeToString,
+            docling__service__pb2.ExtractDocJsonResponse.FromString,
             options,
             channel_credentials,
             insecure,

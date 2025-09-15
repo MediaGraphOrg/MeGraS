@@ -17,6 +17,7 @@ import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.graphstore.derived.QuadSetAware
 import org.megras.segmentation.Bounds
 import org.megras.util.Constants
+import org.megras.util.DocExtractorUtil
 import org.megras.util.FileUtil
 import java.io.File
 
@@ -44,32 +45,12 @@ class ParagraphHandler(private val quadSet: QuadSet, private val objectStore: Fi
     }
 
     override fun derive(subject: URIValue): Collection<LocalQuadValue> {
-        val path = FileUtil.getPath(subject, this.effectiveQuadSet, this.objectStore) ?: return emptyList()
-
-        // Obtain cached Docling JSON via derived relation
-        val docJsonPredicate = DocumentModelJsonHandler.getPredicate()
-        val json: String = (effectiveQuadSet
-            .filter(listOf(subject), listOf(docJsonPredicate), null)
-            .filterPredicate(docJsonPredicate)
-            .firstOrNull()?.`object` as? StringValue)?.value ?: ""
-
-        val texts: List<Map<String, Any?>> = try {
-            if (json.isBlank()) emptyList() else {
-                val mapper = ObjectMapper().registerKotlinModule()
-                @Suppress("UNCHECKED_CAST")
-                val root = mapper.readValue(json, Map::class.java) as Map<String, Any?>
-                (root["texts"] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
-            }
-        } catch (e: Exception) {
-            println("Error parsing texts for '$path': ${e.message}")
-            emptyList()
-        }
+        val texts: List<Map<String, Any?>> = DocExtractorUtil.getDataFromDocJson("texts", effectiveQuadSet, subject)
 
         if (texts.isEmpty()) {
             return emptyList()
         }
 
-        val baseName = File(path).nameWithoutExtension.ifBlank { "document" }
         val created = mutableListOf<LocalQuadValue>()
         val mqs = effectiveQuadSet as MutableQuadSet
 
@@ -93,7 +74,7 @@ class ParagraphHandler(private val quadSet: QuadSet, private val objectStore: Fi
 
             // Create paragraph text file
             val nameOrdinal = ordinal ?: idx.toLong()
-            val outName = "${baseName}-page${pageIndex + 1}-paragraph${nameOrdinal}.txt"
+            val outName = "page${pageIndex + 1}-paragraph${nameOrdinal}.txt"
             val bytes = textStr.toByteArray(Charsets.UTF_8)
             val pseudo = PseudoFile(bytes, outName)
 

@@ -18,6 +18,7 @@ import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.graphstore.derived.QuadSetAware
 import org.megras.segmentation.Bounds
 import org.megras.util.Constants
+import org.megras.util.DocExtractorUtil
 import org.megras.util.FileUtil
 import java.io.File
 import kotlin.math.max
@@ -47,27 +48,9 @@ class TableHandler(
     }
 
     override fun derive(subject: URIValue): Collection<LocalQuadValue> {
-        val path = FileUtil.getPath(subject, effectiveQuadSet, objectStore) ?: return emptyList()
-
-        val json: String = (effectiveQuadSet
-            .filter(listOf(subject), listOf(DocumentModelJsonHandler.getPredicate()), null)
-            .firstOrNull()?.`object` as? StringValue)?.value ?: ""
-
-        if (json.isBlank()) return emptyList()
-
-        val mapper = ObjectMapper().registerKotlinModule()
-        val root: Map<String, Any?>
-        try {
-            root = mapper.readValue(json)
-        } catch (e: Exception) {
-            println("Error parsing doc model for '$path': ${e.message}")
-            return emptyList()
-        }
-
-        val tables = (root["tables"] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
+        val tables: List<Map<String, Any?>> = DocExtractorUtil.getDataFromDocJson("tables", effectiveQuadSet, subject)
         if (tables.isEmpty()) return emptyList()
 
-        val baseName = File(path).nameWithoutExtension.ifBlank { "document" }
         val mqs = (effectiveQuadSet as? MutableQuadSet) ?: return emptyList()
         val created = mutableListOf<LocalQuadValue>()
 
@@ -163,7 +146,7 @@ class TableHandler(
 
             // Store CSV artifact
             val tableOrdinal = ordinal ?: idx.toLong()
-            val outName = "${baseName}-page${pageIndex + 1}-table${tableOrdinal}.csv"
+            val outName = "page${pageIndex + 1}-table${tableOrdinal}.csv"
             val id = FileUtil.addFile(objectStore, effectiveQuadSet as MutableQuadSet, PseudoFile(csv.toByteArray(Charsets.UTF_8), outName), metaSkip = true)
 
             // Attach metadata quads

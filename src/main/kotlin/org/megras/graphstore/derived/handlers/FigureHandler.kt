@@ -18,6 +18,7 @@ import org.megras.segmentation.type.Interval
 import org.megras.segmentation.type.Page
 import org.megras.segmentation.type.Polygon
 import org.megras.util.Constants
+import org.megras.util.DocExtractorUtil
 import org.megras.util.FileUtil
 
 class FigureHandler(
@@ -46,25 +47,7 @@ class FigureHandler(
     }
 
     override fun derive(subject: URIValue): Collection<LocalQuadValue> {
-        val path = FileUtil.getPath(subject, this.effectiveQuadSet, this.objectStore) ?: return emptyList()
-
-        val docJsonPredicate = DocumentModelJsonHandler.getPredicate()
-        val json: String = (effectiveQuadSet
-            .filter(listOf(subject), listOf(docJsonPredicate), null)
-            .filterPredicate(docJsonPredicate)
-            .firstOrNull()?.`object` as? StringValue)?.value ?: ""
-
-        val figures: List<Map<String, Any?>> = try {
-            if (json.isBlank()) emptyList() else {
-                val mapper = ObjectMapper().registerKotlinModule()
-                @Suppress("UNCHECKED_CAST")
-                val root = mapper.readValue(json, Map::class.java) as Map<String, Any?>
-                (root["pictures"] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
-            }
-        } catch (e: Exception) {
-            println("Error parsing figures for '$path': ${e.message}")
-            emptyList()
-        }
+        val figures: List<Map<String, Any?>> = DocExtractorUtil.getDataFromDocJson("pictures", effectiveQuadSet, subject)
 
         if (figures.isEmpty()) return emptyList()
 

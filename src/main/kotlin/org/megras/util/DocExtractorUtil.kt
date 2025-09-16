@@ -24,6 +24,7 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.math.max
 import kotlin.math.roundToInt
+import org.megras.data.schema.Nlp
 
 object DocExtractorUtil {
     private fun getDataFromDocJson(type: String, quadSet: QuadSet, subject: URIValue): List<Map<String, Any?>> {
@@ -55,7 +56,7 @@ object DocExtractorUtil {
             paragraphQuads.forEach { q ->
                 val pid = q.`object` as? LocalQuadValue ?: return@forEach
                 val refQuad = quadSet
-                    .filter(listOf(pid), listOf(URIValue(Constants.NLP_PREFIX + "/reference")), null)
+                    .filter(listOf(pid), listOf(Nlp.REFERENCE.uri), null)
                     .firstOrNull()
                 val ref = (refQuad?.`object` as? StringValue)?.value
                 if (!ref.isNullOrBlank()) {
@@ -74,7 +75,7 @@ object DocExtractorUtil {
         val created = mutableListOf<LocalQuadValue>()
 
         data.forEach { item ->
-            val prov = (item["prov"] as List<*>).first() as Map<*, *>
+            val prov = (item["prov"] as List<*>)?.first() as Map<*, *>
             val pageNo = (prov["page_no"] as Number).toInt()
             val bbox = prov["bbox"] as Map<*, *>
             val l = (bbox["l"] as Number).toDouble()
@@ -187,18 +188,18 @@ object DocExtractorUtil {
             val assetId = FileUtil.addFile(objectStore, quadSet, PseudoFile(bytes, outName), metaSkip = true)
 
             val metaQuads = mutableListOf(
-                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/page"), pageObj),
-                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/label"), StringValue(label)),
-                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/reference"), StringValue(reference)),
-                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/ordinal"), LongValue(ordinal)),
-                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/asset"), assetId)
+                Quad(dataObj, Nlp.PAGE.uri, pageObj),
+                Quad(dataObj, Nlp.LABEL.uri, StringValue(label)),
+                Quad(dataObj, Nlp.REFERENCE.uri, StringValue(reference)),
+                Quad(dataObj, Nlp.ORDINAL.uri, LongValue(ordinal)),
+                Quad(dataObj, Nlp.ASSET.uri, assetId)
             )
             if (captionRefs.isNotEmpty()) {
                 val refToParagraph: Map<String, LocalQuadValue> = getParagraphMap(subject, quadSet)
 
                 captionRefs.forEach { refStr ->
                     refToParagraph[refStr]?.let { pid ->
-                        metaQuads.add(Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/caption"), pid))
+                        metaQuads.add(Quad(dataObj, Nlp.CAPTION.uri, pid))
                     }
                 }
             }

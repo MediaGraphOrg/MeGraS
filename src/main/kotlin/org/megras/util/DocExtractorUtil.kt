@@ -19,13 +19,10 @@ import org.megras.segmentation.SegmentationUtil
 import org.megras.segmentation.type.Interval
 import org.megras.segmentation.type.Page
 import org.megras.segmentation.type.Rect
-import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.imageio.ImageIO
-import kotlin.collections.mutableMapOf
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 object DocExtractorUtil {
@@ -108,37 +105,33 @@ object DocExtractorUtil {
             val dataObj = SegmentationUtil.segment(pageObj, rectSeg, objectStore, quadSet)
 
             var bytes: ByteArray
-            var outName: String = "temp.bin"
+            var outName = "temp.bin"
             when (type) {
                 DocExtractorUtilType.FIGURES -> {
-                    val dpi: Float = 300f
+                    val dpi = 300f
                     val path = FileUtil.getPath(subject, quadSet, objectStore)!!
-                        PDDocument.load(File(path)).use { doc ->
-                            val renderer = PDFRenderer(doc)
-                            val page = doc.getPage(pageIndex)
-                            val mediaBox = page.mediaBox
-                            val pageWidthPt = mediaBox.width.toDouble()
-                            val pageHeightPt = mediaBox.height.toDouble()
-                            val pageImage: BufferedImage = renderer.renderImageWithDPI(pageIndex, dpi)
-                            val imgW = pageImage.width
-                            val imgH = pageImage.height
-                            val scaleX = imgW / pageWidthPt
-                            val scaleY = imgH / pageHeightPt
-                            val leftPx = ((l - mediaBox.lowerLeftX) * scaleX).roundToInt()
-                            val rightPx = ((r - mediaBox.lowerLeftX) * scaleX).roundToInt()
-                            val topPx = (imgH - ((t - mediaBox.lowerLeftY) * scaleY)).roundToInt()
-                            val bottomPx = (imgH - ((b - mediaBox.lowerLeftY) * scaleY)).roundToInt()
-                            val x = max(0, min(leftPx, rightPx))
-                            val y = max(0, min(topPx, bottomPx))
-                            var w = max(0, kotlin.math.abs(rightPx - leftPx))
-                            var h = max(0, kotlin.math.abs(bottomPx - topPx))
-                            if (x + w > imgW) w = imgW - x
-                            if (y + h > imgH) h = imgH - y
-                            val sub = pageImage.getSubimage(x, y, w, h)
-                            val baos = ByteArrayOutputStream()
-                            ImageIO.write(sub, "PNG", baos)
+                    PDDocument.load(File(path)).use { doc ->
+                        val renderer = PDFRenderer(doc)
+                        val pageImage = renderer.renderImageWithDPI(pageIndex, dpi)
+                        val mediaBox = doc.getPage(pageIndex).mediaBox
+                        fun toPx(coord: Double, offset: Float, scale: Float) = ((coord - offset) * scale).roundToInt()
+                        val scaleX = pageImage.width / mediaBox.width
+                        val scaleY = pageImage.height / mediaBox.height
+                        val x = minOf(toPx(
+                            l, mediaBox.lowerLeftX, scaleX),
+                            toPx(r, mediaBox.lowerLeftX, scaleX)
+                        ).coerceAtLeast(0)
+                        val y = minOf(
+                            pageImage.height - toPx(t, mediaBox.lowerLeftY, scaleY),
+                            pageImage.height - toPx(b, mediaBox.lowerLeftY, scaleY)
+                        ).coerceAtLeast(0)
+                        val w = kotlin.math.abs(toPx(r, mediaBox.lowerLeftX, scaleX) - toPx(l, mediaBox.lowerLeftX, scaleX)).coerceAtMost(pageImage.width - x)
+                        val h = kotlin.math.abs(toPx(b, mediaBox.lowerLeftY, scaleY) - toPx(t, mediaBox.lowerLeftY, scaleY)).coerceAtMost(pageImage.height - y)
+                        ByteArrayOutputStream().use { baos ->
+                            ImageIO.write(pageImage.getSubimage(x, y, w, h), "PNG", baos)
                             bytes = baos.toByteArray()
                         }
+                    }
                     outName = "page${pageNo}-figure${ordinal}.png"
                 }
                 DocExtractorUtilType.TABLES -> {
@@ -191,7 +184,7 @@ object DocExtractorUtil {
                     outName = "page${pageNo}-paragraph${ordinal}.txt"
                 }
             }
-            val assetId = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, PseudoFile(bytes, outName), metaSkip = true)
+            val assetId = FileUtil.addFile(objectStore, quadSet, PseudoFile(bytes, outName), metaSkip = true)
 
             val metaQuads = mutableListOf(
                 Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/page"), pageObj),

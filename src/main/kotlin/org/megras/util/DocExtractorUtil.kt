@@ -2,7 +2,10 @@ package org.megras.util
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.data.fs.FileSystemObjectStore
+import org.megras.data.fs.file.PseudoFile
 import org.megras.data.graph.LocalQuadValue
 import org.megras.data.graph.LongValue
 import org.megras.data.graph.Quad
@@ -16,10 +19,17 @@ import org.megras.segmentation.SegmentationUtil
 import org.megras.segmentation.type.Interval
 import org.megras.segmentation.type.Page
 import org.megras.segmentation.type.Rect
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.io.File
+import javax.imageio.ImageIO
 import kotlin.collections.mutableMapOf
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 object DocExtractorUtil {
-    fun getDataFromDocJson(type: String, quadSet: QuadSet, subject: URIValue): List<Map<String, Any?>> {
+    private fun getDataFromDocJson(type: String, quadSet: QuadSet, subject: URIValue): List<Map<String, Any?>> {
         val json: String = (quadSet
             .filter(listOf(subject), listOf(DocumentModelJsonHandler.getPredicate()), null)
             .firstOrNull()?.`object` as? StringValue)?.value ?: ""
@@ -41,7 +51,7 @@ object DocExtractorUtil {
         return data
     }
 
-    fun getParagraphMap(subject: URIValue, quadSet: QuadSet): Map<String, LocalQuadValue> {
+    private fun getParagraphMap(subject: URIValue, quadSet: QuadSet): Map<String, LocalQuadValue> {
         val refToParagraph = mutableMapOf<String, LocalQuadValue>()
         run {
             val paragraphQuads = quadSet.filter(listOf(subject), listOf(ParagraphHandler.getPredicate()), null)
@@ -97,11 +107,98 @@ object DocExtractorUtil {
             val rectSeg = Rect(l, r, b, t)
             val dataObj = SegmentationUtil.segment(pageObj, rectSeg, objectStore, quadSet)
 
+            var bytes: ByteArray
+            var outName: String = "temp.bin"
+            when (type) {
+                DocExtractorUtilType.FIGURES -> {
+                    val dpi: Float = 300f
+                    val path = FileUtil.getPath(subject, quadSet, objectStore)!!
+                        PDDocument.load(File(path)).use { doc ->
+                            val renderer = PDFRenderer(doc)
+                            val page = doc.getPage(pageIndex)
+                            val mediaBox = page.mediaBox
+                            val pageWidthPt = mediaBox.width.toDouble()
+                            val pageHeightPt = mediaBox.height.toDouble()
+                            val pageImage: BufferedImage = renderer.renderImageWithDPI(pageIndex, dpi)
+                            val imgW = pageImage.width
+                            val imgH = pageImage.height
+                            val scaleX = imgW / pageWidthPt
+                            val scaleY = imgH / pageHeightPt
+                            val leftPx = ((l - mediaBox.lowerLeftX) * scaleX).roundToInt()
+                            val rightPx = ((r - mediaBox.lowerLeftX) * scaleX).roundToInt()
+                            val topPx = (imgH - ((t - mediaBox.lowerLeftY) * scaleY)).roundToInt()
+                            val bottomPx = (imgH - ((b - mediaBox.lowerLeftY) * scaleY)).roundToInt()
+                            val x = max(0, min(leftPx, rightPx))
+                            val y = max(0, min(topPx, bottomPx))
+                            var w = max(0, kotlin.math.abs(rightPx - leftPx))
+                            var h = max(0, kotlin.math.abs(bottomPx - topPx))
+                            if (x + w > imgW) w = imgW - x
+                            if (y + h > imgH) h = imgH - y
+                            val sub = pageImage.getSubimage(x, y, w, h)
+                            val baos = ByteArrayOutputStream()
+                            ImageIO.write(sub, "PNG", baos)
+                            bytes = baos.toByteArray()
+                        }
+                    outName = "page${pageNo}-figure${ordinal}.png"
+                }
+                DocExtractorUtilType.TABLES -> {
+                    // Extract cells
+                    val tbl = item["data"] as? Map<*, *>
+                    val cells = (tbl?.get("table_cells") as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
+                    // Compute grid size from end offsets (Docling indices appear 0-based, end-exclusive)
+                    var rowCount = 0
+                    var colCount = 0
+                    cells.forEach { c ->
+                        rowCount = max(rowCount, (c["end_row_offset_idx"] as? Number)?.toInt() ?: 0)
+                        colCount = max(colCount, (c["end_col_offset_idx"] as? Number)?.toInt() ?: 0)
+                    }
+                    // Build a simple 2D grid; place text at the start offsets (top-left anchor for spans)
+                    val grid = Array(rowCount) { Array(colCount) { "" } }
+                    cells.forEach { c ->
+                        val sr = (c["start_row_offset_idx"] as? Number)?.toInt() ?: 0
+                        val sc = (c["start_col_offset_idx"] as? Number)?.toInt() ?: 0
+                        val text = c["text"]?.toString() ?: ""
+                        if (sr in 0 until rowCount && sc in 0 until colCount) {
+                            grid[sr][sc] = when {
+                                grid[sr][sc].isBlank() -> text
+                                text.isBlank() -> grid[sr][sc]
+                                else -> grid[sr][sc] + " " + text
+                            }
+                        }
+                    }
+                    // CSV encode
+                    fun csvEscape(s: String): String {
+                        val needsQuotes = s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r')
+                        var out = s.replace("\"", "\"\"")
+                        if (needsQuotes) out = "\"$out\""
+                        return out
+                    }
+                    val csv = buildString {
+                        grid.forEachIndexed { rIdx, row ->
+                            row.forEachIndexed { cIdx, cell ->
+                                append(csvEscape(cell))
+                                if (cIdx < row.lastIndex) append(',')
+                            }
+                            if (rIdx < grid.lastIndex) append('\n')
+                        }
+                    }
+                    bytes = csv.toByteArray(Charsets.UTF_8)
+                    outName = "page${pageNo}-table${ordinal}.csv"
+                }
+                DocExtractorUtilType.PARAGRAPHS -> {
+                    val textStr = (item["text"] as? String)?.ifBlank { null } ?: (item["orig"] as String)
+                    bytes = textStr.toByteArray(Charsets.UTF_8)
+                    outName = "page${pageNo}-paragraph${ordinal}.txt"
+                }
+            }
+            val assetId = FileUtil.addFile(objectStore, quadSet as MutableQuadSet, PseudoFile(bytes, outName), metaSkip = true)
+
             val metaQuads = mutableListOf(
                 Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/page"), pageObj),
                 Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/label"), StringValue(label)),
                 Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/reference"), StringValue(reference)),
-                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/ordinal"), LongValue(ordinal))
+                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/ordinal"), LongValue(ordinal)),
+                Quad(dataObj, URIValue(Constants.NLP_PREFIX + "/asset"), assetId)
             )
             if (captionRefs.isNotEmpty()) {
                 val refToParagraph: Map<String, LocalQuadValue> = getParagraphMap(subject, quadSet)
@@ -112,12 +209,6 @@ object DocExtractorUtil {
                     }
                 }
             }
-
-            // TODO: render image for figures
-
-            // TODO: extract table cells for tables
-
-            // TODO: store text for paragraphs
 
             quadSet.addAll(metaQuads)
             created.add(dataObj)

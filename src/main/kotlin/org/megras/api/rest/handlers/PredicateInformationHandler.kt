@@ -1,12 +1,23 @@
 package org.megras.api.rest.handlers
 
 import io.javalin.http.Context
+import io.javalin.openapi.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.megras.api.rest.GetRequestHandler
 
 class PredicateInformationHandler : GetRequestHandler {
 
+    @OpenApi(
+        path = "/predicateinformation",
+        methods = [HttpMethod.GET],
+        summary = "Serves a page with information about available predicates.",
+        tags = ["User Interface"],
+        pathParams = [OpenApiParam(name = "predicateUri", description = "Optional predicate URI to jump to", required = false, type = String::class)],
+        responses = [
+            OpenApiResponse(status = "200", description = "HTML page with predicate information", content = [OpenApiContent(type = "text/html")])
+        ]
+    )
     override fun get(ctx: Context) {
         // predicateUri from the path is used to identify which predicate to scroll to.
         // If "predicateUri" is not in the path params, default to empty string.

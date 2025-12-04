@@ -1,10 +1,21 @@
 package org.megras.api.rest.handlers
 
 import io.javalin.http.Context
+import io.javalin.openapi.*
 import org.megras.api.rest.GetRequestHandler
 import org.megras.segmentation.SegmentationType
 
 class SegmenterUiHandler : GetRequestHandler {
+
+    @OpenApi(
+        path = "/segmenterui",
+        methods = [HttpMethod.GET],
+        summary = "Serves the image segmenter UI.",
+        tags = ["User Interface"],
+        responses = [
+            OpenApiResponse(status = "200", description = "HTML page with the image segmenter", content = [OpenApiContent(type = "text/html")])
+        ]
+    )
     override fun get(ctx: Context) {
         val imageSegmentationTypes = listOf(
             SegmentationType.RECT,

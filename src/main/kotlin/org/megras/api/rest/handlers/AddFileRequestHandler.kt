@@ -2,6 +2,7 @@ package org.megras.api.rest.handlers
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.javalin.http.Context
+import io.javalin.openapi.*
 import org.megras.api.rest.PostRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
@@ -15,6 +16,18 @@ import org.megras.util.FileUtil
 class AddFileRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) :
     PostRequestHandler {
 
+    @OpenApi(
+        summary = "Uploads one or more files and stores them in the object store.",
+        path = "/add/file",
+        tags = ["Object Management"],
+        operationId = OpenApiOperation.AUTO_GENERATE,
+        methods = [HttpMethod.POST],
+        requestBody = OpenApiRequestBody([OpenApiContent(type = "multipart/form-data")]),
+        responses = [
+            OpenApiResponse(status = "200", description = "Returns mapping of uploaded filenames to stored object IDs", content = [OpenApiContent(type = "application/json")]),
+            OpenApiResponse(status = "400", description = "Invalid request", content = [OpenApiContent(RestErrorStatus::class)])
+        ]
+    )
     override fun post(ctx: Context) {
 
         val files = ctx.uploadedFiles()

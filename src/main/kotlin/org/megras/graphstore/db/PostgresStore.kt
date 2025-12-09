@@ -12,6 +12,8 @@ import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.slf4j.LoggerFactory
 import java.io.Writer
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 
 
 class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
@@ -79,11 +81,30 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     private val db: Database
 
     init {
-        db = Database.connect(
-            "jdbc:postgresql://$host",
-            driver = "org.postgresql.Driver",
-            user = user, password = password
-        )
+        val config = HikariConfig().apply {
+            jdbcUrl = "jdbc:postgresql://$host"
+            driverClassName = "org.postgresql.Driver"
+            username = user
+            this.password = password
+
+            // Optimization settings for high-speed transactions
+            maximumPoolSize = 10
+            isAutoCommit = false // Exposed manages transactions, so disable auto-commit
+            transactionIsolation = "TRANSACTION_REPEATABLE_READ"
+
+            // Value is in milliseconds (28 * 60 * 1000 = 1,680,000ms)
+            maxLifetime = 1680000
+
+            // Also recommend setting an idle timeout, so unused connections don't waste resources
+            // Retire connections idle for more than 10 minutes (10 * 60 * 1000 = 600,000ms)
+            idleTimeout = 600000
+        }
+
+        // 2. Create the Connection Pool
+        val dataSource = HikariDataSource(config)
+
+        // 3. Connect Exposed using the Pool
+        db = Database.connect(dataSource)
 
         transaction {
             val schema = Schema("megras")
@@ -746,7 +767,9 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
 
         // 4. Return the resulting QuadSet
-        return getIds(finalSeptuples)
+        val quadSet = getIds(finalSeptuples)
+
+        return quadSet
     }
 
     override fun toMutable(): MutableQuadSet = this

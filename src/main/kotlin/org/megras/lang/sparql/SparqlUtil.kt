@@ -17,17 +17,27 @@ object SparqlUtil {
     private val model = ModelFactory.createDefaultModel()
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
-    fun select(query: String, quads: QuadSet): ResultTable {
-        // STEP 1: JenaGraphWrapper instantiation
-        val jenaWrapper = JenaGraphWrapper(quads)
+    private const val TIMING_ENABLED = true
 
-        // STEP 2: Query Execution setup and run
+    fun select(query: String, quads: QuadSet): ResultTable {
+
+        val startTotal = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        // STEP 1: JenaGraphWrapper instantiation
+        val start1 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+        val jenaWrapper = JenaGraphWrapper(quads)
+        if (TIMING_ENABLED) logger.info("Time spent in JenaGraphWrapper instantiation: ${System.currentTimeMillis() - start1}ms")
+
+        // STEP 2: Query Execution setup and run (Jena Parsing, Planning, and DB Calls)
+        val start2 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         val resultSet =
             QueryExecution.create(query, DatasetFactory.wrap(DatasetGraphFactory.wrap(jenaWrapper))).execSelect()
+        if (TIMING_ENABLED) logger.info("Time spent in QueryExecution setup and run: ${System.currentTimeMillis() - start2}ms")
 
         val rows = mutableListOf<Map<String, QuadValue>>()
 
         // STEP 3: Result conversion loop
+        val start3 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         while (resultSet.hasNext()) {
             val row = resultSet.nextSolution()
             val map = HashMap<String, QuadValue>()
@@ -38,8 +48,12 @@ object SparqlUtil {
             }
             rows.add(map)
         }
+        val end3 = System.currentTimeMillis()
+        if (TIMING_ENABLED) logger.info("Time spent in Result conversion loop: ${end3 - start3}ms")
 
         val resultTable = ResultTable(rows)
+
+        if (TIMING_ENABLED) logger.info("Total time spent in SparqlUtil.select: ${System.currentTimeMillis() - startTotal}ms")
 
         return resultTable
     }

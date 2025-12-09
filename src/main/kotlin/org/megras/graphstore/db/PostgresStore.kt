@@ -20,6 +20,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     AbstractDbStore() {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
+    private val TIMING_ENABLED = true
 
     object QuadsTable : Table("quads") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
@@ -701,11 +702,17 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         objects: Collection<QuadValue>?
     ): QuadSet {
 
+        val startTotal = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
         // 1. Handle Trivial Cases (empty or no filters)
+        val start1 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         if (subjects == null && predicates == null && objects == null) return this
         if (subjects?.isEmpty() == true || predicates?.isEmpty() == true || objects?.isEmpty() == true) return BasicQuadSet()
+        if (TIMING_ENABLED) logger.info("Time spent in Filter Trivial Checks: ${System.currentTimeMillis() - start1}ms")
+
 
         // 2. Resolve QuadValues to (typeId, longId) pairs
+        val start2 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         val allFilterValues = (subjects?.toSet() ?: emptySet()) + (predicates?.toSet() ?: emptySet()) + (objects?.toSet() ?: emptySet())
         val filterIds = getOrAddQuadValueIds(allFilterValues, false)
 
@@ -716,34 +723,33 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         if ((subjects != null && subjectFilterIds!!.isEmpty()) ||
             (predicates != null && predicateFilterIds!!.isEmpty()) ||
             (objects != null && objectFilterIds!!.isEmpty())) {
+            if (TIMING_ENABLED) logger.info("Time spent in Filter ID Resolution (Early Exit): ${System.currentTimeMillis() - start2}ms")
             return BasicQuadSet()
         }
+        if (TIMING_ENABLED) logger.info("Time spent in Filter ID Resolution (getOrAddQuadValueIds): ${System.currentTimeMillis() - start2}ms")
+
 
         val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
 
         // 3. Execute a Single Database Query (The Core Optimization)
+        val start3 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         transaction {
             //addLogger(StdOutSqlLogger)
 
             var condition: Op<Boolean> = Op.TRUE
 
-            // Build Subject Condition: (s_type = X AND s = Y) OR (s_type = A AND s = B) ...
             if (subjectFilterIds != null) {
                 val sCondition = subjectFilterIds
                     .map { (QuadsTable.sType eq it.first) and (QuadsTable.s eq it.second) }
                     .reduce { acc, o -> acc or o }
                 condition = condition and sCondition
             }
-
-            // Build Predicate Condition: (p_type = X AND p = Y) OR ...
             if (predicateFilterIds != null) {
                 val pCondition = predicateFilterIds
                     .map { (QuadsTable.pType eq it.first) and (QuadsTable.p eq it.second) }
                     .reduce { acc, o -> acc or o }
                 condition = condition and pCondition
             }
-
-            // Build Object Condition: (o_type = X AND o = Y) OR ...
             if (objectFilterIds != null) {
                 val oCondition = objectFilterIds
                     .map { (QuadsTable.oType eq it.first) and (QuadsTable.o eq it.second) }
@@ -765,10 +771,14 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
 
             finalSeptuples.addAll(result)
         }
+        if (TIMING_ENABLED) logger.info("Time spent in DB Transaction (Main Query Execution): ${System.currentTimeMillis() - start3}ms")
 
         // 4. Return the resulting QuadSet
-        val quadSet = getIds(finalSeptuples)
+        val start4 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+        val quadSet = getIds(finalSeptuples) // Converting IDs back to QuadValues
+        if (TIMING_ENABLED) logger.info("Time spent in Final ID Conversion (getIds): ${System.currentTimeMillis() - start4}ms")
 
+        if (TIMING_ENABLED) logger.info("Total time spent in PostgresStore.filter: ${System.currentTimeMillis() - startTotal}ms")
         return quadSet
     }
 

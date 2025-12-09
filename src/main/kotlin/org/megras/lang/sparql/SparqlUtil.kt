@@ -10,25 +10,38 @@ import org.megras.data.graph.*
 import org.megras.graphstore.QuadSet
 import org.megras.lang.ResultTable
 import org.megras.lang.sparql.jena.JenaGraphWrapper
+import org.slf4j.LoggerFactory
 
 object SparqlUtil {
 
     private val model = ModelFactory.createDefaultModel()
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     fun select(query: String, quads: QuadSet): ResultTable {
+        // STEP 1: JenaGraphWrapper instantiation
         val jenaWrapper = JenaGraphWrapper(quads)
+
+        // STEP 2: Query Execution setup and run
         val resultSet =
             QueryExecution.create(query, DatasetFactory.wrap(DatasetGraphFactory.wrap(jenaWrapper))).execSelect()
+
         val rows = mutableListOf<Map<String, QuadValue>>()
-        resultSet.forEach { row ->
+
+        // STEP 3: Result conversion loop
+        while (resultSet.hasNext()) {
+            val row = resultSet.nextSolution()
             val map = HashMap<String, QuadValue>()
+
             row.varNames().forEach { name ->
-                val node = row[name].asNode()
+                val node = row.get(name).asNode()
                 map[name] = toQuadValue(node)!!
             }
             rows.add(map)
         }
-        return ResultTable(rows)
+
+        val resultTable = ResultTable(rows)
+
+        return resultTable
     }
 
     internal fun toQuadValue(node: Node): QuadValue? {

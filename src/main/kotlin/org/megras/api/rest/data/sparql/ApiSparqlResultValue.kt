@@ -1,6 +1,7 @@
 package org.megras.api.rest.data.sparql
 
 import org.megras.data.graph.*
+import java.time.format.DateTimeFormatter // <-- CRITICAL: Ensure this import is present
 
 data class ApiSparqlResultValue(val value: String, val type: String, val datatype: String? = null) {
 
@@ -14,7 +15,6 @@ data class ApiSparqlResultValue(val value: String, val type: String, val datatyp
 
         /**
          * Converts a QuadValue to the serializable ApiSparqlResultValue.
-         * Uses explicit properties (.value) and hardcoded datatypes to minimize reflection and maximize speed.
          */
         fun fromQuadValue(value: QuadValue): ApiSparqlResultValue = when(value) {
 
@@ -22,15 +22,19 @@ data class ApiSparqlResultValue(val value: String, val type: String, val datatyp
             is DoubleValue -> ApiSparqlResultValue("${value.value}", "literal", XSD_DOUBLE)
             is LongValue -> ApiSparqlResultValue("${value.value}", "literal", XSD_LONG)
 
-            // String Literals
+            // String Literal
             is StringValue -> ApiSparqlResultValue("${value.value}", "literal", XSD_STRING)
 
-            // URIs
-            is URIValue -> ApiSparqlResultValue(value.value, "uri") // value.value is assumed to hold the full URI string
+            // URI
+            is URIValue -> ApiSparqlResultValue(value.value, "uri")
+            is TemporalValue -> ApiSparqlResultValue(
+                value.dateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+                "literal",
+                XSD_DATETIME
+            )
 
-            // Complex Types (Using toString() is a fallback for data extraction)
-            is TemporalValue -> ApiSparqlResultValue(value.toString(), "literal", XSD_DATETIME)
-            is VectorValue -> ApiSparqlResultValue(value.toString(), "literal")
+            // Vector: Fallback to toString(), but we use XSD_STRING for compliance
+            is VectorValue -> ApiSparqlResultValue(value.toString(), "literal", XSD_STRING)
         }
     }
 

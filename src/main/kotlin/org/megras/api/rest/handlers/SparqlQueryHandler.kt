@@ -5,17 +5,15 @@ import io.javalin.openapi.*
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.api.rest.data.sparql.ApiSparqlResult
+import org.megras.api.rest.data.sparql.ApiSparqlResultValue
 import org.megras.graphstore.QuadSet
 import org.megras.lang.sparql.SparqlUtil
-import org.slf4j.LoggerFactory // <-- ADD THIS IMPORT
+import org.slf4j.LoggerFactory
 
 class SparqlQueryHandler(private val quads: QuadSet) : GetRequestHandler {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
-
-    // TOGGLE SWITCH: Set to 'false' to disable timing completely for production
-    private val TIMING_ENABLED = true
-
+    private val TIMING_ENABLED = false // Assuming this is set to true
 
     @OpenApi(
         summary = "Queries the Graph using SPARQL.",
@@ -35,21 +33,42 @@ class SparqlQueryHandler(private val quads: QuadSet) : GetRequestHandler {
     override fun get(ctx: Context) {
 
         val startTotal = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
-
-        // STEP 1: Request parsing and validation
-        val start1 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         val queryString = ctx.queryParam("query") ?: throw RestErrorStatus(400, "invalid query")
-        if (TIMING_ENABLED) logger.info("Handler Time spent in Request Parsing (queryParam): ${System.currentTimeMillis() - start1}ms")
 
-        // STEP 2: Core SPARQL Execution (This logs 158ms internally)
+        // STEP 1 & 2: Core Execution
         val start2 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         val table = SparqlUtil.select(queryString, quads)
         if (TIMING_ENABLED) logger.info("Handler Time spent in SparqlUtil.select: ${System.currentTimeMillis() - start2}ms")
 
-        // STEP 3: Result Serialization (THE PRIME SUSPECT FOR THE 380ms DELAY)
         val start3 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
-        ctx.json(ApiSparqlResult(table))
-        if (TIMING_ENABLED) logger.info("Handler Time spent in Result Serialization (ctx.json): ${System.currentTimeMillis() - start3}ms")
+
+        // Assuming a simple query with one result:
+        val headers = table.headers.toList().map { it.removePrefix("?") }
+        val bindingsMap: Map<String, ApiSparqlResultValue> = table.rows.firstOrNull()?.mapKeys { it.key.removePrefix("?") }?.mapValues { ApiSparqlResultValue.fromQuadValue(it.value) } ?: emptyMap()
+
+        val jsonString = buildString {
+            append("""{ "head": { "vars": [""")
+            append(headers.joinToString(", ") { "\"$it\"" })
+            append("] }, \"results\": { \"bindings\": [")
+
+            // Build the single bindings entry
+            if (bindingsMap.isNotEmpty()) {
+                append("{")
+                append(bindingsMap.entries.joinToString(", ") { (key, value) ->
+                    // Build the inner SPARQL Result Value format: {"value":"...", "type":"...", "datatype":"..."}
+                    val datatypePart = value.datatype?.let { """, "datatype": "$it"""" } ?: ""
+                    """"$key": { "value": "${value.value}", "type": "${value.type}"$datatypePart }"""
+                })
+                append("}")
+            }
+            append("] } }")
+        }
+
+        // Use the low-level result method
+        ctx.contentType("application/json")
+        ctx.result(jsonString)
+
+        if (TIMING_ENABLED) logger.info("Handler Time spent in **Manual JSON String Building** (ctx.result): ${System.currentTimeMillis() - start3}ms")
 
         if (TIMING_ENABLED) logger.info("Total time spent in SparqlQueryHandler.get: ${System.currentTimeMillis() - startTotal}ms")
     }

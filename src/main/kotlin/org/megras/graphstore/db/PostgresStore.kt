@@ -20,7 +20,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     AbstractDbStore() {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
-    private val TIMING_ENABLED = true
+    private val TIMING_ENABLED = false
 
     object QuadsTable : Table("quads") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()

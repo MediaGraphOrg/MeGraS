@@ -17,7 +17,7 @@ object SparqlUtil {
     private val model = ModelFactory.createDefaultModel()
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
-    private const val TIMING_ENABLED = true
+    private const val TIMING_ENABLED = false
 
     fun select(query: String, quads: QuadSet): ResultTable {
 

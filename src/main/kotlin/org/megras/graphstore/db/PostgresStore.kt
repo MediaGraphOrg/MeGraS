@@ -674,96 +674,78 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         return quadIds
     }
 
-    private fun getSeptupleForFilter(ids: List<Pair<Int, Long>>?, part: Char): Set<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>? {
-        if (ids == null) return null
-        if (ids.isEmpty()) return emptySet()
-
-        val (typeColumn, idColumn) = when (part) {
-            's' -> QuadsTable.sType to QuadsTable.s
-            'p' -> QuadsTable.pType to QuadsTable.p
-            'o' -> QuadsTable.oType to QuadsTable.o
-            else -> throw IllegalArgumentException("part must be 's', 'p', or 'o'")
-        }
-
-        val quadIds = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
-        // Each pair in the chunk results in two parameters
-        ids.chunked(10000).forEach { chunk ->
-            transaction {
-                val filter =
-                    chunk.map { (typeColumn eq it.first) and (idColumn eq it.second) }.reduce { acc, op -> acc or op }
-                val chunkResult = QuadsTable.slice(
-                    QuadsTable.id,
-                    QuadsTable.sType,
-                    QuadsTable.s,
-                    QuadsTable.pType,
-                    QuadsTable.p,
-                    QuadsTable.oType,
-                    QuadsTable.o
-                )
-                    .select(filter)
-                    .map {
-                        it[QuadsTable.id] to Triple(
-                            (it[QuadsTable.sType] to it[QuadsTable.s]),
-                            (it[QuadsTable.pType] to it[QuadsTable.p]),
-                            (it[QuadsTable.oType] to it[QuadsTable.o]),
-                        )
-                    }
-                quadIds.addAll(chunkResult)
-            }
-        }
-        return quadIds
-    }
-
     override fun filter(
         subjects: Collection<QuadValue>?,
         predicates: Collection<QuadValue>?,
         objects: Collection<QuadValue>?
     ): QuadSet {
 
-        //if all attributes are unfiltered, do not filter
-        if (subjects == null && predicates == null && objects == null) {
-            return this
-        }
+        // 1. Handle Trivial Cases (empty or no filters)
+        if (subjects == null && predicates == null && objects == null) return this
+        if (subjects?.isEmpty() == true || predicates?.isEmpty() == true || objects?.isEmpty() == true) return BasicQuadSet()
 
-        //if one attribute has an empty collection, return empty set
-        if (subjects?.isEmpty() == true || predicates?.isEmpty() == true || objects?.isEmpty() == true) {
-            return BasicQuadSet()
-        }
-
-        val filterValues = (subjects?.toSet() ?: emptySet()) +
-                (predicates?.toSet() ?: emptySet()) +
-                (objects?.toSet() ?: emptySet())
-
-        if (filterValues.isEmpty()) {
-            return if (subjects == null && predicates == null && objects == null) this else BasicQuadSet()
-        }
-
-        val filterIds = getOrAddQuadValueIds(filterValues, false)
+        // 2. Resolve QuadValues to (typeId, longId) pairs
+        val allFilterValues = (subjects?.toSet() ?: emptySet()) + (predicates?.toSet() ?: emptySet()) + (objects?.toSet() ?: emptySet())
+        val filterIds = getOrAddQuadValueIds(allFilterValues, false)
 
         val subjectFilterIds = subjects?.mapNotNull { filterIds[it] }
         val predicateFilterIds = predicates?.mapNotNull { filterIds[it] }
         val objectFilterIds = objects?.mapNotNull { filterIds[it] }
 
-        //if a filter was specified, but no QuadValueIds could be found for it, the result is empty.
         if ((subjects != null && subjectFilterIds!!.isEmpty()) ||
             (predicates != null && predicateFilterIds!!.isEmpty()) ||
             (objects != null && objectFilterIds!!.isEmpty())) {
             return BasicQuadSet()
         }
 
-        val subjectSeptuples = getSeptupleForFilter(subjectFilterIds, 's')
-        val predicateSeptuples = getSeptupleForFilter(predicateFilterIds, 'p')
-        val objectSeptuples = getSeptupleForFilter(objectFilterIds, 'o')
+        val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
 
-        val idSets = listOfNotNull(subjectSeptuples, predicateSeptuples, objectSeptuples)
+        // 3. Execute a Single Database Query (The Core Optimization)
+        transaction {
+            //addLogger(StdOutSqlLogger)
 
-        if (idSets.isEmpty()) {
-            return this
+            var condition: Op<Boolean> = Op.TRUE
+
+            // Build Subject Condition: (s_type = X AND s = Y) OR (s_type = A AND s = B) ...
+            if (subjectFilterIds != null) {
+                val sCondition = subjectFilterIds
+                    .map { (QuadsTable.sType eq it.first) and (QuadsTable.s eq it.second) }
+                    .reduce { acc, o -> acc or o }
+                condition = condition and sCondition
+            }
+
+            // Build Predicate Condition: (p_type = X AND p = Y) OR ...
+            if (predicateFilterIds != null) {
+                val pCondition = predicateFilterIds
+                    .map { (QuadsTable.pType eq it.first) and (QuadsTable.p eq it.second) }
+                    .reduce { acc, o -> acc or o }
+                condition = condition and pCondition
+            }
+
+            // Build Object Condition: (o_type = X AND o = Y) OR ...
+            if (objectFilterIds != null) {
+                val oCondition = objectFilterIds
+                    .map { (QuadsTable.oType eq it.first) and (QuadsTable.o eq it.second) }
+                    .reduce { acc, o -> acc or o }
+                condition = condition and oCondition
+            }
+
+            // Final Query Execution
+            val result = QuadsTable.slice(
+                QuadsTable.id, QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o
+            ).select(condition)
+                .map {
+                    it[QuadsTable.id] to Triple(
+                        (it[QuadsTable.sType] to it[QuadsTable.s]),
+                        (it[QuadsTable.pType] to it[QuadsTable.p]),
+                        (it[QuadsTable.oType] to it[QuadsTable.o]),
+                    )
+                }
+
+            finalSeptuples.addAll(result)
         }
 
-        // Intersect the ID sets
-        val finalSeptuples = idSets.reduce { acc, set -> acc.intersect(set) }
-
+        // 4. Return the resulting QuadSet
         return getIds(finalSeptuples)
     }
 

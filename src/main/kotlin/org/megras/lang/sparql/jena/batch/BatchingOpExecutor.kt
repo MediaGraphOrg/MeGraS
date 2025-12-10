@@ -4,6 +4,7 @@ import org.apache.jena.graph.Node
 import org.apache.jena.graph.Triple
 import org.apache.jena.query.Query
 import org.apache.jena.sparql.algebra.Op
+import org.apache.jena.sparql.algebra.OpVars
 import org.apache.jena.sparql.algebra.op.*
 import org.apache.jena.sparql.core.BasicPattern
 import org.apache.jena.sparql.core.Var
@@ -53,32 +54,34 @@ class BatchingOpExecutor(
      */
     fun executeOp(op: Op, binding: Binding): QueryIterator {
         val input = QueryIterRoot.create(binding, execCxt)
-        return execute(op, input, NO_LIMIT)
+        return execute(op, input, NO_LIMIT, null)
     }
 
     /**
      * Execute an operation with an input iterator of bindings.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun execute(op: Op, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun execute(op: Op, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         if (TIMING_ENABLED) {
-            logger.info("Executing Op: ${op.javaClass.simpleName}" + if (limit != NO_LIMIT) " with limit $limit" else "")
+            logger.info("Executing Op: ${op.javaClass.simpleName}" + if (limit != NO_LIMIT) " with limit $limit" else "" +
+                    if (requiredVars != null) " with projection to ${requiredVars.size} vars" else "")
         }
         return when (op) {
-            is OpBGP -> executeBGP(op.pattern, input, limit)
-            is OpJoin -> executeJoin(op, input, limit)
-            is OpLeftJoin -> executeLeftJoin(op, input, limit)
-            is OpFilter -> executeFilter(op, input, limit)
+            is OpBGP -> executeBGP(op.pattern, input, limit, requiredVars)
+            is OpJoin -> executeJoin(op, input, limit, requiredVars)
+            is OpLeftJoin -> executeLeftJoin(op, input, limit, requiredVars)
+            is OpFilter -> executeFilter(op, input, limit, requiredVars)
             is OpProject -> executeProject(op, input, limit)
-            is OpDistinct -> executeDistinct(op, input, limit)
-            is OpReduced -> executeReduced(op, input, limit)
-            is OpSlice -> executeSlice(op, input)
-            is OpOrder -> executeOrder(op, input, limit)
+            is OpDistinct -> executeDistinct(op, input, limit, requiredVars)
+            is OpReduced -> executeReduced(op, input, limit, requiredVars)
+            is OpSlice -> executeSlice(op, input, requiredVars)
+            is OpOrder -> executeOrder(op, input, limit, requiredVars)
             is OpGroup -> executeGroup(op, input)
-            is OpExtend -> executeExtend(op, input, limit)
-            is OpUnion -> executeUnion(op, input, limit)
+            is OpExtend -> executeExtend(op, input, limit, requiredVars)
+            is OpUnion -> executeUnion(op, input, limit, requiredVars)
             is OpTable -> executeTable(op, input)
-            is OpSequence -> executeSequence(op, input, limit)
+            is OpSequence -> executeSequence(op, input, limit, requiredVars)
             else -> {
                 // Fall back to default Jena execution for unsupported ops
                 logger.debug("Falling back to default executor for: ${op.javaClass.simpleName}")
@@ -91,8 +94,9 @@ class BatchingOpExecutor(
      * Execute a Basic Graph Pattern (BGP) with batching optimization.
      * This is the core of the N+1 problem solution.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeBGP(pattern: BasicPattern, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeBGP(pattern: BasicPattern, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
 
         val triples = pattern.list
@@ -106,8 +110,15 @@ class BatchingOpExecutor(
             return QueryIterNullIterator.create(execCxt)
         }
 
+        // Compute which variables from this BGP are needed for joins or output
+        // We need: requiredVars + any vars that appear in multiple patterns (for joining)
+        val effectiveRequiredVars = computeEffectiveRequiredVars(triples, requiredVars)
+
         if (TIMING_ENABLED) {
             logger.info("BGP starting with ${inputBindings.size} input bindings" + if (limit != NO_LIMIT) ", limit=$limit" else "")
+            if (requiredVars != null) {
+                logger.info("Projection pushdown: only building bindings for ${effectiveRequiredVars.size} vars: $effectiveRequiredVars")
+            }
             if (inputBindings.isNotEmpty()) {
                 val sampleBinding = inputBindings.first()
                 val boundVars = sampleBinding.vars().asSequence().toList()
@@ -125,8 +136,11 @@ class BatchingOpExecutor(
         var currentBindings = inputBindings
 
         // Process each triple pattern with batching
-        for (triple in reorderedTriples) {
-            currentBindings = executeBatchedTriplePattern(triple, currentBindings, limit)
+        for ((index, triple) in reorderedTriples.withIndex()) {
+            // For intermediate patterns, we need join variables; for the last pattern, we can use final required vars
+            val isLastPattern = index == reorderedTriples.size - 1
+            val patternRequiredVars = if (isLastPattern) requiredVars else effectiveRequiredVars
+            currentBindings = executeBatchedTriplePattern(triple, currentBindings, limit, patternRequiredVars)
             if (currentBindings.isEmpty()) {
                 break
             }
@@ -179,11 +193,139 @@ class BatchingOpExecutor(
     }
 
     /**
+     * Compute the effective set of required variables for BGP execution.
+     * This includes: the explicitly required vars PLUS any vars needed for joins between patterns.
+     */
+    private fun computeEffectiveRequiredVars(triples: List<Triple>, requiredVars: Set<Var>?): Set<Var> {
+        if (requiredVars == null) {
+            // No projection pushdown - all vars from all patterns
+            return triples.flatMap { triple ->
+                listOfNotNull(
+                    if (triple.subject.isVariable) Var.alloc(triple.subject) else null,
+                    if (triple.predicate.isVariable) Var.alloc(triple.predicate) else null,
+                    if (triple.`object`.isVariable) Var.alloc(triple.`object`) else null
+                )
+            }.toSet()
+        }
+
+        // Start with the explicitly required vars
+        val effective = requiredVars.toMutableSet()
+
+        // Add any vars that appear in multiple patterns (these are join variables)
+        val varCounts = mutableMapOf<Var, Int>()
+        for (triple in triples) {
+            if (triple.subject.isVariable) {
+                val v = Var.alloc(triple.subject)
+                varCounts[v] = varCounts.getOrDefault(v, 0) + 1
+            }
+            if (triple.predicate.isVariable) {
+                val v = Var.alloc(triple.predicate)
+                varCounts[v] = varCounts.getOrDefault(v, 0) + 1
+            }
+            if (triple.`object`.isVariable) {
+                val v = Var.alloc(triple.`object`)
+                varCounts[v] = varCounts.getOrDefault(v, 0) + 1
+            }
+        }
+        // Add join variables (appear more than once)
+        for ((v, count) in varCounts) {
+            if (count > 1) {
+                effective.add(v)
+            }
+        }
+
+        return effective
+    }
+
+    /**
+     * Compute the set of variables required for a sub-operation, given the projected vars.
+     * This includes the projected vars plus any vars needed by filters, ORDER BY, GROUP BY, etc.
+     */
+    private fun computeRequiredVarsForSubOp(op: Op, projectedVars: Set<Var>): Set<Var> {
+        val required = projectedVars.toMutableSet()
+
+        // Recursively collect variables used in filters, expressions, etc.
+        collectExpressionVars(op, required)
+
+        return required
+    }
+
+    /**
+     * Recursively collect variables used in expressions (filters, ORDER BY, BIND, etc.)
+     */
+    private fun collectExpressionVars(op: Op, vars: MutableSet<Var>) {
+        when (op) {
+            is OpFilter -> {
+                // Add variables used in filter expressions
+                for (expr in op.exprs) {
+                    vars.addAll(expr.varsMentioned)
+                }
+                collectExpressionVars(op.subOp, vars)
+            }
+            is OpOrder -> {
+                // Add variables used in ORDER BY
+                for (sortCondition in op.conditions) {
+                    vars.addAll(sortCondition.expression.varsMentioned)
+                }
+                collectExpressionVars(op.subOp, vars)
+            }
+            is OpExtend -> {
+                // Add variables used in BIND expressions
+                for (entry in op.varExprList.exprs.entries) {
+                    vars.addAll(entry.value.varsMentioned)
+                }
+                // Also add the variable being bound (it's needed for projection)
+                vars.addAll(op.varExprList.vars)
+                collectExpressionVars(op.subOp, vars)
+            }
+            is OpGroup -> {
+                // Add GROUP BY variables and aggregation expressions
+                for (v in op.groupVars.vars) {
+                    vars.add(v)
+                }
+                for (agg in op.aggregators) {
+                    vars.add(agg.`var`)
+                    vars.addAll(agg.aggregator.exprList?.varsMentioned ?: emptySet())
+                }
+                collectExpressionVars(op.subOp, vars)
+            }
+            is OpProject -> {
+                // Don't recurse past a nested PROJECT - it has its own projection
+            }
+            is OpJoin -> {
+                collectExpressionVars(op.left, vars)
+                collectExpressionVars(op.right, vars)
+            }
+            is OpLeftJoin -> {
+                collectExpressionVars(op.left, vars)
+                collectExpressionVars(op.right, vars)
+                // Add filter expression variables if present
+                op.exprs?.forEach { expr -> vars.addAll(expr.varsMentioned) }
+            }
+            is OpUnion -> {
+                collectExpressionVars(op.left, vars)
+                collectExpressionVars(op.right, vars)
+            }
+            is OpDistinct -> collectExpressionVars(op.subOp, vars)
+            is OpReduced -> collectExpressionVars(op.subOp, vars)
+            is OpSlice -> collectExpressionVars(op.subOp, vars)
+            is OpSequence -> op.elements.forEach { collectExpressionVars(it, vars) }
+            is OpBGP -> {
+                // BGP doesn't have expressions, but we might want to add all vars
+                // if they're used for joins. This is handled by computeEffectiveRequiredVars
+            }
+            // Other operators - no expressions to collect
+            else -> {}
+        }
+    }
+
+    /**
      * Execute a single triple pattern against multiple input bindings using batching.
      * Instead of N separate calls, we make one call with all possible values.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeBatchedTriplePattern(triple: Triple, inputBindings: List<Binding>, limit: Long = NO_LIMIT): List<Binding> {
+    private fun executeBatchedTriplePattern(triple: Triple, inputBindings: List<Binding>, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): List<Binding> {
         val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
 
         if (TIMING_ENABLED) {
@@ -201,13 +343,13 @@ class BatchingOpExecutor(
         // to avoid fetching all data when we only need a few results
         if (limit != NO_LIMIT && inputBindings.size > limit) {
             return executeBatchedTriplePatternIncremental(
-                triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime
+                triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime, requiredVars
             )
         }
 
         // Standard batch execution for no-limit or small input cases
         return executeBatchedTriplePatternFull(
-            triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime
+            triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime, requiredVars
         )
     }
 
@@ -224,7 +366,8 @@ class BatchingOpExecutor(
         @Suppress("UNUSED_PARAMETER") predicateVar: Var?,
         @Suppress("UNUSED_PARAMETER") objectVar: Var?,
         effectiveLimit: Int,
-        startTime: Long
+        startTime: Long,
+        requiredVars: Set<Var>? = null
     ): List<Binding> {
         val results = mutableListOf<Binding>()
 
@@ -297,7 +440,7 @@ class BatchingOpExecutor(
                         for (quad in quadsForSubject) {
                             if (results.size >= effectiveLimit) break
 
-                            val newBinding = extendBinding(binding, triple, quad)
+                            val newBinding = extendBinding(binding, triple, quad, requiredVars)
                             if (newBinding != null) {
                                 results.add(newBinding)
                             }
@@ -340,7 +483,7 @@ class BatchingOpExecutor(
                 for (quad in compatibleQuads) {
                     if (results.size >= effectiveLimit) break
 
-                    val newBinding = extendBinding(binding, triple, quad)
+                    val newBinding = extendBinding(binding, triple, quad, requiredVars)
                     if (newBinding != null) {
                         results.add(newBinding)
                     }
@@ -357,6 +500,7 @@ class BatchingOpExecutor(
 
     /**
      * Full batch execution: process all bindings at once (original behavior).
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
     private fun executeBatchedTriplePatternFull(
         triple: Triple,
@@ -365,7 +509,8 @@ class BatchingOpExecutor(
         predicateVar: Var?,
         objectVar: Var?,
         effectiveLimit: Int,
-        startTime: Long
+        startTime: Long,
+        requiredVars: Set<Var>? = null
     ): List<Binding> {
         // Collect all possible values for each position (S, P, O) based on current bindings
         val subjectValues = mutableSetOf<QuadValue>()
@@ -450,7 +595,7 @@ class BatchingOpExecutor(
             for (quad in compatibleQuads) {
                 if (results.size >= effectiveLimit) break
 
-                val newBinding = extendBinding(binding, triple, quad)
+                val newBinding = extendBinding(binding, triple, quad, requiredVars)
                 if (newBinding != null) {
                     results.add(newBinding)
                 }
@@ -537,22 +682,23 @@ class BatchingOpExecutor(
     /**
      * Extend a binding with values from a matching quad.
      * Returns null if the quad doesn't match the binding constraints.
+     * @param requiredVars Set of variables to actually bind (null means all)
      */
-    private fun extendBinding(binding: Binding, triple: Triple, quad: Quad): Binding? {
+    private fun extendBinding(binding: Binding, triple: Triple, quad: Quad, requiredVars: Set<Var>? = null): Binding? {
         val builder = BindingBuilder.create(binding)
 
         // Check and bind subject
-        if (!bindNode(builder, triple.subject, quad.subject, binding)) {
+        if (!bindNode(builder, triple.subject, quad.subject, binding, requiredVars)) {
             return null
         }
 
         // Check and bind predicate
-        if (!bindNode(builder, triple.predicate, quad.predicate, binding)) {
+        if (!bindNode(builder, triple.predicate, quad.predicate, binding, requiredVars)) {
             return null
         }
 
         // Check and bind object
-        if (!bindNode(builder, triple.`object`, quad.`object`, binding)) {
+        if (!bindNode(builder, triple.`object`, quad.`object`, binding, requiredVars)) {
             return null
         }
 
@@ -562,8 +708,9 @@ class BatchingOpExecutor(
     /**
      * Bind a node from a triple pattern to a value from a quad.
      * Returns false if there's a conflict with an existing binding.
+     * @param requiredVars Set of variables to actually bind (null means all)
      */
-    private fun bindNode(builder: BindingBuilder, patternNode: Node, quadValue: QuadValue, existingBinding: Binding): Boolean {
+    private fun bindNode(builder: BindingBuilder, patternNode: Node, quadValue: QuadValue, existingBinding: Binding, requiredVars: Set<Var>? = null): Boolean {
         if (patternNode.isVariable) {
             val variable = Var.alloc(patternNode)
             val quadNode = quadValueToNode(quadValue)
@@ -575,8 +722,10 @@ class BatchingOpExecutor(
                     return false
                 }
             } else {
-                // Bind the variable
-                builder.add(variable, quadNode)
+                // Only bind the variable if it's in the required set (or if no projection pushdown)
+                if (requiredVars == null || variable in requiredVars) {
+                    builder.add(variable, quadNode)
+                }
             }
         } else {
             // Constant in pattern - check if it matches the quad value
@@ -601,10 +750,14 @@ class BatchingOpExecutor(
      * Execute a join operation.
      * Attempts to reorder operands to execute more selective patterns first.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeJoin(op: OpJoin, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeJoin(op: OpJoin, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         // Flatten nested joins to allow global reordering
         val allOps = flattenJoins(op)
+
+        // For joins, we need to compute which vars are needed for joining plus the required vars
+        val joinRequiredVars = computeJoinRequiredVars(allOps, requiredVars)
 
         if (allOps.size > 1) {
             // Reorder by selectivity - more selective first
@@ -618,21 +771,49 @@ class BatchingOpExecutor(
 
             // Execute in optimized order
             // First operand: no limit (we need all matching results to join with)
-            var result = execute(reordered[0], input, NO_LIMIT)
+            var result = execute(reordered[0], input, NO_LIMIT, joinRequiredVars)
 
             // Subsequent operands: propagate limit to ALL of them
             // Each step can potentially early-terminate once we have enough joined results
             for (i in 1 until reordered.size) {
-                result = execute(reordered[i], result, limit)
+                result = execute(reordered[i], result, limit, joinRequiredVars)
             }
             return result
         } else {
             if (TIMING_ENABLED) {
                 logger.info("Executing JOIN - left: ${op.left.javaClass.simpleName}, right: ${op.right.javaClass.simpleName}")
             }
-            val left = execute(op.left, input, NO_LIMIT)
-            return execute(op.right, left, limit)
+            val left = execute(op.left, input, NO_LIMIT, joinRequiredVars)
+            return execute(op.right, left, limit, joinRequiredVars)
         }
+    }
+
+    /**
+     * Compute required vars for a join, including join variables.
+     */
+    private fun computeJoinRequiredVars(ops: List<Op>, requiredVars: Set<Var>?): Set<Var>? {
+        if (requiredVars == null) return null
+
+        val joinVars = mutableSetOf<Var>()
+        val allVars = mutableMapOf<Var, Int>()
+
+        // Collect all variables from all operands and count occurrences
+        for (op in ops) {
+            val opVars = OpVars.visibleVars(op)
+            for (v in opVars) {
+                allVars[v] = allVars.getOrDefault(v, 0) + 1
+            }
+        }
+
+        // Variables that appear in multiple operands are join variables
+        for ((v, count) in allVars) {
+            if (count > 1) {
+                joinVars.add(v)
+            }
+        }
+
+        // Required = explicitly required + join variables
+        return requiredVars + joinVars
     }
 
     /**
@@ -697,9 +878,19 @@ class BatchingOpExecutor(
     /**
      * Execute a left join (OPTIONAL).
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeLeftJoin(op: OpLeftJoin, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
-        val leftResults = materializeBindings(execute(op.left, input, NO_LIMIT))
+    private fun executeLeftJoin(op: OpLeftJoin, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+        // For left join, we need vars from both sides plus filter vars
+        val leftJoinRequiredVars = if (requiredVars != null) {
+            val leftVars = OpVars.visibleVars(op.left)
+            val rightVars = OpVars.visibleVars(op.right)
+            val joinVars = leftVars.intersect(rightVars.toSet())
+            val filterVars = op.exprs?.flatMap { it.varsMentioned }?.toSet() ?: emptySet()
+            requiredVars + joinVars + filterVars
+        } else null
+
+        val leftResults = materializeBindings(execute(op.left, input, NO_LIMIT, leftJoinRequiredVars))
         val resultBindings = mutableListOf<Binding>()
         val effectiveLimit = if (limit == NO_LIMIT) Int.MAX_VALUE else limit.toInt()
 
@@ -712,7 +903,7 @@ class BatchingOpExecutor(
             }
 
             val rightInput = bindingsToIterator(listOf(binding))
-            val rightResults = materializeBindings(execute(op.right, rightInput, NO_LIMIT))
+            val rightResults = materializeBindings(execute(op.right, rightInput, NO_LIMIT, leftJoinRequiredVars))
 
             if (rightResults.isNotEmpty()) {
                 // Apply filter if present
@@ -742,11 +933,18 @@ class BatchingOpExecutor(
     /**
      * Execute a filter operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeFilter(op: OpFilter, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeFilter(op: OpFilter, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+        // For filters, we need the required vars plus any vars used in filter expressions
+        val filterRequiredVars = if (requiredVars != null) {
+            val filterVars = op.exprs.flatMap { it.varsMentioned }.toSet()
+            requiredVars + filterVars
+        } else null
+
         // Note: We can't reliably push limit into sub-operation for filters
         // because filtering may reduce results significantly
-        val subResults = execute(op.subOp, input, NO_LIMIT)
+        val subResults = execute(op.subOp, input, NO_LIMIT, filterRequiredVars)
 
         // Apply each filter expression in sequence
         var result = subResults
@@ -782,14 +980,23 @@ class BatchingOpExecutor(
 
     /**
      * Execute a project operation.
+     * Implements projection pushdown - only fetches variables that are actually needed.
      * @param limit Maximum number of results to produce (-1 for no limit)
      */
     private fun executeProject(op: OpProject, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
-        // Project preserves result count, so we can push the limit down
-        val subResults = execute(op.subOp, input, limit)
+        // Compute the set of required variables for the sub-operation
+        // This includes: projected vars + any vars needed for filters/expressions in the sub-tree
+        val projectedVars = op.vars.toSet()
+        val requiredVars = computeRequiredVarsForSubOp(op.subOp, projectedVars)
+
         if (TIMING_ENABLED) {
             logger.info("Project operation - projecting to vars: ${op.vars}")
+            logger.info("Projection pushdown - required vars for sub-op: $requiredVars")
         }
+
+        // Project preserves result count, so we can push the limit down
+        // Also push down the required variables to avoid fetching unnecessary data
+        val subResults = execute(op.subOp, input, limit, requiredVars)
 
         // Materialize and manually project to ensure all bindings are processed correctly
         val bindings = materializeBindings(subResults)
@@ -797,7 +1004,8 @@ class BatchingOpExecutor(
             logger.info("Project operation - ${bindings.size} bindings to project")
         }
 
-        val projectedVars = op.vars.toSet()
+        // If projection was already pushed down, bindings should already have only required vars
+        // But we still project to ensure only projected vars are in the final result
         val projectedBindings = bindings.map { binding ->
             val builder = BindingBuilder.create()
             for (v in projectedVars) {
@@ -818,10 +1026,12 @@ class BatchingOpExecutor(
     /**
      * Execute a distinct operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeDistinct(op: OpDistinct, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeDistinct(op: OpDistinct, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         // Cannot push limit into DISTINCT's sub-operation since deduplication may reduce count
-        val subResults = execute(op.subOp, input, NO_LIMIT)
+        // Propagate requiredVars to sub-operation
+        val subResults = execute(op.subOp, input, NO_LIMIT, requiredVars)
         // Manually implement distinct by collecting unique bindings
         if (TIMING_ENABLED) {
             logger.info("Distinct operation - about to materialize sub-results")
@@ -852,10 +1062,12 @@ class BatchingOpExecutor(
     /**
      * Execute a reduced operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeReduced(op: OpReduced, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeReduced(op: OpReduced, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         // Cannot push limit into REDUCED's sub-operation since deduplication may reduce count
-        val subResults = execute(op.subOp, input, NO_LIMIT)
+        // Propagate requiredVars to sub-operation
+        val subResults = execute(op.subOp, input, NO_LIMIT, requiredVars)
         // REDUCED is a weaker form of DISTINCT - same implementation for correctness
         val bindings = materializeBindings(subResults)
         val distinctBindings = bindings.distinctBy { binding ->
@@ -878,8 +1090,9 @@ class BatchingOpExecutor(
     /**
      * Execute a slice (LIMIT/OFFSET) operation.
      * Pushes the limit down to sub-operations when possible for early termination.
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeSlice(op: OpSlice, input: QueryIterator): QueryIterator {
+    private fun executeSlice(op: OpSlice, input: QueryIterator, requiredVars: Set<Var>? = null): QueryIterator {
         if (TIMING_ENABLED) {
             logger.info("Slice operation - start: ${op.start}, length: ${op.length}")
         }
@@ -894,7 +1107,7 @@ class BatchingOpExecutor(
             if (TIMING_ENABLED) {
                 logger.info("Slice optimization: pushing LIMIT ${op.length} down to sub-operation")
             }
-            val subResults = execute(op.subOp, input, op.length)
+            val subResults = execute(op.subOp, input, op.length, requiredVars)
             // No need for QueryIterSlice since we already limited
             return subResults
         } else if (hasLimit && hasOffset) {
@@ -903,7 +1116,7 @@ class BatchingOpExecutor(
             if (TIMING_ENABLED) {
                 logger.info("Slice optimization: pushing combined limit ${totalNeeded} (offset=${op.start} + limit=${op.length}) down to sub-operation")
             }
-            val subResults = execute(op.subOp, input, totalNeeded)
+            val subResults = execute(op.subOp, input, totalNeeded, requiredVars)
             // Apply the offset/limit
             return QueryIterSlice(subResults, op.start, op.length, execCxt)
         } else if (hasOffset && !hasLimit) {
@@ -911,21 +1124,28 @@ class BatchingOpExecutor(
             if (TIMING_ENABLED) {
                 logger.info("Slice: OFFSET without LIMIT, cannot push down")
             }
-            val subResults = execute(op.subOp, input, NO_LIMIT)
+            val subResults = execute(op.subOp, input, NO_LIMIT, requiredVars)
             return QueryIterSlice(subResults, op.start, op.length, execCxt)
         } else {
             // No limit or offset - just pass through
-            return execute(op.subOp, input, NO_LIMIT)
+            return execute(op.subOp, input, NO_LIMIT, requiredVars)
         }
     }
 
     /**
      * Execute an order (ORDER BY) operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeOrder(op: OpOrder, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeOrder(op: OpOrder, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+        // For ORDER BY, we need required vars plus any vars used in sort conditions
+        val orderRequiredVars = if (requiredVars != null) {
+            val sortVars = op.conditions.flatMap { it.expression.varsMentioned }.toSet()
+            requiredVars + sortVars
+        } else null
+
         // Cannot push limit down because we need all results to sort correctly
-        val subResults = execute(op.subOp, input, NO_LIMIT)
+        val subResults = execute(op.subOp, input, NO_LIMIT, orderRequiredVars)
         if (TIMING_ENABLED) {
             logger.info("Order operation - sorting by: ${op.conditions}")
         }
@@ -957,7 +1177,8 @@ class BatchingOpExecutor(
      * Execute a group (GROUP BY) operation - delegate to default executor.
      */
     private fun executeGroup(op: OpGroup, input: QueryIterator): QueryIterator {
-        val subResults = execute(op.subOp, input)
+        // GROUP BY needs all vars for grouping and aggregation, so don't push projection
+        val subResults = execute(op.subOp, input, NO_LIMIT, null)
         // Delegate to Jena's default execution for complex GROUP BY
         return QC.execute(op, subResults, execCxt)
     }
@@ -965,23 +1186,31 @@ class BatchingOpExecutor(
     /**
      * Execute an extend (BIND) operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeExtend(op: OpExtend, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeExtend(op: OpExtend, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+        // For BIND, we need required vars plus any vars used in the BIND expressions
+        val extendRequiredVars = if (requiredVars != null) {
+            val exprVars = op.varExprList.exprs.values.flatMap { it.varsMentioned }.toSet()
+            requiredVars + exprVars
+        } else null
+
         // BIND preserves result count, so we can push the limit down
-        val subResults = execute(op.subOp, input, limit)
+        val subResults = execute(op.subOp, input, limit, extendRequiredVars)
         return QueryIterAssign(subResults, op.varExprList, execCxt, false)
     }
 
     /**
      * Execute a union operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeUnion(op: OpUnion, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeUnion(op: OpUnion, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         val inputBindings = materializeBindings(input)
         val effectiveLimit = if (limit == NO_LIMIT) Int.MAX_VALUE else limit.toInt()
 
-        // Execute left branch first
-        val leftResults = execute(op.left, bindingsToIterator(inputBindings), NO_LIMIT)
+        // Execute left branch first - propagate requiredVars
+        val leftResults = execute(op.left, bindingsToIterator(inputBindings), NO_LIMIT, requiredVars)
         val leftBindings = materializeBindings(leftResults)
 
         // If left already has enough results, we can potentially skip right branch
@@ -992,9 +1221,9 @@ class BatchingOpExecutor(
             return bindingsToIterator(leftBindings.take(effectiveLimit))
         }
 
-        // Execute right branch with remaining limit
+        // Execute right branch with remaining limit - propagate requiredVars
         val remainingLimit = if (limit == NO_LIMIT) NO_LIMIT else (effectiveLimit - leftBindings.size).toLong()
-        val rightResults = execute(op.right, bindingsToIterator(inputBindings), remainingLimit)
+        val rightResults = execute(op.right, bindingsToIterator(inputBindings), remainingLimit, requiredVars)
         val rightBindings = materializeBindings(rightResults)
 
         // Concatenate results
@@ -1015,14 +1244,16 @@ class BatchingOpExecutor(
     /**
      * Execute a sequence operation.
      * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeSequence(op: OpSequence, input: QueryIterator, limit: Long = NO_LIMIT): QueryIterator {
+    private fun executeSequence(op: OpSequence, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
         var current = input
         val elements = op.elements
         for (i in elements.indices) {
             // Only apply limit to the last element in the sequence
             val stepLimit = if (i == elements.size - 1) limit else NO_LIMIT
-            current = execute(elements[i], current, stepLimit)
+            // Propagate requiredVars to all elements
+            current = execute(elements[i], current, stepLimit, requiredVars)
         }
         return current
     }

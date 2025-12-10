@@ -10,6 +10,7 @@ import org.megras.data.graph.*
 import org.megras.graphstore.QuadSet
 import org.megras.lang.ResultTable
 import org.megras.lang.sparql.jena.JenaGraphWrapper
+import org.megras.lang.sparql.jena.batch.BatchingQueryEngineFactory
 import org.slf4j.LoggerFactory
 
 object SparqlUtil {
@@ -18,6 +19,11 @@ object SparqlUtil {
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
     private const val TIMING_ENABLED = false
+
+    init {
+        // Register the custom batching query engine factory
+        BatchingQueryEngineFactory.register()
+    }
 
     fun select(query: String, quads: QuadSet): ResultTable {
 
@@ -38,7 +44,9 @@ object SparqlUtil {
 
         // STEP 3: Result conversion loop
         val start3 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+        var rowCount = 0
         while (resultSet.hasNext()) {
+            rowCount++
             val row = resultSet.nextSolution()
             val map = HashMap<String, QuadValue>()
 
@@ -49,7 +57,8 @@ object SparqlUtil {
             rows.add(map)
         }
         val end3 = System.currentTimeMillis()
-        if (TIMING_ENABLED) logger.info("Time spent in Result conversion loop: ${end3 - start3}ms")
+        if (TIMING_ENABLED) logger.info("Time spent in Result conversion loop: ${end3 - start3}ms, processed $rowCount rows")
+        if (TIMING_ENABLED) logger.info("Total rows in result: ${rows.size}")
 
         val resultTable = ResultTable(rows)
 

@@ -42,22 +42,24 @@ class SparqlQueryHandler(private val quads: QuadSet) : GetRequestHandler {
 
         val start3 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
 
-        // Assuming a simple query with one result:
+        // Build proper SPARQL JSON result with all rows
         val headers = table.headers.toList().map { it.removePrefix("?") }
-        val bindingsMap: Map<String, ApiSparqlResultValue> = table.rows.firstOrNull()?.mapKeys { it.key.removePrefix("?") }?.mapValues { ApiSparqlResultValue.fromQuadValue(it.value) } ?: emptyMap()
 
         val jsonString = buildString {
             append("""{ "head": { "vars": [""")
             append(headers.joinToString(", ") { "\"$it\"" })
             append("] }, \"results\": { \"bindings\": [")
 
-            // Build the single bindings entry
-            if (bindingsMap.isNotEmpty()) {
+            // Build ALL binding entries
+            table.rows.forEachIndexed { index, row ->
+                if (index > 0) append(", ")
                 append("{")
+                val bindingsMap = row.mapKeys { it.key.removePrefix("?") }
+                    .mapValues { ApiSparqlResultValue.fromQuadValue(it.value) }
                 append(bindingsMap.entries.joinToString(", ") { (key, value) ->
                     // Build the inner SPARQL Result Value format: {"value":"...", "type":"...", "datatype":"..."}
                     val datatypePart = value.datatype?.let { """, "datatype": "$it"""" } ?: ""
-                    """"$key": { "value": "${value.value}", "type": "${value.type}"$datatypePart }"""
+                    """"$key": { "value": "${escapeJsonString(value.value)}", "type": "${value.type}"$datatypePart }"""
                 })
                 append("}")
             }
@@ -71,5 +73,16 @@ class SparqlQueryHandler(private val quads: QuadSet) : GetRequestHandler {
         if (TIMING_ENABLED) logger.info("Handler Time spent in **Manual JSON String Building** (ctx.result): ${System.currentTimeMillis() - start3}ms")
 
         if (TIMING_ENABLED) logger.info("Total time spent in SparqlQueryHandler.get: ${System.currentTimeMillis() - startTotal}ms")
+    }
+
+    /**
+     * Escapes special characters in a string for safe JSON embedding.
+     */
+    private fun escapeJsonString(str: String): String {
+        return str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
     }
 }

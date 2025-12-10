@@ -109,10 +109,17 @@ class BatchingOpExecutor(
             }
         }
 
+        // Reorder patterns: most selective first (patterns with more constants)
+        val reorderedTriples = reorderPatterns(triples, inputBindings.firstOrNull())
+
+        if (TIMING_ENABLED && reorderedTriples != triples) {
+            logger.info("Reordered patterns: ${reorderedTriples.map { "${it.subject} ${it.predicate} ${it.`object`}" }}")
+        }
+
         var currentBindings = inputBindings
 
         // Process each triple pattern with batching
-        for (triple in triples) {
+        for (triple in reorderedTriples) {
             currentBindings = executeBatchedTriplePattern(triple, currentBindings)
             if (currentBindings.isEmpty()) {
                 break
@@ -124,6 +131,37 @@ class BatchingOpExecutor(
         }
 
         return bindingsToIterator(currentBindings)
+    }
+
+    /**
+     * Reorder triple patterns for optimal execution.
+     * Patterns with more constants (especially in object position) are more selective
+     * and should be executed first to reduce intermediate result sizes.
+     */
+    private fun reorderPatterns(triples: List<Triple>, currentBinding: Binding?): List<Triple> {
+        if (triples.size <= 1) return triples
+
+        // Calculate selectivity score for each pattern
+        // Higher score = more selective = should be executed first
+        fun selectivityScore(triple: Triple): Int {
+            var score = 0
+
+            // Constants are very selective
+            if (!triple.subject.isVariable) score += 10
+            if (!triple.predicate.isVariable) score += 5  // predicates are usually constrained anyway
+            if (!triple.`object`.isVariable) score += 20  // object constants are very selective (e.g., country="Turkey")
+
+            // Already bound variables are also selective
+            if (currentBinding != null) {
+                if (triple.subject.isVariable && currentBinding.contains(Var.alloc(triple.subject))) score += 8
+                if (triple.predicate.isVariable && currentBinding.contains(Var.alloc(triple.predicate))) score += 3
+                if (triple.`object`.isVariable && currentBinding.contains(Var.alloc(triple.`object`))) score += 8
+            }
+
+            return score
+        }
+
+        return triples.sortedByDescending { selectivityScore(it) }
     }
 
     /**
@@ -205,8 +243,8 @@ class BatchingOpExecutor(
 
         if (TIMING_ENABLED) {
             logger.info("Batched filter - subjects: ${subjectFilter?.size ?: "all"}, " +
-                       "predicates: ${predicateFilter?.size ?: "all"}, " +
-                       "objects: ${objectFilter?.size ?: "all"}")
+                    "predicates: ${predicateFilter?.size ?: "all"}, " +
+                    "objects: ${objectFilter?.size ?: "all"}")
         }
 
         // Execute single batched query
@@ -375,13 +413,93 @@ class BatchingOpExecutor(
 
     /**
      * Execute a join operation.
+     * Attempts to reorder operands to execute more selective patterns first.
      */
     private fun executeJoin(op: OpJoin, input: QueryIterator): QueryIterator {
-        if (TIMING_ENABLED) {
-            logger.info("Executing JOIN - left: ${op.left.javaClass.simpleName}, right: ${op.right.javaClass.simpleName}")
+        // Flatten nested joins to allow global reordering
+        val allOps = flattenJoins(op)
+
+        if (allOps.size > 1) {
+            // Reorder by selectivity - more selective first
+            val reordered = reorderJoinOperands(allOps)
+
+            if (TIMING_ENABLED) {
+                logger.info("Executing JOIN with ${allOps.size} operands (reordered: ${reordered != allOps})")
+                reordered.forEach { logger.info("  - ${describeOp(it)}") }
+            }
+
+            // Execute in optimized order
+            var result = execute(reordered[0], input)
+            for (i in 1 until reordered.size) {
+                result = execute(reordered[i], result)
+            }
+            return result
+        } else {
+            if (TIMING_ENABLED) {
+                logger.info("Executing JOIN - left: ${op.left.javaClass.simpleName}, right: ${op.right.javaClass.simpleName}")
+            }
+            val left = execute(op.left, input)
+            return execute(op.right, left)
         }
-        val left = execute(op.left, input)
-        return execute(op.right, left)
+    }
+
+    /**
+     * Flatten a tree of JOINs into a list of operands.
+     */
+    private fun flattenJoins(op: Op): List<Op> {
+        return when (op) {
+            is OpJoin -> flattenJoins(op.left) + flattenJoins(op.right)
+            else -> listOf(op)
+        }
+    }
+
+    /**
+     * Reorder join operands by selectivity.
+     * BGPs with constant objects are most selective and should run first.
+     */
+    private fun reorderJoinOperands(ops: List<Op>): List<Op> {
+        return ops.sortedByDescending { estimateSelectivity(it) }
+    }
+
+    /**
+     * Estimate the selectivity of an operation.
+     * Higher score = more selective = should run first.
+     */
+    private fun estimateSelectivity(op: Op): Int {
+        return when (op) {
+            is OpBGP -> {
+                op.pattern.list.sumOf { triple ->
+                    var score = 0
+                    // Constants are very selective
+                    if (!triple.subject.isVariable) score += 10
+                    if (!triple.predicate.isVariable) score += 5
+                    if (!triple.`object`.isVariable) score += 20  // Object constants are very selective
+                    score
+                }
+            }
+            is OpJoin -> maxOf(estimateSelectivity(op.left), estimateSelectivity(op.right))
+            is OpFilter -> estimateSelectivity(op.subOp) + 5  // Filters add selectivity
+            else -> 0
+        }
+    }
+
+    /**
+     * Get a human-readable description of an operation for logging.
+     */
+    private fun describeOp(op: Op): String {
+        return when (op) {
+            is OpBGP -> "BGP(${op.pattern.list.joinToString(", ") { triple ->
+                val s = if (triple.subject.isVariable) "?${triple.subject.name}" else triple.subject.toString()
+                val p = if (triple.predicate.isVariable) "?${triple.predicate.name}" else (triple.predicate.localName ?: triple.predicate.toString())
+                val o = when {
+                    triple.`object`.isVariable -> "?${triple.`object`.name}"
+                    triple.`object`.isLiteral -> "\"${triple.`object`.literalLexicalForm}\""
+                    else -> triple.`object`.toString()
+                }
+                "$s $p $o"
+            }})"
+            else -> op.javaClass.simpleName
+        }
     }
 
     /**

@@ -22,6 +22,7 @@ import java.io.File
 
 class ParagraphHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<LocalQuadValue>, QuadSetAware {
     override val predicate: URIValue = getPredicate()
+    override val requiresExternalService: Boolean = true  // Depends on DocumentModelJsonHandler which uses gRPC
 
     private var effectiveQuadSet: QuadSet = quadSet
 

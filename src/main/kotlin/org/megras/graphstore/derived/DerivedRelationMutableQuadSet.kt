@@ -6,11 +6,16 @@ import org.megras.graphstore.*
 import org.megras.util.knn.DistancePairComparator
 import org.megras.util.knn.FixedSizePriorityQueue
 import org.megras.util.services.GrpcServiceAvailability
+import org.slf4j.LoggerFactory
 
 class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<DerivedRelationHandler<*>>) :
     MutableQuadSet {
 
     private val handlers = handlers.associateBy { it.predicate }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(DerivedRelationMutableQuadSet::class.java)
+    }
 
     /**
      * Filters handlers to exclude those requiring external services when unavailable.
@@ -30,8 +35,13 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         val grpcAvailable by lazy { GrpcServiceAvailability.isServiceAvailable() }
 
         return requestedHandlers.filter { handler ->
-            if (handler.requiresExternalService && !grpcAvailable) {
-                false // Skip this handler
+            if (handler.requiresExternalService) {
+                if (!grpcAvailable) {
+                    logger.debug("Skipping handler ${handler.predicate} - gRPC service unavailable")
+                    false // Skip this handler
+                } else {
+                    true
+                }
             } else {
                 true
             }
@@ -127,6 +137,8 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
             return existing
         }
 
+        logger.debug("Deriving relations with ${relevantHandlers.size} handlers: ${relevantHandlers.map { it.predicate }}")
+
         val subs = (subjects ?: getAllBySubject().keys).filterIsInstance<URIValue>()
         val derived = subs.chunked(100).flatMap { chunk ->
             val existingQuads = this.base.filter(
@@ -146,6 +158,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
                     if (!handler.canDerive(subject)) {
                         return@flatMap emptyList()
                     }
+                    logger.debug("Deriving ${handler.predicate} for subject $subject")
                     handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
                 }
             }

@@ -14,6 +14,7 @@ import org.megras.util.services.OcrClient
 
 class OcrHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<StringValue> {
     override val predicate: URIValue = getPredicate()
+    override val requiresExternalService: Boolean = true
 
     companion object {
         fun getPredicate(): URIValue {

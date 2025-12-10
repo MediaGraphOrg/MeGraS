@@ -15,6 +15,7 @@ import org.megras.util.services.DoclingClient
 
 class DocumentModelJsonHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<QuadValue> {
     override val predicate: URIValue = getPredicate()
+    override val requiresExternalService: Boolean = true
 
     companion object {
         fun getPredicate(): URIValue {

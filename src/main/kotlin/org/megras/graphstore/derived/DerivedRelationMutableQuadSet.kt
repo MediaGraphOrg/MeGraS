@@ -5,11 +5,38 @@ import org.megras.data.schema.MeGraS
 import org.megras.graphstore.*
 import org.megras.util.knn.DistancePairComparator
 import org.megras.util.knn.FixedSizePriorityQueue
+import org.megras.util.services.GrpcServiceAvailability
 
 class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: Collection<DerivedRelationHandler<*>>) :
     MutableQuadSet {
 
     private val handlers = handlers.associateBy { it.predicate }
+
+    /**
+     * Filters handlers to exclude those requiring external services when unavailable.
+     * If predicates are explicitly specified, handlers are always included (explicit user request).
+     * If predicates is null (wildcard), handlers requiring unavailable services are skipped.
+     */
+    private fun getAvailableHandlers(
+        requestedHandlers: Collection<DerivedRelationHandler<*>>,
+        isExplicitRequest: Boolean
+    ): Collection<DerivedRelationHandler<*>> {
+        if (isExplicitRequest) {
+            // Explicit predicate request - include all handlers
+            return requestedHandlers
+        }
+
+        // Wildcard query - filter out handlers requiring unavailable external services
+        val grpcAvailable by lazy { GrpcServiceAvailability.isServiceAvailable() }
+
+        return requestedHandlers.filter { handler ->
+            if (handler.requiresExternalService && !grpcAvailable) {
+                false // Skip this handler
+            } else {
+                true
+            }
+        }
+    }
 
     override fun getId(id: Long): Quad? = base.getId(id)
 
@@ -21,7 +48,9 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
             return existing
         }
 
-        val relevantHandlers = handlers.values.filter { handler -> handler.canDerive(subject) }
+        // Wildcard predicate query - filter handlers based on service availability
+        val availableHandlers = getAvailableHandlers(handlers.values, isExplicitRequest = false)
+        val relevantHandlers = availableHandlers.filter { handler -> handler.canDerive(subject) }
 
         val derived = relevantHandlers.flatMap { handler ->
             //check if already present
@@ -89,7 +118,10 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         val existing = this.base.filter(subjects, predicates, objects)
 
-        val relevantHandlers = predicates?.mapNotNull { this.handlers[it] } ?: this.handlers.values
+        // If predicates is null, it's a wildcard query - filter based on service availability
+        val isExplicitRequest = predicates != null
+        val requestedHandlers = predicates?.mapNotNull { this.handlers[it] } ?: this.handlers.values
+        val relevantHandlers = getAvailableHandlers(requestedHandlers, isExplicitRequest)
 
         if (relevantHandlers.isEmpty()) {
             return existing

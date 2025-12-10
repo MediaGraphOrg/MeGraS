@@ -14,6 +14,7 @@ import org.megras.util.services.ClipEmbedderClient
 
 class ClipEmbeddingHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<FloatVectorValue> {
     override val predicate: URIValue = getPredicate()
+    override val requiresExternalService: Boolean = true
 
     companion object {
         fun getPredicate(): URIValue {

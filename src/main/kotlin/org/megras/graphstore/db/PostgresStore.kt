@@ -887,6 +887,78 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         return getIds(quadIds)
     }
 
+    /**
+     * Optimized implementation that uses SQL DISTINCT to get unique object values.
+     * This avoids fetching all rows and deduplicating in memory.
+     */
+    override fun distinctObjects(predicate: QuadValue): Set<QuadValue> {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val predicateId = getQuadValueId(predicate)
+        if (predicateId.first == null || predicateId.second == null) {
+            return emptySet()
+        }
+
+        // Query distinct (oType, o) pairs from the database
+        val distinctObjectIds = transaction {
+            QuadsTable
+                .slice(QuadsTable.oType, QuadsTable.o)
+                .select { (QuadsTable.pType eq predicateId.first!!) and (QuadsTable.p eq predicateId.second!!) }
+                .withDistinct()
+                .map { it[QuadsTable.oType] to it[QuadsTable.o] }
+                .toSet()
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("distinctObjects: Found ${distinctObjectIds.size} distinct objects in ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        // Convert IDs back to QuadValues
+        val quadValues = getQuadValues(distinctObjectIds)
+
+        if (TIMING_ENABLED) {
+            logger.info("distinctObjects: Total time ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        return quadValues.values.toSet()
+    }
+
+    /**
+     * Optimized implementation that uses SQL DISTINCT to get unique subject values.
+     * This avoids fetching all rows and deduplicating in memory.
+     */
+    override fun distinctSubjects(predicate: QuadValue): Set<QuadValue> {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val predicateId = getQuadValueId(predicate)
+        if (predicateId.first == null || predicateId.second == null) {
+            return emptySet()
+        }
+
+        // Query distinct (sType, s) pairs from the database
+        val distinctSubjectIds = transaction {
+            QuadsTable
+                .slice(QuadsTable.sType, QuadsTable.s)
+                .select { (QuadsTable.pType eq predicateId.first!!) and (QuadsTable.p eq predicateId.second!!) }
+                .withDistinct()
+                .map { it[QuadsTable.sType] to it[QuadsTable.s] }
+                .toSet()
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("distinctSubjects: Found ${distinctSubjectIds.size} distinct subjects in ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        // Convert IDs back to QuadValues
+        val quadValues = getQuadValues(distinctSubjectIds)
+
+        if (TIMING_ENABLED) {
+            logger.info("distinctSubjects: Total time ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        return quadValues.values.toSet()
+    }
+
     override val size: Int
         get() {
             return transaction {

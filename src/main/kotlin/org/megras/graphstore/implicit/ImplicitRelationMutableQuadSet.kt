@@ -173,4 +173,26 @@ class ImplicitRelationMutableQuadSet(
     override fun removeAll(elements: Collection<Quad>): Boolean = this.base.removeAll(elements)
 
     override fun retainAll(elements: Collection<Quad>): Boolean = this.base.retainAll(elements)
+
+    override fun distinctObjects(predicate: QuadValue): Set<QuadValue> {
+        val handler = findHandler(predicate)
+        return if (handler != null) {
+            // For implicit relations, we need to compute all objects
+            handler.findAll().map { it.`object` }.toSet()
+        } else {
+            // Delegate to base for non-implicit predicates
+            this.base.distinctObjects(predicate)
+        }
+    }
+
+    override fun distinctSubjects(predicate: QuadValue): Set<QuadValue> {
+        val handler = findHandler(predicate)
+        return if (handler != null) {
+            // For implicit relations, we need to compute all subjects
+            handler.findAll().map { it.subject }.toSet()
+        } else {
+            // Delegate to base for non-implicit predicates
+            this.base.distinctSubjects(predicate)
+        }
+    }
 }

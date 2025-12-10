@@ -348,6 +348,17 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
     override fun retainAll(elements: Collection<Quad>): Boolean = this.base.retainAll(elements)
 
+    override fun distinctObjects(predicate: QuadValue): Set<QuadValue> {
+        // If there's a handler for this predicate, we might need to derive values
+        // For now, delegate to base - derived values should already be materialized
+        return this.base.distinctObjects(predicate)
+    }
+
+    override fun distinctSubjects(predicate: QuadValue): Set<QuadValue> {
+        // If there's a handler for this predicate, we might need to derive values
+        // For now, delegate to base - derived values should already be materialized
+        return this.base.distinctSubjects(predicate)
+    }
 }
 
 interface QuadSetAware {

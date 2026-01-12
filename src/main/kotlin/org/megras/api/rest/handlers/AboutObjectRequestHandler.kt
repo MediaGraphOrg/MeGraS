@@ -97,7 +97,9 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                         "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6",
                         "#bcf60c", "#fabebe", "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000", "#aaffc3"
                     )
-                    svg = "<svg width='100%' height='100%' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
+                    val svgWidth = itemBounds.getMaxX()
+                    val svgHeight = itemBounds.getMaxY()
+                    svg = "<svg width='100%' height='100%' viewBox='0 0 $svgWidth $svgHeight' preserveAspectRatio='none' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
 
                     // Sort children by area and store segmentation
                     val sortedChildrenWithSegmentation = children.mapNotNull { child ->
@@ -127,6 +129,20 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                 """.trimIndent()
                             }
                             SegmentationType.POLYGON -> {
+                                val svgPath = segmentation.getDefinition()
+                                val points = svgPath.split("),(")
+                                    .map { it.replace("(", "").replace(")", "") }
+                                    .map { point ->
+                                        val (x, y) = point.split(",").map(String::toDouble)
+                                        "$x,${itemBounds.getMaxY() - y}"
+                                    }
+                                svg += """
+                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                        <polygon points='${points.joinToString(" ")}' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
+                                    </a>
+                                """.trimIndent()
+                            }
+                            SegmentationType.BEZIER, SegmentationType.BSPLINE -> {
                                 val svgPath = segmentation.getDefinition()
                                 val points = svgPath.split("),(")
                                     .map { it.replace("(", "").replace(")", "") }

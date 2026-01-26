@@ -108,3 +108,33 @@ docker cp config.json megras:\
 # Getting Started
 Once MeGraS is up and running, it can be accessed via HTTP on the configured port.
 Further documentation is also available [here](GETTING_STARTED.md).
+
+
+# Citation
+We kindly ask you to refer to the following paper in publications mentioning or employing MeGraS:
+
+Luca Rossetto and Florian Ruosch. 2025. MeGraS: An Open-Source Store for Multimodal Knowledge Graphs. In Proceedings of the 33rd ACM International Conference on Multimedia (MM '25). Association for Computing Machinery, New York, NY, USA, 13644–13647.
+
+**Link:** https://doi.org/10.1145/3746027.3756872
+
+**Bibtex:**
+
+```
+@inproceedings{10.1145/3746027.3756872,
+	author = {Rossetto, Luca and Ruosch, Florian},
+	title = {MeGraS: An Open-Source Store for Multimodal Knowledge Graphs},
+	year = {2025},
+	isbn = {9798400720352},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/3746027.3756872},
+	doi = {10.1145/3746027.3756872},
+	abstract = {Multimodal knowledge graphs often separate easily represented information (text) from that which is not (multimedia documents like images, videos, or audio). This severely limits query expressiveness, as the engines lack access to the node contents stored externally. We present MeGraS, the MediaGraph Store, a novel storage and query engine for multimodal knowledge graphs. By storing multimedia documents directly in the graph, MeGraS allows the query engine to leverage their content for enhanced capabilities, making it natively capable of performing operations such as k-NN, segmentation, or deriving non-materialized relations based on visual features. To demonstrate this, we incorporate and extend the pattern-matching query language SPARQL, resulting in a unified framework for storing and managing multimodal knowledge graphs with advanced expressiveness. MeGraS is available as open-source software: http://megras.org},
+	booktitle = {Proceedings of the 33rd ACM International Conference on Multimedia},
+	pages = {13644–13647},
+	numpages = {4},
+	keywords = {graph store, multimodal knowledge graphs, multimodal media segmentation},
+	location = {Dublin, Ireland},
+	series = {MM '25}
+}
+```

@@ -210,7 +210,7 @@ class FileUploadPageHandler : GetRequestHandler {
                         </div>
                         
                         <button type="button" class="add-btn" onclick="addTriple()">+ Add Triple</button>
-                        <button type="button" class="fetch-btn" onclick="fetchPredicates()">Fetch Predicates</button>
+                        <button type="button" class="fetch-btn" onclick="fetchAutocompletes()">Fetch Autocompletes</button>
                     </div>
                     
                     <div id="uploadStatus" class="upload-status">
@@ -223,11 +223,18 @@ class FileUploadPageHandler : GetRequestHandler {
 
                 <script>
                     let knownPredicates = [];
+                    let knownObjects = [];
                     
                     // Predicates to ignore
                     const ignoredPrefixes = [
                         'http://megras.org/schema#',
                         'http://megras.org/exif/'
+                    ];
+                    
+                    // Objects to ignore (typically internal URIs)
+                    const ignoredObjectPrefixes = [
+                        'http://megras.org/schema#',
+                        'http://megras.org/'
                     ];
                     
                     // Quick predicates to exclude from suggestions (already available as buttons)
@@ -247,7 +254,11 @@ class FileUploadPageHandler : GetRequestHandler {
                         return ignoredPrefixes.some(prefix => uri.startsWith(prefix)) || quickPredicates.includes(uri);
                     }
                     
-                    // Load predicates from the API on page load
+                    function shouldIgnoreObject(value) {
+                        return ignoredObjectPrefixes.some(prefix => value.startsWith(prefix));
+                    }
+                    
+                    // Load predicates and objects from the API on page load
                     async function loadPredicatesFromApi() {
                         try {
                             const response = await fetch('/query/quads', {
@@ -258,7 +269,9 @@ class FileUploadPageHandler : GetRequestHandler {
                             if (response.ok) {
                                 const data = await response.json();
                                 const predicateSet = new Set();
-                                let ignoredCount = 0;
+                                const objectSet = new Set();
+                                let ignoredPredicateCount = 0;
+                                let ignoredObjectCount = 0;
                                 (data.results || []).forEach(quad => {
                                     // Handle both string format "<uri>" and object format {value: "uri"}
                                     let predUri = null;
@@ -270,9 +283,51 @@ class FileUploadPageHandler : GetRequestHandler {
                                     }
                                     if (predUri) {
                                         if (shouldIgnorePredicate(predUri)) {
-                                            ignoredCount++;
+                                            ignoredPredicateCount++;
                                         } else {
                                             predicateSet.add(predUri);
+                                        }
+                                    }
+                                    
+                                    // Extract subjects (URIs) for autocomplete
+                                    let subjValue = null;
+                                    if (typeof quad.s === 'string') {
+                                        if (quad.s.startsWith('<')) {
+                                            subjValue = quad.s.replace(/^<|>$/g, '');
+                                        }
+                                    } else if (quad.s && quad.s.value) {
+                                        const rawValue = quad.s.value;
+                                        if (rawValue.startsWith('<') || (rawValue.startsWith('http://') || rawValue.startsWith('https://'))) {
+                                            subjValue = rawValue.replace(/^<|>$/g, '');
+                                        }
+                                    }
+                                    if (subjValue && subjValue.trim()) {
+                                        if (shouldIgnoreObject(subjValue)) {
+                                            ignoredObjectCount++;
+                                        } else {
+                                            objectSet.add(subjValue);
+                                        }
+                                    }
+                                    
+                                    // Extract objects (only URIs, not literals)
+                                    let objValue = null;
+                                    if (typeof quad.o === 'string') {
+                                        // Only include if it's a URI (starts with <)
+                                        if (quad.o.startsWith('<')) {
+                                            objValue = quad.o.replace(/^<|>$/g, '');
+                                        }
+                                    } else if (quad.o && quad.o.value) {
+                                        // Check if original had angle brackets or if it's a URI type
+                                        const rawValue = quad.o.value;
+                                        if (rawValue.startsWith('<') || (rawValue.startsWith('http://') || rawValue.startsWith('https://'))) {
+                                            objValue = rawValue.replace(/^<|>$/g, '');
+                                        }
+                                    }
+                                    if (objValue && objValue.trim()) {
+                                        if (shouldIgnoreObject(objValue)) {
+                                            ignoredObjectCount++;
+                                        } else {
+                                            objectSet.add(objValue);
                                         }
                                     }
                                 });
@@ -280,7 +335,12 @@ class FileUploadPageHandler : GetRequestHandler {
                                     uri: uri,
                                     title: uri.split('/').pop().split('#').pop()
                                 }));
-                                console.log('Loaded ' + knownPredicates.length + ' predicates from database (ignored ' + ignoredCount + ' system predicates)');
+                                knownObjects = Array.from(objectSet).map(value => ({
+                                    value: value,
+                                    display: value.length > 50 ? value.substring(0, 50) + '...' : value
+                                }));
+                                console.log('Loaded ' + knownPredicates.length + ' predicates from database (ignored ' + ignoredPredicateCount + ' system predicates)');
+                                console.log('Loaded ' + knownObjects.length + ' objects from database (ignored ' + ignoredObjectCount + ' system objects)');
                             }
                         } catch (err) {
                             console.log('Could not load predicates from API:', err);
@@ -354,7 +414,8 @@ class FileUploadPageHandler : GetRequestHandler {
                                     <div class="autocomplete-list predicate-autocomplete"></div>
                                 </div>
                                 <div class="input-group">
-                                    <input type="text" placeholder="Object value" class="object-input" value="${'$'}{objectValue}">
+                                    <input type="text" placeholder="Object value" class="object-input" value="${'$'}{objectValue}" oninput="showObjectSuggestions(this)" onfocus="showObjectSuggestions(this)" onblur="hideAutocomplete(this)">
+                                    <div class="autocomplete-list object-autocomplete"></div>
                                 </div>
                                 <button type="button" class="remove-btn" onclick="removeTriple(this)">✕</button>
                             </div>
@@ -417,6 +478,41 @@ class FileUploadPageHandler : GetRequestHandler {
                         item.closest('.autocomplete-list').classList.remove('active');
                     }
                     
+                    function showObjectSuggestions(input) {
+                        const value = input.value.toLowerCase();
+                        const autocompleteList = input.parentElement.querySelector('.object-autocomplete');
+                        
+                        if (knownObjects.length === 0) {
+                            autocompleteList.classList.remove('active');
+                            return;
+                        }
+                        
+                        const filtered = knownObjects.filter(o => 
+                            o.value.toLowerCase().includes(value)
+                        ).slice(0, 10);
+                        
+                        if (filtered.length === 0 || value === '') {
+                            autocompleteList.classList.remove('active');
+                            return;
+                        }
+                        
+                        autocompleteList.innerHTML = filtered.map(o => `
+                            <div class="autocomplete-item" onmousedown="selectObject(this, '${'$'}{o.value.replace(/'/g, "\\'")}')">
+                                <div class="title">${'$'}{o.display}</div>
+                            </div>
+                        `).join('');
+                        
+                        autocompleteList.classList.add('active');
+                    }
+                    
+                    function selectObject(item, value) {
+                        const row = item.closest('.triple-row');
+                        const input = row.querySelector('.object-input');
+                        input.value = value;
+                        input.dataset.isUri = 'true'; // Mark as URI when selected from autocomplete
+                        item.closest('.autocomplete-list').classList.remove('active');
+                    }
+                    
                     function hideAutocomplete(input) {
                         setTimeout(() => {
                             const autocompleteList = input.parentElement.querySelector('.autocomplete-list');
@@ -426,7 +522,17 @@ class FileUploadPageHandler : GetRequestHandler {
                         }, 200);
                     }
                     
-                    async function fetchPredicates() {
+                    // Clear URI flag when user manually edits the object input
+                    document.addEventListener('input', function(e) {
+                        if (e.target.classList.contains('object-input')) {
+                            // Check if the current value matches a known object URI
+                            const value = e.target.value;
+                            const isKnownUri = knownObjects.some(o => o.value === value);
+                            e.target.dataset.isUri = isKnownUri ? 'true' : 'false';
+                        }
+                    });
+                    
+                    async function fetchAutocompletes() {
                         try {
                             const response = await fetch('/query/quads', {
                                 method: 'POST',
@@ -436,7 +542,9 @@ class FileUploadPageHandler : GetRequestHandler {
                             if (response.ok) {
                                 const data = await response.json();
                                 const predicateSet = new Set();
-                                let ignoredCount = 0;
+                                const objectSet = new Set();
+                                let ignoredPredicateCount = 0;
+                                let ignoredObjectCount = 0;
                                 (data.results || []).forEach(quad => {
                                     // Handle both string format "<uri>" and object format {value: "uri"}
                                     let predUri = null;
@@ -448,9 +556,51 @@ class FileUploadPageHandler : GetRequestHandler {
                                     }
                                     if (predUri) {
                                         if (shouldIgnorePredicate(predUri)) {
-                                            ignoredCount++;
+                                            ignoredPredicateCount++;
                                         } else {
                                             predicateSet.add(predUri);
+                                        }
+                                    }
+                                    
+                                    // Extract subjects (URIs) for autocomplete
+                                    let subjValue = null;
+                                    if (typeof quad.s === 'string') {
+                                        if (quad.s.startsWith('<')) {
+                                            subjValue = quad.s.replace(/^<|>$/g, '');
+                                        }
+                                    } else if (quad.s && quad.s.value) {
+                                        const rawValue = quad.s.value;
+                                        if (rawValue.startsWith('<') || (rawValue.startsWith('http://') || rawValue.startsWith('https://'))) {
+                                            subjValue = rawValue.replace(/^<|>$/g, '');
+                                        }
+                                    }
+                                    if (subjValue && subjValue.trim()) {
+                                        if (shouldIgnoreObject(subjValue)) {
+                                            ignoredObjectCount++;
+                                        } else {
+                                            objectSet.add(subjValue);
+                                        }
+                                    }
+                                    
+                                    // Extract objects (only URIs, not literals)
+                                    let objValue = null;
+                                    if (typeof quad.o === 'string') {
+                                        // Only include if it's a URI (starts with <)
+                                        if (quad.o.startsWith('<')) {
+                                            objValue = quad.o.replace(/^<|>$/g, '');
+                                        }
+                                    } else if (quad.o && quad.o.value) {
+                                        // Check if original had angle brackets or if it's a URI type
+                                        const rawValue = quad.o.value;
+                                        if (rawValue.startsWith('<') || (rawValue.startsWith('http://') || rawValue.startsWith('https://'))) {
+                                            objValue = rawValue.replace(/^<|>$/g, '');
+                                        }
+                                    }
+                                    if (objValue && objValue.trim()) {
+                                        if (shouldIgnoreObject(objValue)) {
+                                            ignoredObjectCount++;
+                                        } else {
+                                            objectSet.add(objValue);
                                         }
                                     }
                                 });
@@ -458,12 +608,16 @@ class FileUploadPageHandler : GetRequestHandler {
                                     uri: uri,
                                     title: uri.split('/').pop().split('#').pop()
                                 }));
-                                alert('Loaded ' + knownPredicates.length + ' predicates from database (ignored ' + ignoredCount + ' system predicates). Start typing in a predicate field to see suggestions.');
+                                knownObjects = Array.from(objectSet).map(value => ({
+                                    value: value,
+                                    display: value.length > 50 ? value.substring(0, 50) + '...' : value
+                                }));
+                                alert('Loaded ' + knownPredicates.length + ' predicates and ' + knownObjects.length + ' graph nodes from database. Start typing in input fields to see suggestions.');
                             } else {
-                                alert('Could not fetch predicates from API.');
+                                alert('Could not fetch autocompletes from API.');
                             }
                         } catch (e) {
-                            alert('Error fetching predicates: ' + e.message);
+                            alert('Error fetching autocompletes: ' + e.message);
                         }
                     }
                     
@@ -472,9 +626,12 @@ class FileUploadPageHandler : GetRequestHandler {
                         const rows = document.querySelectorAll('.triple-row');
                         rows.forEach(row => {
                             const predicate = row.querySelector('.predicate-input').value.trim();
-                            const object = row.querySelector('.object-input').value.trim();
+                            const objectInput = row.querySelector('.object-input');
+                            const object = objectInput.value.trim();
+                            const isUri = objectInput.dataset.isUri === 'true' || 
+                                          (object.startsWith('http://') || object.startsWith('https://'));
                             if (predicate && object) {
-                                triples.push({ predicate, object });
+                                triples.push({ predicate, object, isUri });
                             }
                         });
                         return triples;
@@ -514,8 +671,13 @@ class FileUploadPageHandler : GetRequestHandler {
                                 if (triples.length > 0) {
                                     statusText.textContent = 'Adding ' + triples.length + ' annotation(s)...';
                                     
-                                    const triplePromises = triples.map(triple => 
-                                        fetch('/add/quads', {
+                                    const triplePromises = triples.map(triple => {
+                                        // Format object as URI reference or string literal
+                                        const formattedObject = triple.isUri 
+                                            ? '<' + triple.object + '>'
+                                            : triple.object + '^^String';
+                                        
+                                        return fetch('/add/quads', {
                                             method: 'POST',
                                             headers: {
                                                 'Content-Type': 'application/json'
@@ -525,11 +687,11 @@ class FileUploadPageHandler : GetRequestHandler {
                                                     id: null,
                                                     s: '<' + fileUri + '>',
                                                     p: '<' + triple.predicate + '>',
-                                                    o: triple.object + '^^String'
+                                                    o: formattedObject
                                                 }]
                                             })
-                                        })
-                                    );
+                                        });
+                                    });
                                     
                                     try {
                                         await Promise.all(triplePromises);

@@ -6,12 +6,7 @@ import io.javalin.openapi.*
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.graph.LocalQuadValue
-import org.megras.data.graph.Quad
-import org.megras.data.graph.QuadValue
-import org.megras.data.graph.StringValue
-import org.megras.data.graph.URIValue
-import org.megras.data.graph.VectorValue
+import org.megras.data.graph.*
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.BasicMutableQuadSet
@@ -582,6 +577,517 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             buf.append("${it.subject} ${it.predicate} ${it.`object`}\n")
         }
         buf.append("</textarea>")*/
+
+        // Graph visualization - loaded on demand when collapsible is opened
+        val currentObjectUri = objectId.value.replace("\\", "\\\\").replace("\"", "\\\"")
+        buf.append("""
+            <style>
+                #graph-wrapper {
+                    position: relative;
+                }
+                #graph-wrapper.fullscreen {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    z-index: 9999;
+                    background: white;
+                    padding: 10px;
+                    box-sizing: border-box;
+                }
+                #graph-wrapper.fullscreen #graph-container {
+                    height: calc(100vh - 60px) !important;
+                }
+                #graph-fullscreen-btn {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    z-index: 10;
+                    padding: 8px 12px;
+                    background: #4363d8;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                #graph-fullscreen-btn:hover {
+                    background: #3251b8;
+                }
+                #graph-wrapper.fullscreen #graph-fullscreen-btn {
+                    top: 15px;
+                    right: 20px;
+                }
+                #graph-toggle-literals-btn {
+                    position: absolute;
+                    top: 10px;
+                    right: 130px;
+                    z-index: 10;
+                    padding: 8px 12px;
+                    background: #aaffc3;
+                    color: #333;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                #graph-toggle-literals-btn:hover {
+                    background: #88dd9f;
+                }
+                #graph-toggle-literals-btn.hidden {
+                    background: #ccc;
+                }
+                #graph-wrapper.fullscreen #graph-toggle-literals-btn {
+                    top: 15px;
+                    right: 160px;
+                }
+            </style>
+            <br><details id="graph-details">
+                <summary style="cursor: pointer; font-size: 1.5em; font-weight: bold; margin-bottom: 10px;">Graph Visualization</summary>
+                <p style="font-size: 0.9em; color: #666;">Click a node to expand its neighborhood. Double-click a local node to navigate to it.</p>
+                <div id="graph-wrapper">
+                    <button id="graph-toggle-literals-btn" class="hidden" onclick="toggleLiteralNodes()">Show Literals</button>
+                    <button id="graph-fullscreen-btn" onclick="toggleGraphFullscreen()">⛶ Fullscreen</button>
+                    <div id="graph-container" style="width: 100%; height: 500px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;"></div>
+                </div>
+            </details>
+            <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+            <script>
+                (function(){
+                    var graphInitialized = false;
+                    var currentObjectUri = "$currentObjectUri";
+                    var localPrefix = '${LocalQuadValue.defaultPrefix}';
+                    var nodes, edges, network;
+                    var expandedNodes = new Set();
+                    var nextNodeId = 0;
+                    var nextEdgeId = 0;
+                    var literalsVisible = false;
+                    var hiddenLiteralNodes = []; // Store hidden literal node data
+                    var hiddenLiteralEdges = []; // Store hidden edges connected to literals
+                    
+                    // Toggle literal nodes visibility
+                    window.toggleLiteralNodes = function() {
+                        var btn = document.getElementById('graph-toggle-literals-btn');
+                        literalsVisible = !literalsVisible;
+                        
+                        if (literalsVisible) {
+                            // Show literals - restore hidden nodes and edges
+                            btn.textContent = 'Hide Literals';
+                            btn.classList.remove('hidden');
+                            
+                            // Restore nodes
+                            hiddenLiteralNodes.forEach(function(nodeData) {
+                                nodes.add(nodeData);
+                            });
+                            // Restore edges
+                            hiddenLiteralEdges.forEach(function(edgeData) {
+                                edges.add(edgeData);
+                            });
+                            hiddenLiteralNodes = [];
+                            hiddenLiteralEdges = [];
+                        } else {
+                            // Hide literals - remove non-URI nodes and their edges
+                            btn.textContent = 'Show Literals';
+                            btn.classList.add('hidden');
+                            
+                            var allNodes = nodes.get();
+                            var literalNodeIds = [];
+                            
+                            // Find all literal (non-URI) nodes
+                            allNodes.forEach(function(node) {
+                                if (!node.queryUri || !node.queryUri.startsWith('http')) {
+                                    literalNodeIds.push(node.id);
+                                    hiddenLiteralNodes.push(node);
+                                }
+                            });
+                            
+                            // Find and hide edges connected to literal nodes
+                            var allEdges = edges.get();
+                            allEdges.forEach(function(edge) {
+                                if (literalNodeIds.indexOf(edge.from) !== -1 || literalNodeIds.indexOf(edge.to) !== -1) {
+                                    hiddenLiteralEdges.push(edge);
+                                }
+                            });
+                            
+                            // Remove edges first, then nodes
+                            hiddenLiteralEdges.forEach(function(edge) {
+                                edges.remove(edge.id);
+                            });
+                            literalNodeIds.forEach(function(nodeId) {
+                                nodes.remove(nodeId);
+                            });
+                        }
+                    };
+                    
+                    // Fullscreen toggle function
+                    window.toggleGraphFullscreen = function() {
+                        var wrapper = document.getElementById('graph-wrapper');
+                        var btn = document.getElementById('graph-fullscreen-btn');
+                        var isFullscreen = wrapper.classList.toggle('fullscreen');
+                        btn.textContent = isFullscreen ? '✕ Exit Fullscreen' : '⛶ Fullscreen';
+                        // Resize network to fit new container size
+                        if (network) {
+                            setTimeout(function() {
+                                network.fit();
+                            }, 100);
+                        }
+                    };
+                    
+                    // Allow ESC key to exit fullscreen
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            var wrapper = document.getElementById('graph-wrapper');
+                            if (wrapper && wrapper.classList.contains('fullscreen')) {
+                                toggleGraphFullscreen();
+                            }
+                        }
+                    });
+                    
+                    document.getElementById('graph-details').addEventListener('toggle', function(e) {
+                        if (this.open && !graphInitialized) {
+                            graphInitialized = true;
+                            initGraph();
+                        }
+                    });
+                    
+                    function initGraph() {
+                        nodes = new vis.DataSet();
+                        edges = new vis.DataSet();
+                        var container = document.getElementById('graph-container');
+                        var data = { nodes: nodes, edges: edges };
+                        
+                        var options = {
+                            nodes: {
+                                shape: 'dot',
+                                size: 16,
+                                font: { size: 12, face: 'Arial' },
+                                borderWidth: 2,
+                                shadow: true
+                            },
+                            edges: {
+                                width: 1,
+                                font: { size: 10, align: 'middle' },
+                                arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                                smooth: { 
+                                    enabled: true,
+                                    type: 'dynamic',
+                                    roundness: 0.5
+                                }
+                            },
+                            physics: {
+                                enabled: true,
+                                solver: 'forceAtlas2Based',
+                                forceAtlas2Based: {
+                                    gravitationalConstant: -50,
+                                    centralGravity: 0.005,
+                                    springLength: 200,
+                                    springConstant: 0.01,
+                                    damping: 0.95,
+                                    avoidOverlap: 1
+                                },
+                                stabilization: { iterations: 200, fit: true },
+                                minVelocity: 1.5,
+                                maxVelocity: 15,
+                                timestep: 0.3
+                            },
+                            interaction: {
+                                hover: true,
+                                tooltipDelay: 200,
+                                navigationButtons: true,
+                                keyboard: true
+                            }
+                        };
+                        network = new vis.Network(container, data, options);
+                        
+                        // Handle click with delay to distinguish single vs double click
+                        var clickTimer = null;
+                        var clickDelay = 150; // ms to wait for potential double-click
+                        
+                        network.on('click', function(params) {
+                            if (params.nodes.length > 0) {
+                                var nodeId = params.nodes[0];
+                                // Clear any pending single-click action
+                                if (clickTimer) clearTimeout(clickTimer);
+                                // Set a delayed single-click action
+                                clickTimer = setTimeout(function() {
+                                    clickTimer = null;
+                                    expandNode(nodeId);
+                                }, clickDelay);
+                            }
+                        });
+                        
+                        // Double click: navigate to node's about page (only for local URIs)
+                        network.on('doubleClick', function(params) {
+                            // Cancel the pending single-click expand
+                            if (clickTimer) {
+                                clearTimeout(clickTimer);
+                                clickTimer = null;
+                            }
+                            if (params.nodes.length > 0) {
+                                var nodeId = params.nodes[0];
+                                var node = nodes.get(nodeId);
+                                if (node && node.isLocal && node.url) {
+                                    window.location.href = node.url;
+                                }
+                            }
+                        });
+                        
+                        // Change cursor on hover
+                        network.on('hoverNode', function() {
+                            container.style.cursor = 'pointer';
+                        });
+                        network.on('blurNode', function() {
+                            container.style.cursor = 'default';
+                        });
+                        
+                        // Load initial data for current object
+                        loadNeighborhood(currentObjectUri, true);
+                    }
+                    
+                    function findOrCreateNode(uri, isCurrent, x, y) {
+                        var existingNodes = nodes.get();
+                        for (var i = 0; i < existingNodes.length; i++) {
+                            if (existingNodes[i].queryUri === uri) {
+                                return existingNodes[i].id;
+                            }
+                        }
+                        // Also check hidden literal nodes
+                        for (var i = 0; i < hiddenLiteralNodes.length; i++) {
+                            if (hiddenLiteralNodes[i].queryUri === uri) {
+                                return hiddenLiteralNodes[i].id;
+                            }
+                        }
+                        // Create new node
+                        var shortLabel = uri.replace(localPrefix, '/').split('/').pop().substring(0, 30);
+                        var fullLabel = uri.replace(localPrefix, '/');
+                        var nodeIsLocal = uri.startsWith(localPrefix);
+                        var isUri = uri.startsWith('http');
+                        var color = isCurrent ? '#e6194b' : (nodeIsLocal ? '#4363d8' : (isUri ? '#9a6324' : '#aaffc3'));
+                        var newNode = {
+                            id: nextNodeId++,
+                            label: shortLabel || uri.substring(0, 30),
+                            title: fullLabel,
+                            color: color,
+                            url: nodeIsLocal ? uri + '/about' : '',
+                            isLocal: nodeIsLocal,
+                            queryUri: uri,
+                            fixed: { x: false, y: false }
+                        };
+                        // Set initial position if provided
+                        if (typeof x === 'number' && typeof y === 'number') {
+                            newNode.x = x;
+                            newNode.y = y;
+                        }
+                        // If literals are hidden and this is a literal, add to hidden list instead
+                        if (!literalsVisible && !isUri) {
+                            hiddenLiteralNodes.push(newNode);
+                        } else {
+                            nodes.add(newNode);
+                        }
+                        return newNode.id;
+                    }
+                    
+                    // Check if a position overlaps with any existing node
+                    function isPositionFree(x, y, minDist, positions) {
+                        for (var id in positions) {
+                            var pos = positions[id];
+                            var dx = pos.x - x;
+                            var dy = pos.y - y;
+                            if (Math.sqrt(dx*dx + dy*dy) < minDist) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                    
+                    // Find a free position in a circle, avoiding overlaps
+                    function findFreePosition(originX, originY, baseRadius, angleOffset, existingPositions, minNodeDist) {
+                        var radius = baseRadius;
+                        var angle = angleOffset;
+                        var attempts = 0;
+                        var maxAttempts = 36; // Try different angles
+                        
+                        while (attempts < maxAttempts) {
+                            var x = originX + radius * Math.cos(angle);
+                            var y = originY + radius * Math.sin(angle);
+                            
+                            if (isPositionFree(x, y, minNodeDist, existingPositions)) {
+                                return { x: x, y: y };
+                            }
+                            
+                            // Try next angle
+                            angle += Math.PI / 6; // 30 degree increments
+                            attempts++;
+                            
+                            // If we've gone full circle, increase radius
+                            if (attempts % 12 === 0) {
+                                radius += minNodeDist;
+                            }
+                        }
+                        
+                        // Fallback: just use increased radius
+                        return {
+                            x: originX + (baseRadius + minNodeDist * 2) * Math.cos(angleOffset),
+                            y: originY + (baseRadius + minNodeDist * 2) * Math.sin(angleOffset)
+                        };
+                    }
+                    
+                    function loadNeighborhood(uri, isCurrent) {
+                        if (expandedNodes.has(uri)) return;
+                        expandedNodes.add(uri);
+                        
+                        // Get all current node positions
+                        var allNodeIds = nodes.getIds();
+                        var allPositions = network.getPositions(allNodeIds);
+                        
+                        // Get the position of the origin node for circular placement
+                        var originPos = { x: 0, y: 0 };
+                        var originNodeId = null;
+                        var existingNodes = nodes.get();
+                        for (var i = 0; i < existingNodes.length; i++) {
+                            if (existingNodes[i].queryUri === uri) {
+                                originNodeId = existingNodes[i].id;
+                                if (allPositions[originNodeId]) {
+                                    originPos = allPositions[originNodeId];
+                                }
+                                break;
+                            }
+                        }
+                        
+                        var encodedUri = encodeURIComponent(uri);
+                        fetch('/query/neighborhood?uri=' + encodedUri)
+                            .then(function(response) {
+                                if (!response.ok) throw new Error('Failed to fetch');
+                                return response.json();
+                            })
+                            .then(function(data) {
+                                if (!data.results || data.results.length === 0) {
+                                    // Still create the node even if no results
+                                    findOrCreateNode(uri, isCurrent, originPos.x, originPos.y);
+                                    return;
+                                }
+                                
+                                // Refresh positions after potential changes
+                                var currentPositions = network.getPositions(nodes.getIds());
+                                
+                                // Collect new nodes to position them in a circle
+                                var newNodeUris = [];
+                                data.results.forEach(function(quad) {
+                                    var subjUri = quad.s.replace(/^<|>$/g, '');
+                                    var objUri = quad.o.replace(/^<|>$/g, '');
+                                    
+                                    // Check if these are new nodes
+                                    var subjExists = existingNodes.some(function(n) { return n.queryUri === subjUri; });
+                                    var objExists = existingNodes.some(function(n) { return n.queryUri === objUri; });
+                                    
+                                    if (!subjExists && newNodeUris.indexOf(subjUri) === -1) {
+                                        newNodeUris.push(subjUri);
+                                    }
+                                    if (!objExists && newNodeUris.indexOf(objUri) === -1) {
+                                        newNodeUris.push(objUri);
+                                    }
+                                });
+                                
+                                // Calculate positions for new nodes, avoiding overlaps
+                                var baseRadius = 120;
+                                var minNodeDist = 60; // Minimum distance between nodes
+                                var nodePositions = {};
+                                var placedPositions = Object.assign({}, currentPositions); // Copy existing positions
+                                
+                                newNodeUris.forEach(function(nodeUri, index) {
+                                    var angleOffset = (index * 2 * Math.PI / Math.max(newNodeUris.length, 1)) - Math.PI / 2;
+                                    var pos = findFreePosition(originPos.x, originPos.y, baseRadius, angleOffset, placedPositions, minNodeDist);
+                                    nodePositions[nodeUri] = pos;
+                                    // Add to placed positions to avoid future overlaps
+                                    placedPositions['new_' + index] = pos;
+                                });
+                                
+                                data.results.forEach(function(quad) {
+                                    var subjUri = quad.s.replace(/^<|>$/g, '');
+                                    var predUri = quad.p.replace(/^<|>$/g, '');
+                                    var objUri = quad.o.replace(/^<|>$/g, '');
+                                    
+                                    var subjPos = nodePositions[subjUri] || { x: undefined, y: undefined };
+                                    var objPos = nodePositions[objUri] || { x: undefined, y: undefined };
+                                    
+                                    var fromId = findOrCreateNode(subjUri, subjUri === currentObjectUri, subjPos.x, subjPos.y);
+                                    var toId = findOrCreateNode(objUri, objUri === currentObjectUri, objPos.x, objPos.y);
+                                    
+                                    // Check if edge already exists (in visible or hidden edges)
+                                    var currentEdges = edges.get();
+                                    var edgeExists = currentEdges.some(function(e) {
+                                        return e.from === fromId && e.to === toId && e.title === predUri;
+                                    }) || hiddenLiteralEdges.some(function(e) {
+                                        return e.from === fromId && e.to === toId && e.title === predUri;
+                                    });
+                                    
+                                    if (!edgeExists) {
+                                        var predLabel = predUri.split('#').pop().split('/').pop().substring(0, 20);
+                                        var newEdge = {
+                                            id: nextEdgeId++,
+                                            from: fromId,
+                                            to: toId,
+                                            label: predLabel,
+                                            title: predUri,
+                                            arrows: 'to'
+                                        };
+                                        
+                                        // Check if either endpoint is a hidden literal node
+                                        var fromIsHiddenLiteral = hiddenLiteralNodes.some(function(n) { return n.id === fromId; });
+                                        var toIsHiddenLiteral = hiddenLiteralNodes.some(function(n) { return n.id === toId; });
+                                        
+                                        if (!literalsVisible && (fromIsHiddenLiteral || toIsHiddenLiteral)) {
+                                            hiddenLiteralEdges.push(newEdge);
+                                        } else {
+                                            edges.add(newEdge);
+                                        }
+                                    }
+                                });
+                                
+                                // Mark expanded node with thicker border
+                                if (originNodeId !== null) {
+                                    nodes.update({ id: originNodeId, borderWidth: 4 });
+                                } else {
+                                    // Find and update the node
+                                    var updatedNodes = nodes.get();
+                                    for (var i = 0; i < updatedNodes.length; i++) {
+                                        if (updatedNodes[i].queryUri === uri) {
+                                            nodes.update({ id: updatedNodes[i].id, borderWidth: 4 });
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // Save current view position before stabilizing
+                                var viewPosition = network.getViewPosition();
+                                var scale = network.getScale();
+                                
+                                // Stabilize briefly to settle new nodes without much drift
+                                network.once('stabilizationIterationsDone', function() {
+                                    // Restore view position after stabilization
+                                    network.moveTo({
+                                        position: viewPosition,
+                                        scale: scale,
+                                        animation: false
+                                    });
+                                });
+                                network.stabilize(30);
+                            })
+                            .catch(function(err) {
+                                console.error('Error loading neighborhood:', err);
+                                expandedNodes.delete(uri);
+                            });
+                    }
+                    
+                    function expandNode(nodeId) {
+                        var node = nodes.get(nodeId);
+                        if (!node || !node.queryUri || node.queryUri === '') return;
+                        loadNeighborhood(node.queryUri, false);
+                    }
+                })();
+            </script>
+        """.trimIndent())
 
         buf.append(
             """

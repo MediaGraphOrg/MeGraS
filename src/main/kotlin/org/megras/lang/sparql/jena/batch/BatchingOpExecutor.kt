@@ -42,8 +42,11 @@ class BatchingOpExecutor(
     companion object {
         private val logger = LoggerFactory.getLogger(BatchingOpExecutor::class.java)
 
-        // Batch size limit to avoid overly large queries
-        const val MAX_BATCH_SIZE = 10000
+        // Batch size limit for chunked queries.
+        // Trade-off: Larger batches = fewer round-trips but larger VALUES clauses
+        // 2000 is a good balance: PostgreSQL handles VALUES(2000 rows) efficiently,
+        // and we reduce round-trips from 9 to 5 for 8322 subjects
+        const val MAX_BATCH_SIZE = 2000
 
         // Enable timing logs for debugging
         private const val TIMING_ENABLED = false

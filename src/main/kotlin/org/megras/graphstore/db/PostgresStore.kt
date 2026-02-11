@@ -22,6 +22,12 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val TIMING_ENABLED = false
 
+    companion object {
+        // Threshold for switching from OR-chain to VALUES clause approach
+        // OR chains with more than this many conditions become very slow in PostgreSQL
+        private const val OR_CHAIN_THRESHOLD = 100
+    }
+
     object QuadsTable : Table("quads") {
         val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
         val sType: Column<Int> = integer("s_type").index()
@@ -728,14 +734,52 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
         if (TIMING_ENABLED) logger.info("Time spent in Filter ID Resolution (getOrAddQuadValueIds): ${System.currentTimeMillis() - start2}ms")
 
+        // Check if any filter set is large enough to warrant VALUES clause approach
+        val useLargeSubjectFilter = subjectFilterIds != null && subjectFilterIds.size > OR_CHAIN_THRESHOLD
+        val useLargePredicateFilter = predicateFilterIds != null && predicateFilterIds.size > OR_CHAIN_THRESHOLD
+        val useLargeObjectFilter = objectFilterIds != null && objectFilterIds.size > OR_CHAIN_THRESHOLD
 
         val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
 
-        // 3. Execute a Single Database Query (The Core Optimization)
+        // 3. Execute Database Query - use optimized approach for large filter sets
         val start3 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
-        transaction {
-            //addLogger(StdOutSqlLogger)
 
+        if (useLargeSubjectFilter || useLargePredicateFilter || useLargeObjectFilter) {
+            // Use VALUES clause approach for large filter sets
+            if (TIMING_ENABLED) {
+                logger.info("Using VALUES clause approach - subjects: ${subjectFilterIds?.size ?: "null"}, predicates: ${predicateFilterIds?.size ?: "null"}, objects: ${objectFilterIds?.size ?: "null"}")
+            }
+            executeFilterWithValuesClause(
+                subjectFilterIds, predicateFilterIds, objectFilterIds,
+                useLargeSubjectFilter, useLargePredicateFilter, useLargeObjectFilter,
+                finalSeptuples
+            )
+        } else {
+            // Use traditional OR-chain approach for small filter sets
+            executeFilterWithOrChain(subjectFilterIds, predicateFilterIds, objectFilterIds, finalSeptuples)
+        }
+
+        if (TIMING_ENABLED) logger.info("Time spent in DB Transaction (Main Query Execution): ${System.currentTimeMillis() - start3}ms")
+
+        // 4. Return the resulting QuadSet
+        val start4 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+        val quadSet = getIds(finalSeptuples) // Converting IDs back to QuadValues
+        if (TIMING_ENABLED) logger.info("Time spent in Final ID Conversion (getIds): ${System.currentTimeMillis() - start4}ms")
+
+        if (TIMING_ENABLED) logger.info("Total time spent in PostgresStore.filter: ${System.currentTimeMillis() - startTotal}ms")
+        return quadSet
+    }
+
+    /**
+     * Execute filter using traditional OR-chain approach (efficient for small filter sets)
+     */
+    private fun executeFilterWithOrChain(
+        subjectFilterIds: List<Pair<Int, Long>>?,
+        predicateFilterIds: List<Pair<Int, Long>>?,
+        objectFilterIds: List<Pair<Int, Long>>?,
+        finalSeptuples: MutableSet<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>
+    ) {
+        transaction {
             var condition: Op<Boolean> = Op.TRUE
 
             if (subjectFilterIds != null) {
@@ -757,7 +801,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                 condition = condition and oCondition
             }
 
-            // Final Query Execution
             val result = QuadsTable.slice(
                 QuadsTable.id, QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o
             ).select(condition)
@@ -771,15 +814,98 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
 
             finalSeptuples.addAll(result)
         }
-        if (TIMING_ENABLED) logger.info("Time spent in DB Transaction (Main Query Execution): ${System.currentTimeMillis() - start3}ms")
+    }
 
-        // 4. Return the resulting QuadSet
-        val start4 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
-        val quadSet = getIds(finalSeptuples) // Converting IDs back to QuadValues
-        if (TIMING_ENABLED) logger.info("Time spent in Final ID Conversion (getIds): ${System.currentTimeMillis() - start4}ms")
+    /**
+     * Execute filter using VALUES clause approach (efficient for large filter sets)
+     * Uses raw SQL with VALUES clause which PostgreSQL optimizes much better than large OR chains
+     */
+    private fun executeFilterWithValuesClause(
+        subjectFilterIds: List<Pair<Int, Long>>?,
+        predicateFilterIds: List<Pair<Int, Long>>?,
+        objectFilterIds: List<Pair<Int, Long>>?,
+        useLargeSubjectFilter: Boolean,
+        useLargePredicateFilter: Boolean,
+        useLargeObjectFilter: Boolean,
+        finalSeptuples: MutableSet<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>
+    ) {
+        transaction {
+            // Build the SQL query with VALUES clauses for large filters
+            val sqlBuilder = StringBuilder()
+            sqlBuilder.append("SELECT q.id, q.s_type, q.s, q.p_type, q.p, q.o_type, q.o FROM quads q")
 
-        if (TIMING_ENABLED) logger.info("Total time spent in PostgresStore.filter: ${System.currentTimeMillis() - startTotal}ms")
-        return quadSet
+            val joins = mutableListOf<String>()
+            val conditions = mutableListOf<String>()
+
+            // Handle subject filter
+            if (subjectFilterIds != null) {
+                if (useLargeSubjectFilter) {
+                    val valuesClause = subjectFilterIds.joinToString(",") { "(${it.first},${it.second})" }
+                    joins.add(" INNER JOIN (VALUES $valuesClause) AS sf(s_type, s_id) ON q.s_type = sf.s_type AND q.s = sf.s_id")
+                } else {
+                    val orConditions = subjectFilterIds.joinToString(" OR ") { "(q.s_type = ${it.first} AND q.s = ${it.second})" }
+                    conditions.add("($orConditions)")
+                }
+            }
+
+            // Handle predicate filter
+            if (predicateFilterIds != null) {
+                if (useLargePredicateFilter) {
+                    val valuesClause = predicateFilterIds.joinToString(",") { "(${it.first},${it.second})" }
+                    joins.add(" INNER JOIN (VALUES $valuesClause) AS pf(p_type, p_id) ON q.p_type = pf.p_type AND q.p = pf.p_id")
+                } else {
+                    val orConditions = predicateFilterIds.joinToString(" OR ") { "(q.p_type = ${it.first} AND q.p = ${it.second})" }
+                    conditions.add("($orConditions)")
+                }
+            }
+
+            // Handle object filter
+            if (objectFilterIds != null) {
+                if (useLargeObjectFilter) {
+                    val valuesClause = objectFilterIds.joinToString(",") { "(${it.first},${it.second})" }
+                    joins.add(" INNER JOIN (VALUES $valuesClause) AS of(o_type, o_id) ON q.o_type = of.o_type AND q.o = of.o_id")
+                } else {
+                    val orConditions = objectFilterIds.joinToString(" OR ") { "(q.o_type = ${it.first} AND q.o = ${it.second})" }
+                    conditions.add("($orConditions)")
+                }
+            }
+
+            // Build final query
+            for (join in joins) {
+                sqlBuilder.append(join)
+            }
+
+            if (conditions.isNotEmpty()) {
+                sqlBuilder.append(" WHERE ")
+                sqlBuilder.append(conditions.joinToString(" AND "))
+            }
+
+            val sql = sqlBuilder.toString()
+            if (TIMING_ENABLED) {
+                logger.info("Executing VALUES clause query with ${joins.size} joins and ${conditions.size} WHERE conditions")
+            }
+
+            // Execute raw SQL
+            exec(sql) { rs ->
+                while (rs.next()) {
+                    val id = rs.getLong("id")
+                    val sType = rs.getInt("s_type")
+                    val s = rs.getLong("s")
+                    val pType = rs.getInt("p_type")
+                    val p = rs.getLong("p")
+                    val oType = rs.getInt("o_type")
+                    val o = rs.getLong("o")
+
+                    finalSeptuples.add(
+                        id to Triple(
+                            (sType to s),
+                            (pType to p),
+                            (oType to o)
+                        )
+                    )
+                }
+            }
+        }
     }
 
     override fun toMutable(): MutableQuadSet = this

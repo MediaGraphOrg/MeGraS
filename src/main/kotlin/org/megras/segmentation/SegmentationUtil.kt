@@ -285,9 +285,9 @@ object SegmentationUtil {
         objectStore: FileSystemObjectStore,
         quads: MutableQuadSet
     ): LocalQuadValue {
-        fun getStoredObjectInCache(objectId: String): ObjectStoreResult? {
+        fun getStoredObjectInCache(id: String): ObjectStoreResult? {
             val canonicalId = quads.filter(
-                setOf(ObjectId(objectId)),
+                setOf(ObjectId(id)),
                 setOf(MeGraS.CANONICAL_ID.uri),
                 null
             ).firstOrNull()?.`object` as? StringValue ?: return null
@@ -295,8 +295,9 @@ object SegmentationUtil {
             return objectStore.get(osId)
         }
 
-        val storedObject = getStoredObjectInCache(objectId)
-            ?: throw IllegalArgumentException("Unknown objectId")
+        // Use documentId to get the stored object, which could be a cached segment
+        val storedObject = getStoredObjectInCache(documentId)
+            ?: throw IllegalArgumentException("Unknown documentId")
         val mediaType = MediaType.mimeTypeMap[storedObject.descriptor.mimeType]
             ?: throw IllegalArgumentException("Unknown media type")
 

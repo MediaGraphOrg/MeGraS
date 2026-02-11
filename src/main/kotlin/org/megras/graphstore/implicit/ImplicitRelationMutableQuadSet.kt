@@ -132,7 +132,23 @@ class ImplicitRelationMutableQuadSet(
         predicate: QuadValue,
         objectFilterText: String
     ): QuadSet {
-        TODO("Not yet implemented")
+        // Check if this is an implicit relation predicate
+        val handler = findHandler(predicate)
+
+        if (handler != null) {
+            // For implicit relations, we need to compute all quads and filter in-memory
+            // since implicit relations are computed on-the-fly
+            val allQuads = handler.findAll()
+            val filtered = allQuads.filter { quad ->
+                val objValue = quad.`object`
+                objValue is org.megras.data.graph.StringValue &&
+                    objValue.value.contains(objectFilterText, ignoreCase = true)
+            }
+            return BasicQuadSet(filtered.toSet())
+        }
+
+        // Delegate to base for non-implicit predicates
+        return this.base.textFilter(predicate, objectFilterText)
     }
 
     override val size: Int

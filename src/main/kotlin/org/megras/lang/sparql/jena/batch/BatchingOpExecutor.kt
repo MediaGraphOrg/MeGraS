@@ -44,8 +44,7 @@ class BatchingOpExecutor(
 
         // Batch size limit for chunked queries.
         // Trade-off: Larger batches = fewer round-trips but larger VALUES clauses
-        // 2000 is a good balance: PostgreSQL handles VALUES(2000 rows) efficiently,
-        // and we reduce round-trips from 9 to 5 for 8322 subjects
+        // 2000 is a good balance: PostgreSQL handles VALUES(2000 rows) efficiently
         const val MAX_BATCH_SIZE = 2000
 
         // Enable timing logs for debugging
@@ -168,16 +167,24 @@ class BatchingOpExecutor(
     }
 
     /**
-     * Reorder triple patterns for optimal execution.
+     * Reorder triple patterns for optimal execution using a greedy algorithm.
      * Patterns with more constants (especially in object position) are more selective
      * and should be executed first to reduce intermediate result sizes.
+     *
+     * This uses greedy selection: at each step, pick the most selective pattern
+     * given the variables that will be bound by previously selected patterns.
      */
     private fun reorderPatterns(triples: List<Triple>, currentBinding: Binding?): List<Triple> {
         if (triples.size <= 1) return triples
 
-        // Calculate selectivity score for each pattern
-        // Higher score = more selective = should be executed first
-        fun selectivityScore(triple: Triple): Int {
+        // Track which variables are bound (initially from currentBinding)
+        val boundVars = mutableSetOf<Var>()
+        if (currentBinding != null) {
+            currentBinding.vars().forEachRemaining { boundVars.add(it) }
+        }
+
+        // Calculate selectivity score for each pattern given current bound variables
+        fun selectivityScore(triple: Triple, bound: Set<Var>): Int {
             var score = 0
 
             // Constants are very selective
@@ -185,17 +192,38 @@ class BatchingOpExecutor(
             if (!triple.predicate.isVariable) score += 5  // predicates are usually constrained anyway
             if (!triple.`object`.isVariable) score += 20  // object constants are very selective (e.g., country="Turkey")
 
-            // Already bound variables are also selective
-            if (currentBinding != null) {
-                if (triple.subject.isVariable && currentBinding.contains(Var.alloc(triple.subject))) score += 8
-                if (triple.predicate.isVariable && currentBinding.contains(Var.alloc(triple.predicate))) score += 3
-                if (triple.`object`.isVariable && currentBinding.contains(Var.alloc(triple.`object`))) score += 8
-            }
+            // Bound variables are also selective - they act as filters
+            if (triple.subject.isVariable && Var.alloc(triple.subject) in bound) score += 8
+            if (triple.predicate.isVariable && Var.alloc(triple.predicate) in bound) score += 3
+            if (triple.`object`.isVariable && Var.alloc(triple.`object`) in bound) score += 15  // Bound object is very selective
 
             return score
         }
 
-        return triples.sortedByDescending { selectivityScore(it) }
+        // Extract variables that a pattern will bind (for tracking propagation)
+        fun patternBindsVars(triple: Triple): List<Var> {
+            return listOfNotNull(
+                if (triple.subject.isVariable) Var.alloc(triple.subject) else null,
+                if (triple.predicate.isVariable) Var.alloc(triple.predicate) else null,
+                if (triple.`object`.isVariable) Var.alloc(triple.`object`) else null
+            )
+        }
+
+        // Greedy selection: at each step, pick the most selective pattern
+        val remaining = triples.toMutableList()
+        val ordered = mutableListOf<Triple>()
+
+        while (remaining.isNotEmpty()) {
+            // Find the pattern with highest selectivity given current bound vars
+            val best = remaining.maxByOrNull { selectivityScore(it, boundVars) }!!
+            remaining.remove(best)
+            ordered.add(best)
+
+            // Add vars bound by this pattern to the bound set for next iteration
+            boundVars.addAll(patternBindsVars(best))
+        }
+
+        return ordered
     }
 
     /**
@@ -1310,6 +1338,7 @@ class BatchingOpExecutor(
 
     /**
      * Reorder patterns, giving priority to patterns with text filters (they are very selective).
+     * Uses greedy selection to account for variable binding propagation.
      */
     private fun reorderPatternsWithTextFilters(
         triples: List<Triple>,
@@ -1318,7 +1347,13 @@ class BatchingOpExecutor(
     ): List<Triple> {
         if (triples.size <= 1) return triples
 
-        fun selectivityScore(triple: Triple): Int {
+        // Track which variables are bound (initially from currentBinding)
+        val boundVars = mutableSetOf<Var>()
+        if (currentBinding != null) {
+            currentBinding.vars().forEachRemaining { boundVars.add(it) }
+        }
+
+        fun selectivityScore(triple: Triple, bound: Set<Var>): Int {
             var score = 0
 
             // Check if this pattern has a text filter - very selective!
@@ -1332,16 +1367,35 @@ class BatchingOpExecutor(
             if (!triple.predicate.isVariable) score += 5
             if (!triple.`object`.isVariable) score += 20
 
-            if (currentBinding != null) {
-                if (triple.subject.isVariable && currentBinding.contains(Var.alloc(triple.subject))) score += 8
-                if (triple.predicate.isVariable && currentBinding.contains(Var.alloc(triple.predicate))) score += 3
-                if (triple.`object`.isVariable && currentBinding.contains(Var.alloc(triple.`object`))) score += 8
-            }
+            // Bound variables are also selective
+            if (triple.subject.isVariable && Var.alloc(triple.subject) in bound) score += 8
+            if (triple.predicate.isVariable && Var.alloc(triple.predicate) in bound) score += 3
+            if (triple.`object`.isVariable && Var.alloc(triple.`object`) in bound) score += 15
 
             return score
         }
 
-        return triples.sortedByDescending { selectivityScore(it) }
+        // Extract variables that a pattern will bind
+        fun patternBindsVars(triple: Triple): List<Var> {
+            return listOfNotNull(
+                if (triple.subject.isVariable) Var.alloc(triple.subject) else null,
+                if (triple.predicate.isVariable) Var.alloc(triple.predicate) else null,
+                if (triple.`object`.isVariable) Var.alloc(triple.`object`) else null
+            )
+        }
+
+        // Greedy selection
+        val remaining = triples.toMutableList()
+        val ordered = mutableListOf<Triple>()
+
+        while (remaining.isNotEmpty()) {
+            val best = remaining.maxByOrNull { selectivityScore(it, boundVars) }!!
+            remaining.remove(best)
+            ordered.add(best)
+            boundVars.addAll(patternBindsVars(best))
+        }
+
+        return ordered
     }
 
     /**

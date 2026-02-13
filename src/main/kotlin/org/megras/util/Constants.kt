@@ -5,7 +5,6 @@ object Constants {
 
     const val SPARQL_SEGMENT = "sparql"
     const val EXIF_SEGMENT = "exif"
-    const val NLP_SEGMENT = "nlp"
 
     const val MM_SEGMENT = "mm"
     const val IMPLICIT_SEGMENT = "implicit"
@@ -23,5 +22,4 @@ object Constants {
     const val SPATIAL_SEGMENT_PREFIX = "$BASE_URI/$IMPLICIT_SEGMENT/$SPATIAL_SEGMENT"
     const val DERIVED_PREFIX = "$BASE_URI/$DERIVED_SEGMENT"
     const val EXIF_PREFIX = "$BASE_URI/$EXIF_SEGMENT"
-    const val NLP_PREFIX = "$BASE_URI/$NLP_SEGMENT"
 }

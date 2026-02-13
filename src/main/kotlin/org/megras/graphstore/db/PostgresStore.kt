@@ -10,6 +10,7 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
+import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 import java.io.Writer
 import com.zaxxer.hikari.HikariConfig
@@ -20,7 +21,7 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     AbstractDbStore() {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
-    private val TIMING_ENABLED = false
+    private val TIMING_ENABLED get() = TimingConfig.enabled
 
     companion object {
         // Threshold for switching from OR-chain to VALUES clause approach

@@ -23,6 +23,7 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.lang.sparql.SparqlUtil.toQuadValue
 import org.megras.lang.sparql.SparqlUtil.toTriple
+import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 
 /**
@@ -47,8 +48,8 @@ class BatchingOpExecutor(
         // 2000 is a good balance: PostgreSQL handles VALUES(2000 rows) efficiently
         const val MAX_BATCH_SIZE = 2000
 
-        // Enable timing logs for debugging
-        private const val TIMING_ENABLED = false
+        // Enable timing logs from log4j2.xml config
+        private val TIMING_ENABLED get() = TimingConfig.enabled
 
         // Constant indicating no limit
         const val NO_LIMIT = -1L

@@ -170,7 +170,10 @@ gradle-app.setting
 **/build/
 
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle,kotlin,intellij
-.idea
+
+# Ignore remaining .idea files but keep runConfigurations for shared run configs
+.idea/*
+!.idea/runConfigurations/
 /store/
 src/main/kotlin/org/megras/Playground.kt
 *.tsv
@@ -180,3 +183,7 @@ src/main/resources/sandbox.html
 **__pycache__
 config.json
 !python_grpc_server/config.json
+
+# Benchmark reports (all subdirectories)
+/benchmark_reports/
+

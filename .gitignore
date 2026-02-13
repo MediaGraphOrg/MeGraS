@@ -170,10 +170,7 @@ gradle-app.setting
 **/build/
 
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle,kotlin,intellij
-
-# Ignore remaining .idea files but keep runConfigurations for shared run configs
-.idea/*
-!.idea/runConfigurations/
+.idea/
 /store/
 src/main/kotlin/org/megras/Playground.kt
 *.tsv

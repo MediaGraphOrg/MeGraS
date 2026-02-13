@@ -17,22 +17,26 @@ import kotlin.math.sqrt
  * LSC SPARQL Benchmark Test
  *
  * Benchmarks SPARQL queries for the Lifelog Search Challenge (LSC) dataset.
- * Reads SPARQL queries from files in a dedicated folder, warms up the application,
- * runs each query multiple times, and calculates performance statistics.
+ * Reads SPARQL queries from files in a dedicated folder and measures performance.
+ *
+ * The benchmark distinguishes between:
+ * - **Cold Run**: First execution of each query (only reported if WARMUP_RUNS = 0, realistic for interactive search)
+ * - **Warmup Runs**: Initial executions to warm up JVM/caches (not included in statistics)
+ * - **Warm Runs**: Timed executions after warmup (shows optimized performance)
  *
  * Configuration:
  * - LSC_SPARQL_QUERIES_DIR: Directory containing .sparql files for LSC queries
  * - BASE_URL: The SPARQL endpoint URL
  * - WARMUP_RUNS: Number of warmup iterations (not counted in stats)
- * - BENCHMARK_RUNS: Number of benchmark iterations per query
+ * - WARM_RUNS: Number of timed warm iterations
  */
 class LscSparqlBenchmark {
 
     companion object {
         // Configuration - adjust these as needed
         private const val BASE_URL = "http://localhost:8080/query/sparql"
-        private const val WARMUP_RUNS = 3
-        private const val BENCHMARK_RUNS = 10
+        private const val WARMUP_RUNS = 3   // Number of warmup runs (not measured)
+        private const val WARM_RUNS = 10    // Number of timed runs after warmup
         private const val CONNECT_TIMEOUT_MS = 30000
         private const val READ_TIMEOUT_MS = 60000
 
@@ -63,6 +67,16 @@ class LscSparqlBenchmark {
         val allTimesMs: List<Long>
     )
 
+    /**
+     * Complete benchmark result for a query
+     */
+    data class QueryBenchmarkResult(
+        val queryName: String,
+        val queryContent: String,
+        val coldStartMs: Long?,         // First execution time (only if WARMUP_RUNS > 0)
+        val warmStats: BenchmarkStats?  // null if no warm runs configured
+    )
+
     @Test
     fun runLscSparqlBenchmark() {
         println("=".repeat(80))
@@ -89,8 +103,8 @@ class LscSparqlBenchmark {
         }
 
         println("Found ${queryFiles.size} query file(s) in: ${queriesDir.absolutePath}")
-        println("Warmup runs: $WARMUP_RUNS")
-        println("Benchmark runs: $BENCHMARK_RUNS")
+        println("Warmup runs: $WARMUP_RUNS (not measured, for JVM/cache warmup)")
+        println("Warm runs: $WARM_RUNS (measured)")
         println("Endpoint: $BASE_URL")
         println()
 
@@ -101,7 +115,7 @@ class LscSparqlBenchmark {
             return
         }
 
-        val allStats = mutableListOf<BenchmarkStats>()
+        val allResults = mutableListOf<QueryBenchmarkResult>()
 
         // Process each query file
         for (queryFile in queryFiles) {
@@ -114,46 +128,68 @@ class LscSparqlBenchmark {
             println("Content: ${queryContent.take(200)}${if (queryContent.length > 200) "..." else ""}")
             println()
 
-            // Warmup phase
-            println("Warming up ($WARMUP_RUNS runs)...")
-            repeat(WARMUP_RUNS) { i ->
-                val result = executeQuery(queryContent)
-                print("  Warmup ${i + 1}: ${result.responseTimeMs}ms")
-                if (result.success) {
-                    println(" (${result.resultCount} results)")
-                } else {
-                    println(" ERROR: ${result.errorMessage}")
+            // Warmup phase (not measured, but first run is reported as cold start)
+            var coldStartMs: Long? = null
+            if (WARMUP_RUNS > 0) {
+                println("Warmup ($WARMUP_RUNS runs, not measured)...")
+                repeat(WARMUP_RUNS) { i ->
+                    val result = executeQuery(queryContent)
+                    if (i == 0) {
+                        coldStartMs = result.responseTimeMs
+                        print("  Warmup ${i + 1} (cold start): ${result.responseTimeMs}ms")
+                    } else {
+                        print("  Warmup ${i + 1}: ${result.responseTimeMs}ms")
+                    }
+                    if (result.success) {
+                        println(" (${result.resultCount} results)")
+                    } else {
+                        println(" ERROR: ${result.errorMessage}")
+                    }
                 }
+                println()
             }
-            println()
 
-            // Benchmark phase
-            println("Benchmarking ($BENCHMARK_RUNS runs)...")
-            val results = mutableListOf<QueryResult>()
-            repeat(BENCHMARK_RUNS) { i ->
-                val result = executeQuery(queryContent)
-                results.add(result)
-                print("  Run ${i + 1}: ${result.responseTimeMs}ms")
-                if (result.success) {
-                    println(" (${result.resultCount} results)")
-                } else {
-                    println(" ERROR: ${result.errorMessage}")
+            // Warm runs (measured)
+            var warmStats: BenchmarkStats? = null
+            if (WARM_RUNS > 0) {
+                println("Warm runs ($WARM_RUNS measured executions)...")
+                val warmResults = mutableListOf<QueryResult>()
+                repeat(WARM_RUNS) { i ->
+                    val result = executeQuery(queryContent)
+                    warmResults.add(result)
+                    // If no warmup runs, first warm run is the cold start
+                    if (i == 0 && WARMUP_RUNS == 0) {
+                        coldStartMs = result.responseTimeMs
+                        print("  Warm ${i + 1} (cold start): ${result.responseTimeMs}ms")
+                    } else {
+                        print("  Warm ${i + 1}: ${result.responseTimeMs}ms")
+                    }
+                    if (result.success) {
+                        println(" (${result.resultCount} results)")
+                    } else {
+                        println(" ERROR: ${result.errorMessage}")
+                    }
                 }
+                warmStats = calculateStats(queryName, queryContent, warmResults)
+                println()
             }
-            println()
 
-            // Calculate statistics
-            val stats = calculateStats(queryName, queryContent, results)
-            allStats.add(stats)
+            val benchmarkResult = QueryBenchmarkResult(
+                queryName = queryName,
+                queryContent = queryContent,
+                coldStartMs = coldStartMs,
+                warmStats = warmStats
+            )
+            allResults.add(benchmarkResult)
 
             // Print individual query stats
-            printStats(stats)
+            printQueryResult(benchmarkResult)
             println()
         }
 
         // Generate and save report
-        val report = generateReport(allStats)
-        saveReport(report, allStats)
+        val report = generateReport(allResults)
+        saveReport(report, allResults)
 
         println("=".repeat(80))
         println("Benchmark Complete!")
@@ -310,61 +346,87 @@ class LscSparqlBenchmark {
         )
     }
 
-    private fun printStats(stats: BenchmarkStats) {
-        println("Statistics for: ${stats.queryName}")
-        println("  Successful runs: ${stats.successfulRuns}/${stats.totalRuns}")
-        println("  Result count:    ${stats.resultCount}")
-        println("  Min:             ${stats.minMs} ms")
-        println("  Max:             ${stats.maxMs} ms")
-        println("  Mean:            ${"%.2f".format(stats.meanMs)} ms")
-        println("  Median:          ${"%.2f".format(stats.medianMs)} ms")
-        println("  Std Dev:         ${"%.2f".format(stats.stdDevMs)} ms")
+    private fun printQueryResult(result: QueryBenchmarkResult) {
+        println("Statistics for: ${result.queryName}")
+
+        if (result.coldStartMs != null) {
+            println("  Cold start:      ${result.coldStartMs} ms")
+        }
+
+        if (result.warmStats != null) {
+            println("  Result count:    ${result.warmStats.resultCount}")
+            println("  Min:             ${result.warmStats.minMs} ms")
+            println("  Max:             ${result.warmStats.maxMs} ms")
+            println("  Mean:            ${"%.2f".format(result.warmStats.meanMs)} ms")
+            println("  Median:          ${"%.2f".format(result.warmStats.medianMs)} ms")
+            println("  Std Dev:         ${"%.2f".format(result.warmStats.stdDevMs)} ms")
+            println("  Success rate:    ${result.warmStats.successfulRuns}/${result.warmStats.totalRuns}")
+        } else {
+            println("  No results (no warm runs configured)")
+        }
     }
 
-    private fun generateReport(allStats: List<BenchmarkStats>): String {
+    private fun generateReport(allResults: List<QueryBenchmarkResult>): String {
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
         return buildString {
-            appendLine("# SPARQL Benchmark Report")
+            appendLine("# LSC SPARQL Benchmark Report")
             appendLine()
             appendLine("Generated: $timestamp")
             appendLine("Endpoint: $BASE_URL")
-            appendLine("Warmup runs: $WARMUP_RUNS")
-            appendLine("Benchmark runs: $BENCHMARK_RUNS")
+            appendLine("Warmup runs: $WARMUP_RUNS (not measured)")
+            appendLine("Warm runs: $WARM_RUNS (measured)")
             appendLine()
+
+            // Summary table
             appendLine("## Summary")
             appendLine()
-            appendLine("| Query | Min (ms) | Max (ms) | Mean (ms) | Median (ms) | Std Dev (ms) | Results | Success Rate |")
-            appendLine("|-------|----------|----------|-----------|-------------|--------------|---------|--------------|")
-
-            for (stats in allStats) {
-                appendLine("| ${stats.queryName} | ${stats.minMs} | ${stats.maxMs} | ${"%.2f".format(stats.meanMs)} | ${"%.2f".format(stats.medianMs)} | ${"%.2f".format(stats.stdDevMs)} | ${stats.resultCount} | ${stats.successfulRuns}/${stats.totalRuns} |")
+            appendLine("| Query | Results | Cold Start (ms) | Min (ms) | Max (ms) | Mean (ms) | Median (ms) | Std Dev (ms) | Success Rate |")
+            appendLine("|-------|---------|-----------------|----------|----------|-----------|-------------|--------------|--------------|")
+            for (result in allResults) {
+                val warm = result.warmStats
+                val coldStart = result.coldStartMs?.toString() ?: "-"
+                if (warm != null) {
+                    appendLine("| ${result.queryName} | ${warm.resultCount} | $coldStart | ${warm.minMs} | ${warm.maxMs} | ${"%.2f".format(warm.meanMs)} | ${"%.2f".format(warm.medianMs)} | ${"%.2f".format(warm.stdDevMs)} | ${warm.successfulRuns}/${warm.totalRuns} |")
+                } else {
+                    appendLine("| ${result.queryName} | - | $coldStart | - | - | - | - | - | - |")
+                }
             }
 
             appendLine()
             appendLine("## Query Details")
             appendLine()
 
-            for (stats in allStats) {
-                appendLine("### ${stats.queryName}")
+            for (result in allResults) {
+                appendLine("### ${result.queryName}")
                 appendLine()
                 appendLine("```sparql")
-                appendLine(stats.queryContent)
+                appendLine(result.queryContent)
                 appendLine("```")
                 appendLine()
-                appendLine("- **Min:** ${stats.minMs} ms")
-                appendLine("- **Max:** ${stats.maxMs} ms")
-                appendLine("- **Mean:** ${"%.2f".format(stats.meanMs)} ms")
-                appendLine("- **Median:** ${"%.2f".format(stats.medianMs)} ms")
-                appendLine("- **Std Dev:** ${"%.2f".format(stats.stdDevMs)} ms")
-                appendLine("- **Result Count:** ${stats.resultCount}")
-                appendLine("- **All Times (ms):** ${stats.allTimesMs.joinToString(", ")}")
-                appendLine()
+
+                if (result.coldStartMs != null) {
+                    appendLine("- **Cold Start:** ${result.coldStartMs} ms")
+                }
+
+                if (result.warmStats != null) {
+                    appendLine()
+                    appendLine("#### Warm Statistics (${result.warmStats.totalRuns} runs)")
+                    appendLine("- **Min:** ${result.warmStats.minMs} ms")
+                    appendLine("- **Max:** ${result.warmStats.maxMs} ms")
+                    appendLine("- **Mean:** ${"%.2f".format(result.warmStats.meanMs)} ms")
+                    appendLine("- **Median:** ${"%.2f".format(result.warmStats.medianMs)} ms")
+                    appendLine("- **Std Dev:** ${"%.2f".format(result.warmStats.stdDevMs)} ms")
+                    appendLine("- **Result Count:** ${result.warmStats.resultCount}")
+                    appendLine("- **Success Rate:** ${result.warmStats.successfulRuns}/${result.warmStats.totalRuns}")
+                    appendLine("- **All Times (ms):** ${result.warmStats.allTimesMs.joinToString(", ")}")
+                    appendLine()
+                }
             }
         }
     }
 
-    private fun saveReport(report: String, allStats: List<BenchmarkStats>) {
+    private fun saveReport(report: String, allResults: List<QueryBenchmarkResult>) {
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
         val reportsDir = File(REPORTS_DIR)
 
@@ -380,9 +442,15 @@ class LscSparqlBenchmark {
         // Save CSV report for easy import into spreadsheets
         val csvFile = File(reportsDir, "benchmark_report_$timestamp.csv")
         csvFile.writeText(buildString {
-            appendLine("Query,Min (ms),Max (ms),Mean (ms),Median (ms),Std Dev (ms),Result Count,Successful Runs,Total Runs")
-            for (stats in allStats) {
-                appendLine("${stats.queryName},${stats.minMs},${stats.maxMs},${"%.2f".format(stats.meanMs)},${"%.2f".format(stats.medianMs)},${"%.2f".format(stats.stdDevMs)},${stats.resultCount},${stats.successfulRuns},${stats.totalRuns}")
+            appendLine("Query,Result Count,Cold Start (ms),Min (ms),Max (ms),Mean (ms),Median (ms),Std Dev (ms),Successful Runs,Total Runs")
+            for (result in allResults) {
+                val warm = result.warmStats
+                val coldStart = result.coldStartMs?.toString() ?: ""
+                if (warm != null) {
+                    appendLine("${result.queryName},${warm.resultCount},$coldStart,${warm.minMs},${warm.maxMs},${"%.2f".format(warm.meanMs)},${"%.2f".format(warm.medianMs)},${"%.2f".format(warm.stdDevMs)},${warm.successfulRuns},${warm.totalRuns}")
+                } else {
+                    appendLine("${result.queryName},0,$coldStart,,,,,,,")
+                }
             }
         })
         println("CSV saved to: ${csvFile.absolutePath}")
@@ -394,21 +462,26 @@ class LscSparqlBenchmark {
             "config" to mapOf(
                 "endpoint" to BASE_URL,
                 "warmupRuns" to WARMUP_RUNS,
-                "benchmarkRuns" to BENCHMARK_RUNS
+                "warmRuns" to WARM_RUNS
             ),
-            "results" to allStats.map { stats ->
+            "results" to allResults.map { result ->
                 mapOf(
-                    "queryName" to stats.queryName,
-                    "query" to stats.queryContent,
-                    "minMs" to stats.minMs,
-                    "maxMs" to stats.maxMs,
-                    "meanMs" to stats.meanMs,
-                    "medianMs" to stats.medianMs,
-                    "stdDevMs" to stats.stdDevMs,
-                    "resultCount" to stats.resultCount,
-                    "successfulRuns" to stats.successfulRuns,
-                    "totalRuns" to stats.totalRuns,
-                    "allTimesMs" to stats.allTimesMs
+                    "queryName" to result.queryName,
+                    "query" to result.queryContent,
+                    "coldStartMs" to result.coldStartMs,
+                    "resultCount" to (result.warmStats?.resultCount ?: 0),
+                    "stats" to result.warmStats?.let { warm ->
+                        mapOf(
+                            "minMs" to warm.minMs,
+                            "maxMs" to warm.maxMs,
+                            "meanMs" to warm.meanMs,
+                            "medianMs" to warm.medianMs,
+                            "stdDevMs" to warm.stdDevMs,
+                            "successfulRuns" to warm.successfulRuns,
+                            "totalRuns" to warm.totalRuns,
+                            "allTimesMs" to warm.allTimesMs
+                        )
+                    }
                 )
             }
         )

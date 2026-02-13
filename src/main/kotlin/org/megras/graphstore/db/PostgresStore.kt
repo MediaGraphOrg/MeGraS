@@ -128,6 +128,8 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
             exec("CREATE INDEX IF NOT EXISTS ts_idx ON megras.literal_string USING GIN (ts);")
             exec("CREATE EXTENSION IF NOT EXISTS vector;")
         }
+        // Ensure HNSW indexes exist on all vector tables for fast KNN queries
+        ensureVectorIndexes()
     }
 
     override fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
@@ -379,12 +381,39 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             val vectorTable = VectorTable(id, type, length)
             transaction {
                 SchemaUtils.create(vectorTable)
+                // Create HNSW index for fast cosine distance KNN queries
+                // This dramatically improves nearestNeighbor performance from O(n) to O(log n)
+                exec("CREATE INDEX IF NOT EXISTS vector_values_${id}_hnsw_idx ON megras.vector_values_${id} USING hnsw (value vector_cosine_ops) WITH (m = 16, ef_construction = 64)")
             }
 
             return vectorTable
         }
 
         return getVectorTable(type, length) ?: createTable()
+    }
+
+    /**
+     * Ensures HNSW indexes exist on all vector tables for fast KNN queries.
+     * Call this once during setup or manually to add indexes to existing tables.
+     */
+    fun ensureVectorIndexes() {
+        val startTime = System.currentTimeMillis()
+
+        transaction {
+            val vectorTypes = VectorTypesTable.selectAll().map {
+                Triple(it[VectorTypesTable.id], it[VectorTypesTable.type], it[VectorTypesTable.length])
+            }
+
+            for ((id, _, _) in vectorTypes) {
+                try {
+                    exec("CREATE INDEX IF NOT EXISTS vector_values_${id}_hnsw_idx ON megras.vector_values_${id} USING hnsw (value vector_cosine_ops) WITH (m = 16, ef_construction = 64)")
+                } catch (e: Exception) {
+                    logger.warn("Failed to create HNSW index for vector_values_$id: ${e.message}")
+                }
+            }
+        }
+
+        if (TIMING_ENABLED) logger.info("Vector index check completed in ${System.currentTimeMillis() - startTime}ms")
     }
 
     private fun getVectorTable(type: VectorValue.Type, length: Int): VectorTable? {
@@ -881,9 +910,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             }
 
             val sql = sqlBuilder.toString()
-            if (TIMING_ENABLED) {
-                logger.info("Executing VALUES clause query with ${joins.size} joins and ${conditions.size} WHERE conditions")
-            }
 
             // Execute raw SQL
             exec(sql) { rs ->
@@ -947,16 +973,24 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     }
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean): QuadSet {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
         val predicateId = getQuadValueId(predicate)
         if (predicateId.first == null || predicateId.second == null) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.nearestNeighbor: Unknown predicate, returning empty in ${System.currentTimeMillis() - startTime}ms")
             return BasicQuadSet()
         }
 
         // We are querying, so we only care about existing tables.
-        val vectorTable = getVectorTable(`object`.type, `object`.length) ?: return BasicQuadSet()
+        val vectorTable = getVectorTable(`object`.type, `object`.length)
+        if (vectorTable == null) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.nearestNeighbor: No vector table found for type=${`object`.type}, length=${`object`.length}, returning empty in ${System.currentTimeMillis() - startTime}ms")
+            return BasicQuadSet()
+        }
 
         val distanceExpression = VectorDistance(vectorTable.value, `object`, distance)
 
+        val queryStartTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
         val quadIds = transaction {
             QuadsTable.join(
                 vectorTable,
@@ -974,8 +1008,11 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             .limit(count)
             .map { it[QuadsTable.id] }
         }
+        if (TIMING_ENABLED) logger.info("PostgresStore.nearestNeighbor: DB query returned ${quadIds.size} quad IDs in ${System.currentTimeMillis() - queryStartTime}ms")
 
-        return getIds(quadIds)
+        val result = getIds(quadIds)
+        if (TIMING_ENABLED) logger.info("PostgresStore.nearestNeighbor: Total time ${System.currentTimeMillis() - startTime}ms, returning ${result.size} quads")
+        return result
     }
 
 

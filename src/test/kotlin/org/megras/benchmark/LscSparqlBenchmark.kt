@@ -3,22 +3,22 @@ package org.megras.benchmark
 import org.junit.jupiter.api.Test
 
 /**
- * LSC SPARQL Benchmark Test
+ * LSC SPARQL Benchmark
  *
  * Benchmarks SPARQL queries for the Lifelog Search Challenge (LSC) dataset.
- *
- * @see BenchmarkConfig.lsc for configuration
- * @see SparqlBenchmarkRunner for the benchmark implementation
  */
 class LscSparqlBenchmark {
 
-    @Test
-    fun runLscSparqlBenchmark() {
-        val config = BenchmarkConfig.lsc()
-        val runner = SparqlBenchmarkRunner(config)
+    private val config = BenchmarkConfig(
+        name = "LSC SPARQL Benchmark",
+        queriesDir = "src/test/resources/lsc_sparql_queries",
+        reportsDir = "benchmark_reports/lsc"
+    )
 
+    @Test
+    fun run() {
         try {
-            runner.runBenchmark()
+            SparqlBenchmarkRunner(config).runBenchmark()
         } catch (e: IllegalStateException) {
             println("ERROR: ${e.message}")
         }

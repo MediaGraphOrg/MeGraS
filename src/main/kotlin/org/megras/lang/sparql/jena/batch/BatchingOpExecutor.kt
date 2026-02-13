@@ -14,12 +14,16 @@ import org.apache.jena.sparql.engine.binding.Binding
 import org.apache.jena.sparql.engine.binding.BindingBuilder
 import org.apache.jena.sparql.engine.iterator.*
 import org.apache.jena.sparql.engine.main.QC
-import org.apache.jena.sparql.expr.ExprList
+import org.apache.jena.sparql.expr.*
+import org.apache.jena.sparql.expr.nodevalue.NodeValueString
 import org.megras.data.graph.Quad
+import org.megras.data.graph.StringValue
 import org.megras.data.graph.QuadValue
+import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.lang.sparql.SparqlUtil.toQuadValue
 import org.megras.lang.sparql.SparqlUtil.toTriple
+import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 
 /**
@@ -39,11 +43,13 @@ class BatchingOpExecutor(
     companion object {
         private val logger = LoggerFactory.getLogger(BatchingOpExecutor::class.java)
 
-        // Batch size limit to avoid overly large queries
-        const val MAX_BATCH_SIZE = 10000
+        // Batch size limit for chunked queries.
+        // Trade-off: Larger batches = fewer round-trips but larger VALUES clauses
+        // 2000 is a good balance: PostgreSQL handles VALUES(2000 rows) efficiently
+        const val MAX_BATCH_SIZE = 2000
 
-        // Enable timing logs for debugging
-        private const val TIMING_ENABLED = false
+        // Enable timing logs from log4j2.xml config
+        private val TIMING_ENABLED get() = TimingConfig.enabled
 
         // Constant indicating no limit
         const val NO_LIMIT = -1L
@@ -162,16 +168,24 @@ class BatchingOpExecutor(
     }
 
     /**
-     * Reorder triple patterns for optimal execution.
+     * Reorder triple patterns for optimal execution using a greedy algorithm.
      * Patterns with more constants (especially in object position) are more selective
      * and should be executed first to reduce intermediate result sizes.
+     *
+     * This uses greedy selection: at each step, pick the most selective pattern
+     * given the variables that will be bound by previously selected patterns.
      */
     private fun reorderPatterns(triples: List<Triple>, currentBinding: Binding?): List<Triple> {
         if (triples.size <= 1) return triples
 
-        // Calculate selectivity score for each pattern
-        // Higher score = more selective = should be executed first
-        fun selectivityScore(triple: Triple): Int {
+        // Track which variables are bound (initially from currentBinding)
+        val boundVars = mutableSetOf<Var>()
+        if (currentBinding != null) {
+            currentBinding.vars().forEachRemaining { boundVars.add(it) }
+        }
+
+        // Calculate selectivity score for each pattern given current bound variables
+        fun selectivityScore(triple: Triple, bound: Set<Var>): Int {
             var score = 0
 
             // Constants are very selective
@@ -179,17 +193,38 @@ class BatchingOpExecutor(
             if (!triple.predicate.isVariable) score += 5  // predicates are usually constrained anyway
             if (!triple.`object`.isVariable) score += 20  // object constants are very selective (e.g., country="Turkey")
 
-            // Already bound variables are also selective
-            if (currentBinding != null) {
-                if (triple.subject.isVariable && currentBinding.contains(Var.alloc(triple.subject))) score += 8
-                if (triple.predicate.isVariable && currentBinding.contains(Var.alloc(triple.predicate))) score += 3
-                if (triple.`object`.isVariable && currentBinding.contains(Var.alloc(triple.`object`))) score += 8
-            }
+            // Bound variables are also selective - they act as filters
+            if (triple.subject.isVariable && Var.alloc(triple.subject) in bound) score += 8
+            if (triple.predicate.isVariable && Var.alloc(triple.predicate) in bound) score += 3
+            if (triple.`object`.isVariable && Var.alloc(triple.`object`) in bound) score += 15  // Bound object is very selective
 
             return score
         }
 
-        return triples.sortedByDescending { selectivityScore(it) }
+        // Extract variables that a pattern will bind (for tracking propagation)
+        fun patternBindsVars(triple: Triple): List<Var> {
+            return listOfNotNull(
+                if (triple.subject.isVariable) Var.alloc(triple.subject) else null,
+                if (triple.predicate.isVariable) Var.alloc(triple.predicate) else null,
+                if (triple.`object`.isVariable) Var.alloc(triple.`object`) else null
+            )
+        }
+
+        // Greedy selection: at each step, pick the most selective pattern
+        val remaining = triples.toMutableList()
+        val ordered = mutableListOf<Triple>()
+
+        while (remaining.isNotEmpty()) {
+            // Find the pattern with highest selectivity given current bound vars
+            val best = remaining.maxByOrNull { selectivityScore(it, boundVars) }!!
+            remaining.remove(best)
+            ordered.add(best)
+
+            // Add vars bound by this pattern to the bound set for next iteration
+            boundVars.addAll(patternBindsVars(best))
+        }
+
+        return ordered
     }
 
     /**
@@ -500,6 +535,7 @@ class BatchingOpExecutor(
 
     /**
      * Full batch execution: process all bindings at once (original behavior).
+     * Now handles large subject sets by chunking instead of falling back to 'all'.
      * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
     private fun executeBatchedTriplePatternFull(
@@ -544,11 +580,21 @@ class BatchingOpExecutor(
             }
         }
 
-        // Determine filter collections
+        // Check if we need chunked execution for large subject sets
+        val needsChunkedSubjectExecution = hasSubjectBinding && subjectValues.size > MAX_BATCH_SIZE
+
+        if (needsChunkedSubjectExecution) {
+            return executeChunkedBySubjects(
+                triple, inputBindings, subjectVar!!, subjectValues, predicateVar, objectVar,
+                predicateValues, objectValues, hasPredicateBinding, hasObjectBinding,
+                effectiveLimit, startTime, requiredVars
+            )
+        }
+
+        // Standard execution path
         val subjectFilter: Collection<QuadValue>? = when {
             !triple.subject.isVariable -> toQuadValue(triple.subject)?.let { listOf(it) }
-            hasSubjectBinding && subjectValues.isNotEmpty() ->
-                if (subjectValues.size <= MAX_BATCH_SIZE) subjectValues else null
+            hasSubjectBinding && subjectValues.isNotEmpty() -> subjectValues
             else -> null
         }
 
@@ -607,6 +653,140 @@ class BatchingOpExecutor(
         }
 
         return results
+    }
+
+    /**
+     * Execute a triple pattern with chunked subject filtering for large subject sets.
+     * Instead of falling back to 'all' subjects (which fetches millions of rows),
+     * this processes subjects in chunks to keep DB queries manageable.
+     */
+    private fun executeChunkedBySubjects(
+        triple: Triple,
+        inputBindings: List<Binding>,
+        subjectVar: Var,
+        subjectValues: Set<QuadValue>,
+        predicateVar: Var?,
+        objectVar: Var?,
+        predicateValues: Set<QuadValue>,
+        objectValues: Set<QuadValue>,
+        hasPredicateBinding: Boolean,
+        hasObjectBinding: Boolean,
+        effectiveLimit: Int,
+        startTime: Long,
+        requiredVars: Set<Var>?
+    ): List<Binding> {
+        if (TIMING_ENABLED) {
+            logger.info("Using chunked subject execution for ${subjectValues.size} subjects")
+        }
+
+        // Group input bindings by their bound subject value for efficient processing
+        val bindingsBySubject: Map<QuadValue, List<Binding>> = inputBindings.groupBy { binding ->
+            toQuadValue(binding.get(subjectVar))!!
+        }
+
+        val predicateFilter: Collection<QuadValue>? = when {
+            !triple.predicate.isVariable -> toQuadValue(triple.predicate)?.let { listOf(it) }
+            hasPredicateBinding && predicateValues.isNotEmpty() && predicateValues.size <= MAX_BATCH_SIZE -> predicateValues
+            else -> null
+        }
+
+        val objectFilter: Collection<QuadValue>? = when {
+            !triple.`object`.isVariable -> toQuadValue(triple.`object`)?.let { listOf(it) }
+            hasObjectBinding && objectValues.isNotEmpty() && objectValues.size <= MAX_BATCH_SIZE -> objectValues
+            else -> null
+        }
+
+        val results = mutableListOf<Binding>()
+        val subjectList = subjectValues.toList()
+        var processedChunks = 0
+
+        // Process subjects in chunks
+        for (subjectChunk in subjectList.chunked(MAX_BATCH_SIZE)) {
+            if (results.size >= effectiveLimit) {
+                if (TIMING_ENABLED) {
+                    logger.info("Chunked execution early termination at chunk $processedChunks: reached limit of $effectiveLimit")
+                }
+                break
+            }
+
+            val chunkStartTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+            if (TIMING_ENABLED) {
+                logger.info("Processing subject chunk ${processedChunks + 1}: ${subjectChunk.size} subjects")
+            }
+
+            val matchingQuads = quadSet.filter(subjectChunk, predicateFilter, objectFilter)
+
+            if (TIMING_ENABLED) {
+                logger.info("Chunk query returned ${matchingQuads.size} quads in ${System.currentTimeMillis() - chunkStartTime}ms")
+            }
+
+            // Build index for this chunk
+            val quadIndex = buildQuadIndex(matchingQuads)
+
+            // Process bindings for subjects in this chunk
+            for (subject in subjectChunk) {
+                if (results.size >= effectiveLimit) break
+
+                val bindingsForSubject = bindingsBySubject[subject] ?: continue
+                val quadsForSubject = quadIndex.bySubject[subject] ?: continue
+
+                for (binding in bindingsForSubject) {
+                    if (results.size >= effectiveLimit) break
+
+                    for (quad in quadsForSubject) {
+                        if (results.size >= effectiveLimit) break
+
+                        // Verify compatibility (predicate/object matching)
+                        if (!isQuadCompatible(triple, binding, quad)) continue
+
+                        val newBinding = extendBinding(binding, triple, quad, requiredVars)
+                        if (newBinding != null) {
+                            results.add(newBinding)
+                        }
+                    }
+                }
+            }
+
+            processedChunks++
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("Chunked subject execution completed: ${results.size} bindings from ${processedChunks} chunks in ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        return results
+    }
+
+    /**
+     * Check if a quad is compatible with the current binding (predicate and object matching).
+     */
+    private fun isQuadCompatible(triple: Triple, binding: Binding, quad: Quad): Boolean {
+        // Check predicate
+        if (!triple.predicate.isVariable) {
+            val expectedPredicate = toQuadValue(triple.predicate)
+            if (quad.predicate != expectedPredicate) return false
+        } else {
+            val predicateVar = Var.alloc(triple.predicate)
+            if (binding.contains(predicateVar)) {
+                val expectedPredicate = toQuadValue(binding.get(predicateVar))
+                if (quad.predicate != expectedPredicate) return false
+            }
+        }
+
+        // Check object
+        if (!triple.`object`.isVariable) {
+            val expectedObject = toQuadValue(triple.`object`)
+            if (quad.`object` != expectedObject) return false
+        } else {
+            val objectVar = Var.alloc(triple.`object`)
+            if (binding.contains(objectVar)) {
+                val expectedObject = toQuadValue(binding.get(objectVar))
+                if (quad.`object` != expectedObject) return false
+            }
+        }
+
+        return true
     }
 
     /**
@@ -931,7 +1111,82 @@ class BatchingOpExecutor(
     }
 
     /**
-     * Execute a filter operation.
+     * Represents a detected text filter that can be pushed down to the database.
+     * @param variable The variable being filtered (e.g., ?ocr)
+     * @param searchText The text to search for
+     * @param originalExpr The original expression (for removal from filter list)
+     */
+    private data class TextFilterInfo(
+        val variable: Var,
+        val searchText: String,
+        val originalExpr: Expr
+    )
+
+    /**
+     * Try to extract a pushable text filter from a CONTAINS expression.
+     * Supports patterns like:
+     * - CONTAINS(?var, "text")
+     * - CONTAINS(LCASE(?var), LCASE("text"))
+     * - CONTAINS(STR(?var), "text")
+     * - CONTAINS(LCASE(STR(?var)), LCASE("text"))
+     */
+    private fun tryExtractTextFilter(expr: Expr): TextFilterInfo? {
+        if (expr !is E_StrContains) return null
+
+        val arg1 = expr.arg1
+        val arg2 = expr.arg2
+
+        // Extract the variable from arg1 (may be wrapped in LCASE, STR, or both)
+        val variable = extractVariableFromExpr(arg1) ?: return null
+
+        // Extract the search text from arg2 (may be wrapped in LCASE)
+        val searchText = extractStringFromExpr(arg2) ?: return null
+
+        return TextFilterInfo(variable, searchText, expr)
+    }
+
+    /**
+     * Extract a variable from an expression, unwrapping LCASE and STR if present.
+     */
+    private fun extractVariableFromExpr(expr: Expr): Var? {
+        return when (expr) {
+            is ExprVar -> expr.asVar()
+            is E_StrLowerCase -> extractVariableFromExpr(expr.arg)
+            is E_Str -> extractVariableFromExpr(expr.arg)
+            else -> null
+        }
+    }
+
+    /**
+     * Extract a string literal from an expression, unwrapping LCASE if present.
+     */
+    private fun extractStringFromExpr(expr: Expr): String? {
+        return when (expr) {
+            is NodeValueString -> expr.asString()
+            is E_StrLowerCase -> extractStringFromExpr(expr.arg)
+            is NodeValue -> if (expr.isString) expr.asString() else null
+            else -> null
+        }
+    }
+
+    /**
+     * Find the triple pattern in a BGP that binds a specific variable in object position.
+     * Returns the predicate if found.
+     */
+    private fun findPredicateForObjectVariable(bgp: OpBGP, variable: Var): QuadValue? {
+        for (triple in bgp.pattern.list) {
+            if (triple.`object`.isVariable && Var.alloc(triple.`object`) == variable) {
+                // Found the pattern where this variable is bound as the object
+                if (!triple.predicate.isVariable) {
+                    return toQuadValue(triple.predicate)
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Execute a filter operation with text filter pushdown optimization.
      * @param limit Maximum number of results to produce (-1 for no limit)
      * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
@@ -942,8 +1197,62 @@ class BatchingOpExecutor(
             requiredVars + filterVars
         } else null
 
-        // Note: We can't reliably push limit into sub-operation for filters
-        // because filtering may reduce results significantly
+        // Try to detect pushable text filters
+        val textFilters = mutableListOf<TextFilterInfo>()
+        val remainingExprs = mutableListOf<Expr>()
+
+        for (expr in op.exprs) {
+            val textFilter = tryExtractTextFilter(expr)
+            if (textFilter != null) {
+                textFilters.add(textFilter)
+            } else {
+                remainingExprs.add(expr)
+            }
+        }
+
+        // If we found pushable text filters and the sub-op is a BGP, try to push down
+        if (textFilters.isNotEmpty() && op.subOp is OpBGP) {
+            val bgp = op.subOp as OpBGP
+
+            // For each text filter, find the corresponding predicate and apply textFilter
+            val pushedFilters = mutableListOf<TextFilterInfo>()
+            val predicateTextFilters = mutableMapOf<QuadValue, MutableList<TextFilterInfo>>()
+
+            for (tf in textFilters) {
+                val predicate = findPredicateForObjectVariable(bgp, tf.variable)
+                if (predicate != null) {
+                    predicateTextFilters.getOrPut(predicate) { mutableListOf() }.add(tf)
+                    pushedFilters.add(tf)
+                    if (TIMING_ENABLED) {
+                        logger.info("Text filter pushdown: CONTAINS on ${tf.variable} with text '${tf.searchText}' -> predicate $predicate")
+                    }
+                } else {
+                    // Can't push this filter, add to remaining
+                    remainingExprs.add(tf.originalExpr)
+                }
+            }
+
+            if (pushedFilters.isNotEmpty()) {
+                // Execute BGP with text filter pushdown
+                val subResults = executeBGPWithTextFilters(bgp, input, predicateTextFilters, filterRequiredVars)
+
+                // Apply remaining filters
+                var result = subResults
+                for (expr in remainingExprs) {
+                    result = QueryIterFilterExpr(result, expr, execCxt)
+                }
+
+                // Apply limit after filtering if specified
+                if (limit != NO_LIMIT) {
+                    val bindings = materializeBindings(result).take(limit.toInt())
+                    return bindingsToIterator(bindings)
+                }
+
+                return result
+            }
+        }
+
+        // No text filter pushdown - use standard execution
         val subResults = execute(op.subOp, input, NO_LIMIT, filterRequiredVars)
 
         // Apply each filter expression in sequence
@@ -959,6 +1268,224 @@ class BatchingOpExecutor(
         }
 
         return result
+    }
+
+    /**
+     * Execute a BGP with text filter pushdown.
+     * For patterns that match text filters, use quadSet.textFilter() instead of regular filter().
+     */
+    private fun executeBGPWithTextFilters(
+        bgp: OpBGP,
+        input: QueryIterator,
+        predicateTextFilters: Map<QuadValue, List<TextFilterInfo>>,
+        requiredVars: Set<Var>?
+    ): QueryIterator {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val triples = bgp.pattern.list
+        if (triples.isEmpty()) {
+            return input
+        }
+
+        val inputBindings = materializeBindings(input)
+        if (inputBindings.isEmpty()) {
+            return QueryIterNullIterator.create(execCxt)
+        }
+
+        val effectiveRequiredVars = computeEffectiveRequiredVars(triples, requiredVars)
+
+        if (TIMING_ENABLED) {
+            logger.info("BGP with text filters starting with ${inputBindings.size} input bindings")
+        }
+
+        // Reorder patterns, but prioritize patterns with text filters
+        val reorderedTriples = reorderPatternsWithTextFilters(triples, inputBindings.firstOrNull(), predicateTextFilters)
+
+        if (TIMING_ENABLED) {
+            logger.info("Reordered patterns (with text filter priority): ${reorderedTriples.map { "${it.subject} ${it.predicate} ${it.`object`}" }}")
+        }
+
+        var currentBindings = inputBindings
+
+        for ((index, triple) in reorderedTriples.withIndex()) {
+            val isLastPattern = index == reorderedTriples.size - 1
+            val patternRequiredVars = if (isLastPattern) requiredVars else effectiveRequiredVars
+
+            // Check if this pattern has a text filter
+            val predicate = if (!triple.predicate.isVariable) toQuadValue(triple.predicate) else null
+            val textFiltersForPattern = if (predicate != null) predicateTextFilters[predicate] else null
+
+            if (textFiltersForPattern != null && triple.`object`.isVariable) {
+                // Execute with text filter pushdown
+                currentBindings = executeBatchedTriplePatternWithTextFilter(
+                    triple, currentBindings, textFiltersForPattern, patternRequiredVars
+                )
+            } else {
+                // Standard execution
+                currentBindings = executeBatchedTriplePattern(triple, currentBindings, NO_LIMIT, patternRequiredVars)
+            }
+
+            if (currentBindings.isEmpty()) {
+                break
+            }
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("BGP with text filters execution time: ${System.currentTimeMillis() - startTime}ms, results: ${currentBindings.size}")
+        }
+
+        return bindingsToIterator(currentBindings)
+    }
+
+    /**
+     * Reorder patterns, giving priority to patterns with text filters (they are very selective).
+     * Uses greedy selection to account for variable binding propagation.
+     */
+    private fun reorderPatternsWithTextFilters(
+        triples: List<Triple>,
+        currentBinding: Binding?,
+        predicateTextFilters: Map<QuadValue, List<TextFilterInfo>>
+    ): List<Triple> {
+        if (triples.size <= 1) return triples
+
+        // Track which variables are bound (initially from currentBinding)
+        val boundVars = mutableSetOf<Var>()
+        if (currentBinding != null) {
+            currentBinding.vars().forEachRemaining { boundVars.add(it) }
+        }
+
+        fun selectivityScore(triple: Triple, bound: Set<Var>): Int {
+            var score = 0
+
+            // Check if this pattern has a text filter - very selective!
+            val predicate = if (!triple.predicate.isVariable) toQuadValue(triple.predicate) else null
+            if (predicate != null && predicateTextFilters.containsKey(predicate)) {
+                score += 100 // Text filters are extremely selective
+            }
+
+            // Standard selectivity scoring
+            if (!triple.subject.isVariable) score += 10
+            if (!triple.predicate.isVariable) score += 5
+            if (!triple.`object`.isVariable) score += 20
+
+            // Bound variables are also selective
+            if (triple.subject.isVariable && Var.alloc(triple.subject) in bound) score += 8
+            if (triple.predicate.isVariable && Var.alloc(triple.predicate) in bound) score += 3
+            if (triple.`object`.isVariable && Var.alloc(triple.`object`) in bound) score += 15
+
+            return score
+        }
+
+        // Extract variables that a pattern will bind
+        fun patternBindsVars(triple: Triple): List<Var> {
+            return listOfNotNull(
+                if (triple.subject.isVariable) Var.alloc(triple.subject) else null,
+                if (triple.predicate.isVariable) Var.alloc(triple.predicate) else null,
+                if (triple.`object`.isVariable) Var.alloc(triple.`object`) else null
+            )
+        }
+
+        // Greedy selection
+        val remaining = triples.toMutableList()
+        val ordered = mutableListOf<Triple>()
+
+        while (remaining.isNotEmpty()) {
+            val best = remaining.maxByOrNull { selectivityScore(it, boundVars) }!!
+            remaining.remove(best)
+            ordered.add(best)
+            boundVars.addAll(patternBindsVars(best))
+        }
+
+        return ordered
+    }
+
+    /**
+     * Execute a triple pattern with text filter pushdown.
+     * Uses quadSet.textFilter() for efficient database-level text search.
+     */
+    private fun executeBatchedTriplePatternWithTextFilter(
+        triple: Triple,
+        inputBindings: List<Binding>,
+        textFilters: List<TextFilterInfo>,
+        requiredVars: Set<Var>?
+    ): List<Binding> {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val predicate = toQuadValue(triple.predicate) ?: return emptyList()
+        val subjectVar = if (triple.subject.isVariable) Var.alloc(triple.subject) else null
+        val objectVar = if (triple.`object`.isVariable) Var.alloc(triple.`object`) else null
+
+        if (TIMING_ENABLED) {
+            logger.info("Executing triple pattern with text filter: ${triple.subject} ${triple.predicate} ${triple.`object`}")
+            logger.info("Text filters: ${textFilters.map { it.searchText }}")
+        }
+
+        // Use the first text filter for initial database query
+        // (multiple text filters on same predicate are rare, but we handle them with in-memory filtering)
+        val primaryTextFilter = textFilters.first()
+        var matchingQuads = quadSet.textFilter(predicate, primaryTextFilter.searchText)
+
+        if (TIMING_ENABLED) {
+            logger.info("textFilter returned ${matchingQuads.size} quads in ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        // Apply additional text filters if any (in-memory)
+        if (textFilters.size > 1) {
+            for (i in 1 until textFilters.size) {
+                val additionalFilter = textFilters[i]
+                matchingQuads = BasicQuadSet(matchingQuads.filter { quad ->
+                    val objValue = quad.`object`
+                    objValue is StringValue && objValue.value.contains(additionalFilter.searchText, ignoreCase = true)
+                }.toSet())
+            }
+            if (TIMING_ENABLED) {
+                logger.info("After additional text filters: ${matchingQuads.size} quads")
+            }
+        }
+
+        // Now filter by subject bindings if we have them
+        val subjectValues = if (subjectVar != null) {
+            inputBindings.mapNotNull { binding ->
+                if (binding.contains(subjectVar)) toQuadValue(binding.get(subjectVar)) else null
+            }.toSet()
+        } else {
+            // Subject is a constant
+            val constantSubject = toQuadValue(triple.subject)
+            if (constantSubject != null) setOf(constantSubject) else emptySet()
+        }
+
+        // Filter quads by subject if we have subject constraints
+        val filteredQuads = if (subjectValues.isNotEmpty()) {
+            matchingQuads.filter { it.subject in subjectValues }
+        } else {
+            matchingQuads.toList()
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("After subject filtering: ${filteredQuads.size} quads (from ${subjectValues.size} subject values)")
+        }
+
+        // Build index for joining
+        val quadIndex = buildQuadIndex(BasicQuadSet(filteredQuads.toSet()))
+
+        val results = mutableListOf<Binding>()
+
+        for (binding in inputBindings) {
+            val compatibleQuads = findCompatibleQuads(triple, binding, quadIndex)
+
+            for (quad in compatibleQuads) {
+                val newBinding = extendBinding(binding, triple, quad, requiredVars)
+                if (newBinding != null) {
+                    results.add(newBinding)
+                }
+            }
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("Triple pattern with text filter join produced ${results.size} bindings in ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        return results
     }
 
     /**

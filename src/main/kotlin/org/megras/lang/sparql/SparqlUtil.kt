@@ -11,6 +11,7 @@ import org.megras.graphstore.QuadSet
 import org.megras.lang.ResultTable
 import org.megras.lang.sparql.jena.JenaGraphWrapper
 import org.megras.lang.sparql.jena.batch.BatchingQueryEngineFactory
+import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 
 object SparqlUtil {
@@ -18,7 +19,7 @@ object SparqlUtil {
     private val model = ModelFactory.createDefaultModel()
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
-    private const val TIMING_ENABLED = false
+    private val TIMING_ENABLED get() = TimingConfig.enabled
 
     init {
         // Register the custom batching query engine factory

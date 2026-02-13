@@ -187,76 +187,10 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         distance: Distance,
         invert: Boolean
     ): QuadSet {
-
-        val existing = this.base.nearestNeighbor(predicate, `object`, count, distance, invert)
-
-        val handler = this.handlers[predicate] ?: return existing
-
-        val subjects = getAllBySubject()
-
-        val derived = subjects.flatMap { (subject, quads) ->
-            if (!handler.canDerive(subject)) {
-                return@flatMap emptyList()
-            }
-            if (quads.any { it.predicate == predicate }) { //already exists
-                return@flatMap emptyList()
-            }
-            handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
-        }
-
-        if (derived.isNotEmpty()) {
-            base.addAll(derived)
-        }
-
-        val queue = FixedSizePriorityQueue(count, DistancePairComparator<Pair<Double, VectorValue>>())
-        val order = if (invert) -1 else 1
-        val dist = distance.distance()
-
-        val vectors = existing.mapNotNull { it.`object` as? VectorValue }.toSet()
-        val derivedVectors = derived.mapNotNull { it.`object` as? VectorValue }.toSet()
-
-        val candidates = vectors.asSequence() + derivedVectors.asSequence()
-
-        when(`object`) {
-            is DoubleVectorValue -> {
-                val v = `object`.vector
-                candidates.forEach {
-                    val vv = (it as DoubleVectorValue).vector
-                    val d = order * dist.distance(v, vv)
-                    queue.add(d to it)
-                }
-            }
-            is LongVectorValue -> {
-                val v = `object`.vector
-                candidates.forEach {
-                    val vv = (it as LongVectorValue).vector
-                    val d = order * dist.distance(v, vv)
-                    queue.add(d to it)
-                }
-            }
-            is FloatVectorValue -> {
-                val v = `object`.vector
-                candidates.forEach {
-                    val vv = (it as FloatVectorValue).vector
-                    val d = order * dist.distance(v, vv)
-                    queue.add(d to it)
-                }
-            }
-        }
-
-        val relevantVectors = mutableSetOf<VectorValue>()
-        val ret = BasicMutableQuadSet()
-        queue.forEach {
-            relevantVectors.add(it.second)
-            ret.add(Quad(it.second, MeGraS.QUERY_DISTANCE.uri, DoubleValue(it.first)))
-        }
-        existing.forEach {
-            if (it.`object` in relevantVectors) {
-                ret.add(it)
-            }
-        }
-
-        return ret
+        // Derivation for the query subject happens via filter() when getImageEmbedding() is called.
+        // KNN searches over existing indexed embeddings - we don't derive for ALL subjects here
+        // as that would be too expensive
+        return this.base.nearestNeighbor(predicate, `object`, count, distance, invert)
     }
 
     override fun textFilter(

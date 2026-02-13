@@ -1,0 +1,13 @@
+PREFIX lsc: <http://lsc.dcu.ie/schema#>
+
+SELECT DISTINCT ?img ?id ?day
+WHERE {
+	?img lsc:id ?id .
+	<http://localhost:8080/EiCqaIJDprnKhKsPhy4DuqmLqndNMPvJ7NtenOjYaeGSSw> lsc:ordinal ?ordinal .
+	<http://localhost:8080/EiCqaIJDprnKhKsPhy4DuqmLqndNMPvJ7NtenOjYaeGSSw> lsc:day ?day .
+	?img lsc:day ?day .
+	?img lsc:ordinal ?ord .
+	BIND (100 AS ?n)
+	FILTER ((?ord >= (?ordinal - ?n)) && (?ord <= (?ordinal + ?n)))
+}
+ORDER BY ?id

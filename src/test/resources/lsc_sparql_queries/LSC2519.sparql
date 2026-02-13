@@ -1,0 +1,12 @@
+PREFIX lsc: <http://lsc.dcu.ie/schema#>
+PREFIX tag: <http://lsc.dcu.ie/tag#>
+
+SELECT DISTINCT ?img ?id ?day
+WHERE {
+	?img lsc:id ?id .
+	{
+		?img lsc:tag tag:food . 
+	}
+	?img lsc:day ?day .
+}
+ORDER BY ?id

@@ -11,8 +11,13 @@ class LscSparqlBenchmark {
 
     private val config = BenchmarkConfig(
         name = "LSC SPARQL Benchmark",
+        baseUrl = "http://localhost:8080/query/sparql",
         queriesDir = "src/test/resources/lsc_sparql_queries",
-        reportsDir = "benchmark_reports/lsc"
+        reportsDir = "benchmark_reports/lsc",
+        warmupRuns = 3,
+        warmRuns = 10,
+        connectTimeoutMs = 30000,
+        readTimeoutMs = 60000
     )
 
     @Test

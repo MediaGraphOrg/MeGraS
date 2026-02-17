@@ -171,7 +171,7 @@ gradle-app.setting
 
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle,kotlin,intellij
 .idea/
-/store/
+/store*/
 src/main/kotlin/org/megras/Playground.kt
 *.tsv
 src/main/resources/log4j2.xml

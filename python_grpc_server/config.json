@@ -1,5 +1,5 @@
 {
-  "device": "cpu",
+  "device": "cuda",
   "clip_embedder_model": "openai/clip-vit-base-patch16",
   "trocr_ocr_model": "microsoft/trocr-base-printed",
   "grpc_host": "0.0.0.0",

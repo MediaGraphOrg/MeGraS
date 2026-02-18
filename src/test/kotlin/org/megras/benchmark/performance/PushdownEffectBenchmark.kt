@@ -15,21 +15,25 @@ import org.megras.benchmark.core.*
  * - 10% selectivity (sel10): Less restrictive filter
  * - 50% selectivity (sel50): Minimally restrictive filter
  *
- * Goal: Prove that MeGraS-Optimized maintains stable performance as filters
- * become more restrictive by "pushing down" candidates, whereas MeGraS-Default
- * suffers from late-binding overhead.
+ * Goal: Prove that MeGraS-Optimized (BATCHING engine) maintains stable performance
+ * as filters become more restrictive by "pushing down" candidates, whereas
+ * MeGraS-Default suffers from late-binding overhead.
  *
  * Dataset: MeGraS-SYNTH with pre-tagged selectivity markers
- * Baselines: MeGraS-Default vs. MeGraS-Optimized
+ * Baselines: MeGraS-Default (DEFAULT engine) vs. MeGraS-Optimized (BATCHING engine)
  */
 class PushdownEffectBenchmark {
 
     companion object {
         private const val DEFAULT_REPORTS_DIR = "benchmark_reports/performance/pushdown"
+
+        /** Query engine types for comparison */
+        const val ENGINE_DEFAULT = "DEFAULT"
+        const val ENGINE_BATCHING = "BATCHING"
     }
 
-    private val config = PerformanceBenchmarkConfig(
-        name = "Pushdown Effect Benchmark",
+    private fun createConfig(queryEngine: String) = PerformanceBenchmarkConfig(
+        name = "Pushdown Effect Benchmark ($queryEngine engine)",
         reportsDir = DEFAULT_REPORTS_DIR,
         warmupRuns = 3,
         measuredRuns = 10,
@@ -37,7 +41,8 @@ class PushdownEffectBenchmark {
         infrastructureConfig = InfrastructureConfig(
             megrasServerConfig = MegrasServerConfig(
                 objectStoreBase = "store-megras-synth",
-                postgresDatabase = "megras_synth"
+                postgresDatabase = "megras_synth",
+                sparqlQueryEngine = queryEngine
             )
         )
     )
@@ -45,24 +50,209 @@ class PushdownEffectBenchmark {
     data class PushdownResult(
         val selectivityResults: Map<String, QueryBenchmarkResult>,
         val selectivityValues: Map<String, Double>,
-        val scalingFactor: Double  // How latency scales with selectivity
+        val scalingFactor: Double,  // How latency scales with selectivity
+        val queryEngine: String
+    )
+
+    data class ComparisonResult(
+        val defaultEngineResult: PushdownResult,
+        val batchingEngineResult: PushdownResult,
+        val speedupBySelectivity: Map<String, Double>  // Speedup factor per selectivity level
     )
 
     @Test
     fun run() {
-        val runner = PushdownEffectRunner(config)
         try {
-            runner.runBenchmark()
+            val comparisonResult = runComparison()
+            println()
+            println("=".repeat(80))
+            println("COMPARISON COMPLETE")
+            println("=".repeat(80))
+            println()
+            println("Speedup (BATCHING vs DEFAULT) by selectivity:")
+            for ((marker, speedup) in comparisonResult.speedupBySelectivity) {
+                val selectivity = comparisonResult.defaultEngineResult.selectivityValues[marker]!! * 100
+                println("  ${selectivity}%: ${"%.2f".format(speedup)}x")
+            }
         } catch (e: IllegalStateException) {
             println("ERROR: ${e.message}")
         }
     }
 
     /**
-     * Run with custom configuration.
+     * Run comparison between DEFAULT and BATCHING engines.
+     */
+    fun runComparison(): ComparisonResult {
+        println("=".repeat(80))
+        println("PUSHDOWN EFFECT BENCHMARK - ENGINE COMPARISON")
+        println("=".repeat(80))
+        println()
+        println("This benchmark compares two query engine configurations:")
+        println("  1. DEFAULT: Standard Jena query engine")
+        println("  2. BATCHING: Optimized batching query engine")
+        println()
+
+        // Run with DEFAULT engine first
+        println("━".repeat(80))
+        println("PHASE 1: Running with DEFAULT query engine")
+        println("━".repeat(80))
+        val defaultResult = PushdownEffectRunner(createConfig(ENGINE_DEFAULT)).runBenchmark()
+
+        // Run with BATCHING engine
+        println()
+        println("━".repeat(80))
+        println("PHASE 2: Running with BATCHING query engine")
+        println("━".repeat(80))
+        val batchingResult = PushdownEffectRunner(createConfig(ENGINE_BATCHING)).runBenchmark()
+
+        // Calculate speedup for each selectivity level
+        val speedupBySelectivity = defaultResult.selectivityResults.keys.associateWith { marker ->
+            val defaultMs = defaultResult.selectivityResults[marker]!!.latencyStats.meanMs
+            val batchingMs = batchingResult.selectivityResults[marker]!!.latencyStats.meanMs
+            if (batchingMs > 0) defaultMs / batchingMs else 1.0
+        }
+
+        val comparisonResult = ComparisonResult(
+            defaultEngineResult = defaultResult,
+            batchingEngineResult = batchingResult,
+            speedupBySelectivity = speedupBySelectivity
+        )
+
+        // Save comparison report
+        saveComparisonReport(comparisonResult)
+
+        return comparisonResult
+    }
+
+    /**
+     * Run with custom configuration (single engine).
      */
     fun run(customConfig: PerformanceBenchmarkConfig): PushdownResult {
         return PushdownEffectRunner(customConfig).runBenchmark()
+    }
+
+    private fun saveComparisonReport(result: ComparisonResult) {
+        val timestamp = BenchmarkReportGenerator.generateTimestamp()
+        val reportsDir = BenchmarkReportGenerator.ensureReportsDir(DEFAULT_REPORTS_DIR)
+
+        val selectivityLevels = listOf(
+            QueryTemplates.Selectivity.SEL_0_1_PERCENT to 0.001,
+            QueryTemplates.Selectivity.SEL_1_PERCENT to 0.01,
+            QueryTemplates.Selectivity.SEL_10_PERCENT to 0.1,
+            QueryTemplates.Selectivity.SEL_50_PERCENT to 0.5
+        )
+
+        // Markdown comparison report
+        val mdContent = buildString {
+            appendLine("# Pushdown Effect Benchmark - Engine Comparison Report")
+            appendLine()
+            appendLine("Generated: ${BenchmarkReportGenerator.generateReadableTimestamp()}")
+            appendLine()
+            appendLine("## Overview")
+            appendLine()
+            appendLine("This benchmark compares query performance between two SPARQL query engine configurations:")
+            appendLine("- **DEFAULT**: Standard Jena query engine")
+            appendLine("- **BATCHING**: Optimized batching query engine that reduces N+1 database calls")
+            appendLine()
+            appendLine("## Results Comparison")
+            appendLine()
+            appendLine("| Selectivity | DEFAULT Mean (ms) | BATCHING Mean (ms) | Speedup |")
+            appendLine("|-------------|-------------------|-------------------|---------|")
+
+            for ((marker, selectivity) in selectivityLevels) {
+                val defaultMs = result.defaultEngineResult.selectivityResults[marker]!!.latencyStats.meanMs
+                val batchingMs = result.batchingEngineResult.selectivityResults[marker]!!.latencyStats.meanMs
+                val speedup = result.speedupBySelectivity[marker]!!
+                appendLine("| ${selectivity * 100}% | ${BenchmarkStatistics.formatMs(defaultMs)} | ${BenchmarkStatistics.formatMs(batchingMs)} | ${"%.2f".format(speedup)}x |")
+            }
+
+            appendLine()
+            appendLine("## Detailed Results")
+            appendLine()
+            appendLine("### DEFAULT Engine")
+            appendLine()
+            appendLine("| Selectivity | Results | Mean (ms) | Median (ms) | Std Dev (ms) | Throughput (ops/s) |")
+            appendLine("|-------------|---------|-----------|-------------|--------------|-------------------|")
+            for ((marker, selectivity) in selectivityLevels) {
+                val res = result.defaultEngineResult.selectivityResults[marker]!!
+                appendLine("| ${selectivity * 100}% | ${res.resultCount} | ${BenchmarkStatistics.formatMs(res.latencyStats.meanMs)} | ${BenchmarkStatistics.formatMs(res.latencyStats.medianMs)} | ${BenchmarkStatistics.formatMs(res.latencyStats.stdDevMs)} | ${BenchmarkStatistics.formatOpsPerSec(res.throughputStats.meanOpsPerSec)} |")
+            }
+            appendLine()
+            appendLine("Scaling Factor: ${"%.4f".format(result.defaultEngineResult.scalingFactor)} ms/selectivity")
+            appendLine()
+            appendLine("### BATCHING Engine")
+            appendLine()
+            appendLine("| Selectivity | Results | Mean (ms) | Median (ms) | Std Dev (ms) | Throughput (ops/s) |")
+            appendLine("|-------------|---------|-----------|-------------|--------------|-------------------|")
+            for ((marker, selectivity) in selectivityLevels) {
+                val res = result.batchingEngineResult.selectivityResults[marker]!!
+                appendLine("| ${selectivity * 100}% | ${res.resultCount} | ${BenchmarkStatistics.formatMs(res.latencyStats.meanMs)} | ${BenchmarkStatistics.formatMs(res.latencyStats.medianMs)} | ${BenchmarkStatistics.formatMs(res.latencyStats.stdDevMs)} | ${BenchmarkStatistics.formatOpsPerSec(res.throughputStats.meanOpsPerSec)} |")
+            }
+            appendLine()
+            appendLine("Scaling Factor: ${"%.4f".format(result.batchingEngineResult.scalingFactor)} ms/selectivity")
+            appendLine()
+            appendLine("## Analysis")
+            appendLine()
+            val avgSpeedup = result.speedupBySelectivity.values.average()
+            appendLine("**Average Speedup**: ${"%.2f".format(avgSpeedup)}x")
+            appendLine()
+            if (avgSpeedup > 1.0) {
+                appendLine("✅ The BATCHING engine shows improved performance over the DEFAULT engine.")
+            } else {
+                appendLine("⚠️ The BATCHING engine does not show improvement over the DEFAULT engine in this test.")
+            }
+        }
+        BenchmarkReportGenerator.saveReport(reportsDir, "comparison_$timestamp.md", mdContent)
+
+        // CSV comparison
+        val csvContent = buildString {
+            appendLine("Selectivity,SelectivityMarker,DEFAULT_Mean_ms,BATCHING_Mean_ms,Speedup,DEFAULT_Throughput,BATCHING_Throughput")
+            for ((marker, selectivity) in selectivityLevels) {
+                val defaultRes = result.defaultEngineResult.selectivityResults[marker]!!
+                val batchingRes = result.batchingEngineResult.selectivityResults[marker]!!
+                appendLine("$selectivity,$marker,${BenchmarkStatistics.formatMs(defaultRes.latencyStats.meanMs)},${BenchmarkStatistics.formatMs(batchingRes.latencyStats.meanMs)},${"%.4f".format(result.speedupBySelectivity[marker]!!)},${BenchmarkStatistics.formatOpsPerSec(defaultRes.throughputStats.meanOpsPerSec)},${BenchmarkStatistics.formatOpsPerSec(batchingRes.throughputStats.meanOpsPerSec)}")
+            }
+        }
+        BenchmarkReportGenerator.saveReport(reportsDir, "comparison_$timestamp.csv", csvContent)
+
+        // JSON comparison
+        val jsonData = mapOf(
+            "benchmark" to "Pushdown Effect - Engine Comparison",
+            "timestamp" to timestamp,
+            "engines" to listOf(ENGINE_DEFAULT, ENGINE_BATCHING),
+            "results" to mapOf(
+                "default" to selectivityLevels.associate { (marker, selectivity) ->
+                    val res = result.defaultEngineResult.selectivityResults[marker]!!
+                    marker to mapOf(
+                        "selectivity" to selectivity,
+                        "resultCount" to res.resultCount,
+                        "meanMs" to res.latencyStats.meanMs,
+                        "medianMs" to res.latencyStats.medianMs,
+                        "throughput" to res.throughputStats.meanOpsPerSec
+                    )
+                },
+                "batching" to selectivityLevels.associate { (marker, selectivity) ->
+                    val res = result.batchingEngineResult.selectivityResults[marker]!!
+                    marker to mapOf(
+                        "selectivity" to selectivity,
+                        "resultCount" to res.resultCount,
+                        "meanMs" to res.latencyStats.meanMs,
+                        "medianMs" to res.latencyStats.medianMs,
+                        "throughput" to res.throughputStats.meanOpsPerSec
+                    )
+                }
+            ),
+            "speedup" to result.speedupBySelectivity,
+            "averageSpeedup" to result.speedupBySelectivity.values.average(),
+            "scalingFactors" to mapOf(
+                "default" to result.defaultEngineResult.scalingFactor,
+                "batching" to result.batchingEngineResult.scalingFactor
+            )
+        )
+        BenchmarkReportGenerator.saveJsonReport(reportsDir, "comparison_$timestamp.json", jsonData)
+
+        println()
+        println("Comparison reports saved to: $reportsDir")
     }
 }
 
@@ -180,7 +370,8 @@ class PushdownEffectRunner(config: PerformanceBenchmarkConfig) : PerformanceBenc
         val result = PushdownEffectBenchmark.PushdownResult(
             selectivityResults = results,
             selectivityValues = selectivityValues,
-            scalingFactor = scalingFactor
+            scalingFactor = scalingFactor,
+            queryEngine = config.infrastructureConfig.megrasServerConfig?.sparqlQueryEngine ?: "BATCHING"
         )
 
         // Save reports

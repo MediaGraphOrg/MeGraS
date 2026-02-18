@@ -15,7 +15,9 @@ data class MegrasServerConfig(
     val postgresPort: Int = 5432,
     val postgresDatabase: String = "megras",
     val postgresUser: String = "megras",
-    val postgresPassword: String = "megras"
+    val postgresPassword: String = "megras",
+    /** Query engine to use: "DEFAULT" (standard Jena) or "BATCHING" (optimized) */
+    val sparqlQueryEngine: String = "BATCHING"
 ) {
     /**
      * Generates a config.json file for MeGraS with the specified settings.
@@ -31,7 +33,8 @@ data class MegrasServerConfig(
             "database": "$postgresDatabase",
             "user": "$postgresUser",
             "password": "$postgresPassword"
-          }
+          },
+          "sparqlQueryEngine": "$sparqlQueryEngine"
         }
     """.trimIndent()
 
@@ -510,6 +513,7 @@ abstract class PerformanceBenchmarkRunner(
             println("    Using custom config: ${customConfigFile!!.absolutePath}")
             println("    Database: ${serverConfig.postgresHost}:${serverConfig.postgresPort}/${serverConfig.postgresDatabase}")
             println("    Object Store: ${serverConfig.objectStoreBase}")
+            println("    Query Engine: ${serverConfig.sparqlQueryEngine}")
             customConfigFile!!.absolutePath
         } else {
             println("    Using default config.json")

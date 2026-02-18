@@ -50,6 +50,9 @@ object SparqlUtil {
 
     fun select(query: String, quads: QuadSet): ResultTable {
 
+        // Log which query engine is configured
+        logger.info("Executing SPARQL query with engine: ${currentEngineType ?: "NOT CONFIGURED (will use Jena default)"}")
+
         val startTotal = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
 
         // STEP 1: JenaGraphWrapper instantiation

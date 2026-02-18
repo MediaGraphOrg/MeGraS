@@ -86,14 +86,7 @@ class PerformanceAnalysisSuite {
         println("BENCHMARK 3/4: Graph Volume Scalability")
         println("=".repeat(80))
         try {
-            val volumeConfig = baseConfig.copy(
-                name = "Graph Volume Scalability Benchmark",
-                reportsDir = "$DEFAULT_REPORTS_DIR/scalability/volume"
-            )
-            val volumeResult = GraphVolumeScalabilityRunner(
-                volumeConfig,
-                GraphVolumeScalabilityBenchmark.VOLUME_CONFIGS
-            ).runBenchmark()
+            val volumeResult = GraphVolumeScalabilityBenchmark().runComparison()
             results["volume"] = volumeResult
         } catch (e: Exception) {
             println("ERROR in Graph Volume Scalability: ${e.message}")

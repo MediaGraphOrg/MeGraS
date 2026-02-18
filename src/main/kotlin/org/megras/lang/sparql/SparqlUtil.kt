@@ -7,6 +7,7 @@ import org.apache.jena.query.QueryExecution
 import org.apache.jena.rdf.model.ModelFactory
 import org.apache.jena.sparql.core.DatasetGraphFactory
 import org.megras.data.graph.*
+import org.megras.data.model.Config
 import org.megras.graphstore.QuadSet
 import org.megras.lang.ResultTable
 import org.megras.lang.sparql.jena.JenaGraphWrapper
@@ -21,9 +22,30 @@ object SparqlUtil {
 
     private val TIMING_ENABLED get() = TimingConfig.enabled
 
-    init {
-        // Register the custom batching query engine factory
-        BatchingQueryEngineFactory.register()
+    @Volatile
+    private var currentEngineType: Config.SparqlQueryEngine? = null
+
+    /**
+     * Configures the SPARQL query engine type to use.
+     * Should be called once at application startup based on the configuration.
+     * @param engineType The query engine type to use
+     */
+    fun configureQueryEngine(engineType: Config.SparqlQueryEngine) {
+        if (currentEngineType == engineType) {
+            return // Already configured
+        }
+
+        when (engineType) {
+            Config.SparqlQueryEngine.BATCHING -> {
+                BatchingQueryEngineFactory.register()
+                logger.info("SPARQL query engine configured: BATCHING (optimized)")
+            }
+            Config.SparqlQueryEngine.DEFAULT -> {
+                BatchingQueryEngineFactory.unregister()
+                logger.info("SPARQL query engine configured: DEFAULT (Jena)")
+            }
+        }
+        currentEngineType = engineType
     }
 
     fun select(query: String, quads: QuadSet): ResultTable {

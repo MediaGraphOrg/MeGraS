@@ -13,6 +13,7 @@ import org.megras.graphstore.derived.DerivedRelationRegistrar
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.graphstore.implicit.ImplicitRelationRegistrar
 import org.megras.lang.sparql.FunctionRegistrar
+import org.megras.lang.sparql.SparqlUtil
 import org.megras.segmentation.media.AudioVideoSegmenter
 import org.megras.util.ServiceConfig
 import org.slf4j.LoggerFactory
@@ -40,6 +41,9 @@ object MeGraS {
 
         // Initialize service config (gRPC host/port)
         ServiceConfig.setFrom(config)
+
+        // Configure SPARQL query engine
+        SparqlUtil.configureQueryEngine(config.sparqlQueryEngine)
 
         AudioVideoSegmenter.setConfig(config)
 

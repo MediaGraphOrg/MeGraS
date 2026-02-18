@@ -15,7 +15,8 @@ data class Config(
     val ffmpeg: FfmpegConfig = FfmpegConfig(),
     val cottontailConnection: CottontailConnection? = null,
     val postgresConnection: PostgresConnection? = null,
-    val grpcConnection: GrpcConnection = GrpcConnection()
+    val grpcConnection: GrpcConnection = GrpcConnection(),
+    val sparqlQueryEngine: SparqlQueryEngine = SparqlQueryEngine.BATCHING
 ) {
 
     init {
@@ -90,5 +91,13 @@ data class Config(
         val host: String = "localhost",
         val port: Int = 50051
     )
+
+    @Serializable
+    enum class SparqlQueryEngine {
+        /** Default Jena query engine */
+        DEFAULT,
+        /** Optimized batching query engine that reduces N+1 database calls */
+        BATCHING
+    }
 
 }

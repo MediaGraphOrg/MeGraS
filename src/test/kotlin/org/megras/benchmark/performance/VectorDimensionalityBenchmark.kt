@@ -300,11 +300,21 @@ class VectorDimensionalityRunner(
                 appendLine("The BatchingQueryEngine handles varying embedding sizes efficiently.")
             }
             appendLine()
-            appendLine("## Query Template")
+            appendLine("## Queries Used")
             appendLine()
-            appendLine("```sparql")
-            appendLine(result.dimensionalityResults.values.firstOrNull()?.queryContent ?: "N/A")
-            appendLine("```")
+            appendLine("Each dimensionality uses a hybrid query with the corresponding vector predicate:")
+            appendLine()
+            for (dimConfig in dimensionalityConfigs) {
+                val res = result.dimensionalityResults[dimConfig.dimensions]
+                if (res != null) {
+                    appendLine("### ${dimConfig.dimensions}d Query (${dimConfig.vectorPredicate})")
+                    appendLine()
+                    appendLine("```sparql")
+                    appendLine(res.queryContent)
+                    appendLine("```")
+                    appendLine()
+                }
+            }
         }
         BenchmarkReportGenerator.saveReport(reportsDir, "dimensionality_$timestamp.md", mdContent)
 
@@ -340,6 +350,7 @@ class VectorDimensionalityRunner(
                 mapOf(
                     "dimensions" to dimConfig.dimensions,
                     "vectorPredicate" to dimConfig.vectorPredicate,
+                    "query" to res.queryContent,
                     "resultCount" to res.resultCount,
                     "coldStartMs" to res.coldStartMs,
                     "latency" to mapOf(

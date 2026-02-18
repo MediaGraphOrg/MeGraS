@@ -631,6 +631,11 @@ class DynamicKnowledgeBenchmark {
         val reportsDir = File(config.reportsDir).apply { if (!exists()) mkdirs() }
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
 
+        val clipQuery = """
+            PREFIX derived: <http://megras.org/derived/>
+            SELECT ?subject ?embedding WHERE { ?subject derived:clipEmbedding ?embedding . } LIMIT ${config.imageLimit}
+        """.trimIndent()
+
         // Markdown
         File(reportsDir, "dynamic_knowledge_$timestamp.md").writeText(buildString {
             appendLine("# Dynamic Knowledge Generation Benchmark")
@@ -644,6 +649,13 @@ class DynamicKnowledgeBenchmark {
             appendLine("| Image Limit | ${config.imageLimit} |")
             appendLine("| Database | ${config.dbConnectionString} |")
             appendLine("| Docker Container | ${config.postgresContainerName} |")
+            appendLine("\n## Query Used")
+            appendLine()
+            appendLine("The benchmark uses the following query to retrieve CLIP embeddings:")
+            appendLine()
+            appendLine("```sparql")
+            appendLine(clipQuery)
+            appendLine("```")
             appendLine("\n## Results")
             appendLine("\n### Materialized State (Pre-computed Embeddings)")
             appendLine("\n#### Cold Start (First Query)")
@@ -700,6 +712,7 @@ class DynamicKnowledgeBenchmark {
                     "database" to config.dbConnectionString,
                     "dockerContainer" to config.postgresContainerName
                 ),
+                "query" to clipQuery,
                 "materializedColdStartMs" to result.materializedColdStartMs,
                 "materializedStats" to result.materializedStats,
                 "dynamicStats" to result.dynamicStats,

@@ -154,6 +154,19 @@ class PushdownEffectBenchmark {
             appendLine("- **DEFAULT**: Standard Jena query engine")
             appendLine("- **BATCHING**: Optimized batching query engine that reduces N+1 database calls")
             appendLine()
+            appendLine("## Queries Used")
+            appendLine()
+            appendLine("The benchmark uses hybrid queries that combine symbolic filters with k-NN vector search.")
+            appendLine("Each selectivity level uses a different filter predicate to control how many subjects pass the filter.")
+            appendLine()
+            for ((marker, selectivity) in selectivityLevels) {
+                appendLine("### ${selectivity * 100}% Selectivity Query")
+                appendLine()
+                appendLine("```sparql")
+                appendLine(QueryTemplates.hybrid(selectivity = marker, k = 10))
+                appendLine("```")
+                appendLine()
+            }
             appendLine("## Results Comparison")
             appendLine()
             appendLine("| Selectivity | DEFAULT Mean (ms) | BATCHING Mean (ms) | Speedup |")
@@ -220,6 +233,12 @@ class PushdownEffectBenchmark {
             "benchmark" to "Pushdown Effect - Engine Comparison",
             "timestamp" to timestamp,
             "engines" to listOf(ENGINE_DEFAULT, ENGINE_BATCHING),
+            "queries" to selectivityLevels.associate { (marker, selectivity) ->
+                marker to mapOf(
+                    "selectivity" to selectivity,
+                    "sparql" to QueryTemplates.hybrid(selectivity = marker, k = 10)
+                )
+            },
             "results" to mapOf(
                 "default" to selectivityLevels.associate { (marker, selectivity) ->
                     val res = result.defaultEngineResult.selectivityResults[marker]!!
@@ -445,9 +464,17 @@ class PushdownEffectRunner(config: PerformanceBenchmarkConfig) : PerformanceBenc
             appendLine()
             appendLine("## Query Template")
             appendLine()
-            appendLine("```sparql")
-            appendLine(result.selectivityResults.values.first().queryContent)
-            appendLine("```")
+            appendLine("The benchmark uses hybrid queries combining symbolic filters with k-NN vector search.")
+            appendLine("Each selectivity level uses a different filter predicate:")
+            appendLine()
+            for ((marker, selectivity) in selectivityLevels) {
+                appendLine("### ${selectivity * 100}% Selectivity Query")
+                appendLine()
+                appendLine("```sparql")
+                appendLine(result.selectivityResults[marker]!!.queryContent)
+                appendLine("```")
+                appendLine()
+            }
         }
         BenchmarkReportGenerator.saveReport(reportsDir, "pushdown_$timestamp.md", mdContent)
 
@@ -483,6 +510,7 @@ class PushdownEffectRunner(config: PerformanceBenchmarkConfig) : PerformanceBenc
                 mapOf(
                     "marker" to marker,
                     "selectivity" to value,
+                    "query" to res.queryContent,
                     "resultCount" to res.resultCount,
                     "coldStartMs" to res.coldStartMs,
                     "latency" to mapOf(

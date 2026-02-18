@@ -233,10 +233,12 @@ class GraphVolumeScalabilityRunner(
             }
 
             appendLine()
-            appendLine("## Query Template")
+            appendLine("## Query Used")
+            appendLine()
+            appendLine("The benchmark uses the following hybrid query combining symbolic access with k-NN vector search:")
             appendLine()
             appendLine("```sparql")
-            appendLine(result.volumeResults.values.firstOrNull()?.queryContent ?: "N/A")
+            appendLine(result.volumeResults.values.firstOrNull()?.queryContent ?: QueryTemplates.scalabilityQuery(10))
             appendLine("```")
             appendLine()
             appendLine("## Expected Datasets")
@@ -281,6 +283,7 @@ class GraphVolumeScalabilityRunner(
             "results" to result.volumeResults.map { (volume, res) ->
                 mapOf(
                     "volume" to volume,
+                    "query" to res.queryContent,
                     "resultCount" to res.resultCount,
                     "coldStartMs" to res.coldStartMs,
                     "latency" to mapOf(

@@ -6,6 +6,110 @@ This directory contains benchmark frameworks for measuring MeGraS performance.
 
 1. **SPARQL Benchmark** - Measures SPARQL query performance
 2. **Ingestion Benchmark** - Measures TSV ingestion performance over time
+3. **Dynamic Knowledge Benchmark** - Compares materialized vs on-the-fly embedding generation
+4. **Performance Analysis Suite** - Comprehensive engine optimization benchmarks:
+   - Cost of Hybridity
+   - Pushdown Effect
+   - Graph Volume Scalability
+   - Vector Dimensionality Scalability
+
+## Architecture Overview
+
+The benchmark framework is organized into:
+
+```
+benchmark/
+├── core/                           # Shared utilities
+│   ├── BenchmarkStatistics.kt      # Statistical calculations
+│   ├── BenchmarkReportGenerator.kt # Report generation (MD, CSV, JSON)
+│   ├── DatabaseOperations.kt       # Database reset, ingestion
+│   ├── SparqlClient.kt             # SPARQL query execution
+│   └── BaseBenchmarkRunner.kt      # Base classes and configs
+├── performance/                    # Performance analysis benchmarks
+│   ├── QueryTemplates.kt           # SPARQL query templates for MeGraS-SYNTH
+│   ├── PerformanceBenchmarkRunner.kt
+│   ├── CostOfHybridityBenchmark.kt
+│   ├── PushdownEffectBenchmark.kt
+│   ├── GraphVolumeScalabilityBenchmark.kt
+│   ├── VectorDimensionalityBenchmark.kt
+│   └── PerformanceAnalysisSuite.kt # Runs all performance benchmarks
+├── SparqlBenchmarkRunner.kt        # Generic SPARQL benchmarking
+├── IngestionBenchmarkRunner.kt     # Ingestion performance
+├── DynamicKnowledgeBenchmark.kt    # Materialized vs dynamic embeddings
+├── LscSparqlBenchmark.kt           # LSC dataset queries
+└── PostgresIngestionBenchmark.kt   # PostgreSQL ingestion
+```
+
+---
+
+# Performance Analysis Benchmarks
+
+These benchmarks evaluate MeGraS engine-level optimizations using the MeGraS-SYNTH dataset.
+
+## Quick Start
+
+Run all performance benchmarks:
+```bash
+./gradlew test --tests "org.megras.benchmark.performance.PerformanceAnalysisSuite.runAll"
+```
+
+Run individual benchmarks:
+```bash
+./gradlew test --tests "org.megras.benchmark.performance.CostOfHybridityBenchmark"
+./gradlew test --tests "org.megras.benchmark.performance.PushdownEffectBenchmark"
+./gradlew test --tests "org.megras.benchmark.performance.GraphVolumeScalabilityBenchmark"
+./gradlew test --tests "org.megras.benchmark.performance.VectorDimensionalityBenchmark"
+```
+
+## Cost of Hybridity Benchmark
+
+Quantifies the overhead of combining symbolic patterns with vector similarity operators.
+
+**Query Types:**
+- Symbolic-only: Pure triple pattern matching
+- Vector-only: Pure k-NN vector search
+- Hybrid: Combined symbolic filter + vector search
+
+**Metrics:** Execution latency, throughput, overhead percentage
+
+**Output:** `benchmark_reports/performance/hybridity/`
+
+## Pushdown Effect Benchmark
+
+Evaluates Early Binding optimization by varying filter selectivity.
+
+**Selectivity Levels:**
+- 0.1% (sel001) - Very restrictive
+- 1% (sel01) - Moderately restrictive
+- 10% (sel10) - Less restrictive
+- 50% (sel50) - Minimally restrictive
+
+**Goal:** Prove stable performance as filters become more restrictive
+
+**Output:** `benchmark_reports/performance/pushdown/`
+
+## Graph Volume Scalability Benchmark
+
+Tests how retrieval scales with increasing graph size.
+
+**Dataset Volumes:**
+- 10^5 triples (100k)
+- 10^6 triples (1M)
+- 10^7 triples (10M)
+
+**Goal:** Demonstrate logarithmic scaling
+
+**Output:** `benchmark_reports/performance/scalability/volume/`
+
+## Vector Dimensionality Benchmark
+
+Characterizes performance with varying embedding dimensions.
+
+**Dimensions:** 256, 512, 768, 1024
+
+**Goal:** Identify bottlenecks in high-dimensional vector processing
+
+**Output:** `benchmark_reports/performance/scalability/dimensionality/`
 
 ---
 

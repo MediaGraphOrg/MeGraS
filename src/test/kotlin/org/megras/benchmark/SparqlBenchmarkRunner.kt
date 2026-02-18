@@ -2,15 +2,12 @@ package org.megras.benchmark
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import org.megras.benchmark.core.BenchmarkReportGenerator
+import org.megras.benchmark.core.BenchmarkStatistics
+import org.megras.benchmark.core.SparqlClient
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import kotlin.math.pow
-import kotlin.math.sqrt
 
 /**
  * Configuration for a SPARQL benchmark.
@@ -61,6 +58,11 @@ data class BenchmarkConfig(
 class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
 
     private val objectMapper: ObjectMapper = jacksonObjectMapper()
+    private val sparqlClient: SparqlClient = SparqlClient(
+        endpoint = config.baseUrl,
+        connectTimeoutMs = config.connectTimeoutMs,
+        readTimeoutMs = config.readTimeoutMs
+    )
 
     init {
         config.validate()
@@ -189,21 +191,7 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
     /**
      * Checks if the SPARQL endpoint is available.
      */
-    fun isEndpointAvailable(): Boolean {
-        return try {
-            val url = URL(config.baseUrl)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
-            connection.requestMethod = "GET"
-            connection.connect()
-            val responseCode = connection.responseCode
-            connection.disconnect()
-            responseCode in 200..499
-        } catch (e: Exception) {
-            false
-        }
-    }
+    fun isEndpointAvailable(): Boolean = sparqlClient.isAvailable()
 
     // ============== Internal Implementation ==============
 
@@ -312,51 +300,13 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
     }
 
     private fun executeQuery(query: String): QueryResult {
-        val startTime = System.currentTimeMillis()
-
-        return try {
-            val encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8.toString())
-            val url = URL("${config.baseUrl}?query=$encodedQuery")
-
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = config.connectTimeoutMs
-            connection.readTimeout = config.readTimeoutMs
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Accept", "application/json")
-
-            val responseCode = connection.responseCode
-            val responseTime = System.currentTimeMillis() - startTime
-
-            if (responseCode == 200) {
-                val response = connection.inputStream.bufferedReader().readText()
-                val resultCount = parseResultCount(response)
-                connection.disconnect()
-
-                QueryResult(
-                    responseTimeMs = responseTime,
-                    resultCount = resultCount,
-                    success = true
-                )
-            } else {
-                val errorStream = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-                connection.disconnect()
-
-                QueryResult(
-                    responseTimeMs = responseTime,
-                    resultCount = 0,
-                    success = false,
-                    errorMessage = "HTTP $responseCode: $errorStream"
-                )
-            }
-        } catch (e: Exception) {
-            val responseTime = System.currentTimeMillis() - startTime
-            QueryResult(
-                responseTimeMs = responseTime,
-                resultCount = 0,
-                success = false,
-                errorMessage = e.message ?: e.javaClass.simpleName
-            )
-        }
+        val result = sparqlClient.executeQuery(query)
+        return QueryResult(
+            responseTimeMs = result.responseTimeMs,
+            resultCount = result.resultCount,
+            success = result.success,
+            errorMessage = result.errorMessage
+        )
     }
 
     private fun parseResultCount(jsonResponse: String): Int {
@@ -389,30 +339,18 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
             )
         }
 
-        val sortedTimes = times.sorted()
-        val min = sortedTimes.first()
-        val max = sortedTimes.last()
-        val mean = times.average()
-
-        val median = if (sortedTimes.size % 2 == 0) {
-            (sortedTimes[sortedTimes.size / 2 - 1] + sortedTimes[sortedTimes.size / 2]) / 2.0
-        } else {
-            sortedTimes[sortedTimes.size / 2].toDouble()
-        }
-
-        val variance = times.map { (it - mean).pow(2) }.average()
-        val stdDev = sqrt(variance)
-
+        // Use shared statistics utilities
+        val stats = BenchmarkStatistics.calculateLatencyStats(times, results.size)
         val resultCount = successfulResults.firstOrNull()?.resultCount ?: 0
 
         return BenchmarkStats(
             queryName = queryName,
             queryContent = queryContent,
-            minMs = min,
-            maxMs = max,
-            meanMs = mean,
-            medianMs = median,
-            stdDevMs = stdDev,
+            minMs = stats.minMs,
+            maxMs = stats.maxMs,
+            meanMs = stats.meanMs,
+            medianMs = stats.medianMs,
+            stdDevMs = stats.stdDevMs,
             resultCount = resultCount,
             successfulRuns = successfulResults.size,
             totalRuns = results.size,

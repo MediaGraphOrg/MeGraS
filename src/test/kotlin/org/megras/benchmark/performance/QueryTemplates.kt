@@ -91,6 +91,72 @@ object QueryTemplates {
     """.trimIndent()
 
     /**
+     * N+1 Problem Demonstration Query
+     *
+     * This query is specifically designed to highlight the N+1 database call problem.
+     *
+     * Without batching optimization (DEFAULT engine):
+     * - First, all subjects matching the selectivity filter are retrieved
+     * - Then, FOR EACH subject, a separate k-NN query is executed
+     * - This results in 1 + N database calls (where N = number of matching subjects)
+     *
+     * With batching optimization (BATCHING engine):
+     * - Subjects are retrieved in batches
+     * - k-NN queries are batched together
+     * - This significantly reduces the number of database round-trips
+     *
+     * The query also retrieves an additional property to make the pattern more realistic
+     * and to ensure we're measuring actual data retrieval, not just query planning.
+     *
+     * @param selectivity The selectivity marker - higher selectivity = more N+1 calls
+     * @param k Number of nearest neighbors per subject
+     * @param vectorPredicate The vector predicate to use
+     */
+    fun nPlusOneDemo(
+        selectivity: String = "sel01",
+        k: Int = 10,
+        vectorPredicate: String = DEFAULT_VECTOR_PREDICATE
+    ): String = """
+        $PREFIX_SYNTH
+        SELECT ?s ?neighbor ?prop
+        WHERE {
+            ?s synth:$selectivity "true" .
+            ?s <http://megras.org/implicit/${k}nn/$vectorPredicate> ?neighbor .
+            ?s synth:prop_0 ?prop .
+        }
+    """.trimIndent()
+
+    /**
+     * Multi-hop N+1 Query
+     *
+     * An even more extreme N+1 scenario where we traverse from subjects to their
+     * neighbors and then get properties of those neighbors.
+     *
+     * This creates a multiplicative effect:
+     * - N subjects pass the filter
+     * - Each subject has k neighbors
+     * - Each neighbor's property is fetched
+     * - Result: potentially N * k + N database calls without batching
+     *
+     * @param selectivity The selectivity marker
+     * @param k Number of nearest neighbors
+     * @param vectorPredicate The vector predicate to use
+     */
+    fun multiHopNPlusOne(
+        selectivity: String = "sel01",
+        k: Int = 10,
+        vectorPredicate: String = DEFAULT_VECTOR_PREDICATE
+    ): String = """
+        $PREFIX_SYNTH
+        SELECT ?s ?neighbor ?neighborProp
+        WHERE {
+            ?s synth:$selectivity "true" .
+            ?s <http://megras.org/implicit/${k}nn/$vectorPredicate> ?neighbor .
+            ?neighbor synth:prop_0 ?neighborProp .
+        }
+    """.trimIndent()
+
+    /**
      * Scalability test query - combines vector search with property access.
      * Used for graph volume scalability experiments.
      */

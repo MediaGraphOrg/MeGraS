@@ -4,20 +4,40 @@ import org.junit.jupiter.api.Test
 import org.megras.benchmark.core.*
 
 /**
- * Pushdown Effect Benchmark
+ * N+1 Problem / Pushdown Effect Benchmark
  *
- * Evaluates the effectiveness of the Early Binding optimization by varying
- * the restrictive nature of the symbolic filters.
+ * Demonstrates and measures the N+1 database call problem that occurs with
+ * hybrid SPARQL queries combining symbolic filters and vector (k-NN) operations.
  *
- * Tests how different filter selectivities affect query performance:
- * - 0.1% selectivity (sel001): Very restrictive filter
- * - 1% selectivity (sel01): Moderately restrictive filter
- * - 10% selectivity (sel10): Less restrictive filter
- * - 50% selectivity (sel50): Minimally restrictive filter
+ * ## The N+1 Problem
  *
- * Goal: Prove that MeGraS-Optimized (BATCHING engine) maintains stable performance
- * as filters become more restrictive by "pushing down" candidates, whereas
- * MeGraS-Default suffers from late-binding overhead.
+ * When executing a query like:
+ * ```sparql
+ * SELECT ?s ?neighbor WHERE {
+ *     ?s synth:sel01 "true" .           # Returns N subjects
+ *     ?s <implicit:10nn/vec512> ?neighbor .  # k-NN for EACH subject
+ * }
+ * ```
+ *
+ * **Without batching (DEFAULT engine):**
+ * - Query 1: Fetch all N subjects matching the filter
+ * - Query 2..N+1: For EACH subject, execute a separate k-NN query
+ * - Total: 1 + N database round-trips
+ *
+ * **With batching (BATCHING engine):**
+ * - Subjects and k-NN queries are batched together
+ * - Dramatically fewer database round-trips
+ *
+ * ## Selectivity Impact
+ *
+ * Higher selectivity (more subjects pass the filter) = more N+1 calls:
+ * - 0.1% selectivity (1 subject): 1 + 1 = 2 calls
+ * - 1% selectivity (10 subjects): 1 + 10 = 11 calls
+ * - 10% selectivity (100 subjects): 1 + 100 = 101 calls
+ * - 50% selectivity (500 subjects): 1 + 500 = 501 calls
+ *
+ * The BATCHING engine should show relatively stable performance across selectivities,
+ * while the DEFAULT engine's latency should increase linearly with selectivity.
  *
  * Dataset: MeGraS-SYNTH with pre-tagged selectivity markers
  * Baselines: MeGraS-Default (DEFAULT engine) vs. MeGraS-Optimized (BATCHING engine)
@@ -84,26 +104,26 @@ class PushdownEffectBenchmark {
      */
     fun runComparison(): ComparisonResult {
         println("=".repeat(80))
-        println("PUSHDOWN EFFECT BENCHMARK - ENGINE COMPARISON")
+        println("N+1 PROBLEM BENCHMARK - ENGINE COMPARISON")
         println("=".repeat(80))
         println()
         println("This benchmark compares two query engine configurations:")
-        println("  1. DEFAULT: Standard Jena query engine")
-        println("  2. BATCHING: Optimized batching query engine")
+        println("  1. BATCHING: Optimized batching query engine (runs first as baseline)")
+        println("  2. DEFAULT: Standard Jena query engine (exhibits N+1 problem)")
         println()
 
-        // Run with DEFAULT engine first
+        // Run with BATCHING engine first (optimized baseline)
         println("━".repeat(80))
-        println("PHASE 1: Running with DEFAULT query engine")
-        println("━".repeat(80))
-        val defaultResult = PushdownEffectRunner(createConfig(ENGINE_DEFAULT)).runBenchmark()
-
-        // Run with BATCHING engine
-        println()
-        println("━".repeat(80))
-        println("PHASE 2: Running with BATCHING query engine")
+        println("PHASE 1: Running with BATCHING query engine (optimized)")
         println("━".repeat(80))
         val batchingResult = PushdownEffectRunner(createConfig(ENGINE_BATCHING)).runBenchmark()
+
+        // Run with DEFAULT engine
+        println()
+        println("━".repeat(80))
+        println("PHASE 2: Running with DEFAULT query engine (N+1 problem)")
+        println("━".repeat(80))
+        val defaultResult = PushdownEffectRunner(createConfig(ENGINE_DEFAULT)).runBenchmark()
 
         // Calculate speedup for each selectivity level
         val speedupBySelectivity = defaultResult.selectivityResults.keys.associateWith { marker ->
@@ -144,26 +164,47 @@ class PushdownEffectBenchmark {
 
         // Markdown comparison report
         val mdContent = buildString {
-            appendLine("# Pushdown Effect Benchmark - Engine Comparison Report")
+            appendLine("# N+1 Problem Benchmark - Engine Comparison Report")
             appendLine()
             appendLine("Generated: ${BenchmarkReportGenerator.generateReadableTimestamp()}")
             appendLine()
             appendLine("## Overview")
             appendLine()
-            appendLine("This benchmark compares query performance between two SPARQL query engine configurations:")
-            appendLine("- **DEFAULT**: Standard Jena query engine")
-            appendLine("- **BATCHING**: Optimized batching query engine that reduces N+1 database calls")
+            appendLine("This benchmark demonstrates the **N+1 database call problem** that occurs with hybrid")
+            appendLine("SPARQL queries combining symbolic filters and vector (k-NN) operations.")
+            appendLine()
+            appendLine("### The N+1 Problem")
+            appendLine()
+            appendLine("When a query filters N subjects and then performs a k-NN search for each:")
+            appendLine()
+            appendLine("| Engine | Database Calls | Description |")
+            appendLine("|--------|----------------|-------------|")
+            appendLine("| **DEFAULT** | 1 + N | One call to fetch subjects, then N separate k-NN calls |")
+            appendLine("| **BATCHING** | ~2-3 | Batched fetching and k-NN operations |")
+            appendLine()
+            appendLine("### Engine Configurations")
+            appendLine()
+            appendLine("- **DEFAULT**: Standard Jena query engine (exhibits N+1 problem)")
+            appendLine("- **BATCHING**: Optimized batching query engine (solves N+1 problem)")
             appendLine()
             appendLine("## Queries Used")
             appendLine()
-            appendLine("The benchmark uses hybrid queries that combine symbolic filters with k-NN vector search.")
-            appendLine("Each selectivity level uses a different filter predicate to control how many subjects pass the filter.")
+            appendLine("The benchmark uses queries that combine symbolic filters with k-NN vector search.")
+            appendLine("Each selectivity level controls how many subjects pass the filter, directly affecting")
+            appendLine("the number of N+1 database calls in the DEFAULT engine.")
+            appendLine()
+            appendLine("| Selectivity | Subjects (N) | DEFAULT Engine Calls | Expected Latency Impact |")
+            appendLine("|-------------|--------------|---------------------|------------------------|")
+            appendLine("| 0.1% | ~1 | 1 + 1 = 2 | Baseline |")
+            appendLine("| 1% | ~10 | 1 + 10 = 11 | ~5x baseline |")
+            appendLine("| 10% | ~100 | 1 + 100 = 101 | ~50x baseline |")
+            appendLine("| 50% | ~500 | 1 + 500 = 501 | ~250x baseline |")
             appendLine()
             for ((marker, selectivity) in selectivityLevels) {
                 appendLine("### ${selectivity * 100}% Selectivity Query")
                 appendLine()
                 appendLine("```sparql")
-                appendLine(QueryTemplates.hybrid(selectivity = marker, k = 10))
+                appendLine(QueryTemplates.nPlusOneDemo(selectivity = marker, k = 10))
                 appendLine("```")
                 appendLine()
             }
@@ -230,13 +271,13 @@ class PushdownEffectBenchmark {
 
         // JSON comparison
         val jsonData = mapOf(
-            "benchmark" to "Pushdown Effect - Engine Comparison",
+            "benchmark" to "N+1 Problem - Engine Comparison",
             "timestamp" to timestamp,
             "engines" to listOf(ENGINE_DEFAULT, ENGINE_BATCHING),
             "queries" to selectivityLevels.associate { (marker, selectivity) ->
                 marker to mapOf(
                     "selectivity" to selectivity,
-                    "sparql" to QueryTemplates.hybrid(selectivity = marker, k = 10)
+                    "sparql" to QueryTemplates.nPlusOneDemo(selectivity = marker, k = 10)
                 )
             },
             "results" to mapOf(
@@ -331,7 +372,8 @@ class PushdownEffectRunner(config: PerformanceBenchmarkConfig) : PerformanceBenc
             println("SELECTIVITY: ${selectivityValue * 100}% ($selectivityMarker)")
             println("-".repeat(80))
 
-            val query = QueryTemplates.hybrid(
+            // Use nPlusOneDemo query to demonstrate N+1 problem
+            val query = QueryTemplates.nPlusOneDemo(
                 selectivity = selectivityMarker,
                 k = config.k
             )

@@ -24,8 +24,8 @@ class LscSparqlBenchmark {
         private const val DEFAULT_REPORTS_DIR = "benchmark_reports/lsc"
         private const val DEFAULT_WARMUP_RUNS = 3
         private const val DEFAULT_WARM_RUNS = 10
-        private const val DEFAULT_CONNECT_TIMEOUT_MS = 30000
-        private const val DEFAULT_READ_TIMEOUT_MS = 60000
+        private const val DEFAULT_CONNECT_TIMEOUT_MS = 30_000
+        private const val DEFAULT_READ_TIMEOUT_MS = 300_000
     }
 
     private val megrasServerConfig = MegrasServerConfig(
@@ -54,7 +54,8 @@ class LscSparqlBenchmark {
         warmupRuns = DEFAULT_WARMUP_RUNS,
         warmRuns = DEFAULT_WARM_RUNS,
         connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MS,
-        readTimeoutMs = DEFAULT_READ_TIMEOUT_MS
+        readTimeoutMs = DEFAULT_READ_TIMEOUT_MS,
+        maxTimeouts = 3
     )
 
     // Track the MeGraS process if we start it

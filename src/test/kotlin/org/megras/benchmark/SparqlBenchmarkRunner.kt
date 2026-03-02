@@ -29,7 +29,9 @@ data class BenchmarkConfig(
     val warmupRuns: Int = 3,
     val warmRuns: Int = 10,
     val connectTimeoutMs: Int = 30000,
-    val readTimeoutMs: Int = 60000
+    val readTimeoutMs: Int = 60000,
+    /** If > 0, skip a query after this many timeouts (across warmup + measured runs). 0 = disabled. */
+    val maxTimeouts: Int = 0
 ) {
     fun validate() {
         require(name.isNotBlank()) { "Benchmark name cannot be blank" }
@@ -41,6 +43,7 @@ data class BenchmarkConfig(
         require(warmupRuns > 0 || warmRuns > 0) { "At least one of warmupRuns or warmRuns must be positive" }
         require(connectTimeoutMs > 0) { "Connect timeout must be positive" }
         require(readTimeoutMs > 0) { "Read timeout must be positive" }
+        require(maxTimeouts >= 0) { "Max timeouts must be non-negative" }
     }
 }
 
@@ -95,7 +98,9 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
         val queryName: String,
         val queryContent: String,
         val coldStartMs: Long?,
-        val warmStats: BenchmarkStats?
+        val warmStats: BenchmarkStats?,
+        val skipped: Boolean = false,
+        val skippedReason: String? = null
     )
 
     data class BenchmarkReport(
@@ -246,11 +251,12 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
 
     private fun executeBenchmark(queryName: String, queryContent: String): QueryBenchmarkResult {
         var coldStartMs: Long? = null
+        var timeoutCount = 0
 
         // Warmup phase
         if (config.warmupRuns > 0) {
             println("Warmup (${config.warmupRuns} runs, not measured)...")
-            repeat(config.warmupRuns) { i ->
+            for (i in 0 until config.warmupRuns) {
                 val result = executeQuery(queryContent)
                 if (i == 0) {
                     coldStartMs = result.responseTimeMs
@@ -262,6 +268,20 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
                     println(" (${result.resultCount} results)")
                 } else {
                     println(" ERROR: ${result.errorMessage}")
+                    if (isTimeout(result)) {
+                        timeoutCount++
+                        if (config.maxTimeouts > 0 && timeoutCount >= config.maxTimeouts) {
+                            println("  *** Query skipped: $timeoutCount timeout(s) reached the limit of ${config.maxTimeouts} ***")
+                            return QueryBenchmarkResult(
+                                queryName = queryName,
+                                queryContent = queryContent,
+                                coldStartMs = coldStartMs,
+                                warmStats = null,
+                                skipped = true,
+                                skippedReason = "Skipped after $timeoutCount timeout(s) during warmup"
+                            )
+                        }
+                    }
                 }
             }
             println()
@@ -272,7 +292,7 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
         if (config.warmRuns > 0) {
             println("Warm runs (${config.warmRuns} measured executions)...")
             val warmResults = mutableListOf<QueryResult>()
-            repeat(config.warmRuns) { i ->
+            for (i in 0 until config.warmRuns) {
                 val result = executeQuery(queryContent)
                 warmResults.add(result)
                 if (i == 0 && config.warmupRuns == 0) {
@@ -285,6 +305,20 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
                     println(" (${result.resultCount} results)")
                 } else {
                     println(" ERROR: ${result.errorMessage}")
+                    if (isTimeout(result)) {
+                        timeoutCount++
+                        if (config.maxTimeouts > 0 && timeoutCount >= config.maxTimeouts) {
+                            println("  *** Query skipped: $timeoutCount timeout(s) reached the limit of ${config.maxTimeouts} ***")
+                            return QueryBenchmarkResult(
+                                queryName = queryName,
+                                queryContent = queryContent,
+                                coldStartMs = coldStartMs,
+                                warmStats = calculateStats(queryName, queryContent, warmResults),
+                                skipped = true,
+                                skippedReason = "Skipped after $timeoutCount timeout(s) during measured runs"
+                            )
+                        }
+                    }
                 }
             }
             warmStats = calculateStats(queryName, queryContent, warmResults)
@@ -297,6 +331,15 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
             coldStartMs = coldStartMs,
             warmStats = warmStats
         )
+    }
+
+    /**
+     * Checks if a query result represents a timeout error.
+     */
+    private fun isTimeout(result: QueryResult): Boolean {
+        if (result.success) return false
+        val msg = result.errorMessage?.lowercase() ?: return false
+        return msg.contains("timed out") || msg.contains("timeout") || msg.contains("sockettimeout")
     }
 
     private fun executeQuery(query: String): QueryResult {
@@ -361,6 +404,10 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
     private fun printQueryResult(result: QueryBenchmarkResult) {
         println("Statistics for: ${result.queryName}")
 
+        if (result.skipped) {
+            println("  *** SKIPPED: ${result.skippedReason} ***")
+        }
+
         if (result.coldStartMs != null) {
             println("  Cold start:      ${result.coldStartMs} ms")
         }
@@ -398,7 +445,9 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
             for (result in allResults) {
                 val warm = result.warmStats
                 val coldStart = result.coldStartMs?.toString() ?: "-"
-                if (warm != null) {
+                if (result.skipped) {
+                    appendLine("| ${result.queryName} | SKIPPED | $coldStart | - | - | - | - | - | ${result.skippedReason ?: "timeout"} |")
+                } else if (warm != null) {
                     appendLine("| ${result.queryName} | ${warm.resultCount} | $coldStart | ${warm.minMs} | ${warm.maxMs} | ${"%.2f".format(warm.meanMs)} | ${"%.2f".format(warm.medianMs)} | ${"%.2f".format(warm.stdDevMs)} | ${warm.successfulRuns}/${warm.totalRuns} |")
                 } else {
                     appendLine("| ${result.queryName} | - | $coldStart | - | - | - | - | - | - |")
@@ -416,6 +465,11 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
                 appendLine(result.queryContent)
                 appendLine("```")
                 appendLine()
+
+                if (result.skipped) {
+                    appendLine("**⚠ SKIPPED:** ${result.skippedReason}")
+                    appendLine()
+                }
 
                 if (result.coldStartMs != null) {
                     appendLine("- **Cold Start:** ${result.coldStartMs} ms")
@@ -453,14 +507,15 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
         // Save CSV report
         val csvFile = File(reportsDir, "benchmark_report_$timestamp.csv")
         csvFile.writeText(buildString {
-            appendLine("Query,Result Count,Cold Start (ms),Min (ms),Max (ms),Mean (ms),Median (ms),Std Dev (ms),Successful Runs,Total Runs")
+            appendLine("Query,Status,Result Count,Cold Start (ms),Min (ms),Max (ms),Mean (ms),Median (ms),Std Dev (ms),Successful Runs,Total Runs")
             for (result in allResults) {
                 val warm = result.warmStats
                 val coldStart = result.coldStartMs?.toString() ?: ""
+                val status = if (result.skipped) "SKIPPED" else "OK"
                 if (warm != null) {
-                    appendLine("${result.queryName},${warm.resultCount},$coldStart,${warm.minMs},${warm.maxMs},${"%.2f".format(warm.meanMs)},${"%.2f".format(warm.medianMs)},${"%.2f".format(warm.stdDevMs)},${warm.successfulRuns},${warm.totalRuns}")
+                    appendLine("${result.queryName},$status,${warm.resultCount},$coldStart,${warm.minMs},${warm.maxMs},${"%.2f".format(warm.meanMs)},${"%.2f".format(warm.medianMs)},${"%.2f".format(warm.stdDevMs)},${warm.successfulRuns},${warm.totalRuns}")
                 } else {
-                    appendLine("${result.queryName},0,$coldStart,,,,,,,")
+                    appendLine("${result.queryName},$status,0,$coldStart,,,,,,,")
                 }
             }
         })
@@ -483,6 +538,8 @@ class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
                     "queryName" to result.queryName,
                     "query" to result.queryContent,
                     "coldStartMs" to result.coldStartMs,
+                    "skipped" to result.skipped,
+                    "skippedReason" to result.skippedReason,
                     "resultCount" to (result.warmStats?.resultCount ?: 0),
                     "stats" to result.warmStats?.let { warm ->
                         mapOf(

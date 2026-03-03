@@ -1,0 +1,563 @@
+package org.megras.benchmark
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import org.megras.benchmark.core.BenchmarkReportGenerator
+import org.megras.benchmark.core.BenchmarkStatistics
+import org.megras.benchmark.core.SparqlClient
+import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+/**
+ * Configuration for a SPARQL benchmark.
+ *
+ * @param name Human-readable name for the benchmark (used in reports)
+ * @param baseUrl The SPARQL endpoint URL to benchmark
+ * @param queriesDir Directory containing .sparql or .rq query files
+ * @param reportsDir Directory where benchmark reports will be saved
+ * @param warmupRuns Number of warmup iterations (not included in statistics)
+ * @param warmRuns Number of timed iterations after warmup
+ * @param connectTimeoutMs HTTP connection timeout in milliseconds
+ * @param readTimeoutMs HTTP read timeout in milliseconds
+ */
+data class BenchmarkConfig(
+    val name: String,
+    val baseUrl: String = "http://localhost:8080/query/sparql",
+    val queriesDir: String,
+    val reportsDir: String,
+    val warmupRuns: Int = 3,
+    val warmRuns: Int = 10,
+    val connectTimeoutMs: Int = 30000,
+    val readTimeoutMs: Int = 60000,
+    /** If > 0, skip a query after this many timeouts (across warmup + measured runs). 0 = disabled. */
+    val maxTimeouts: Int = 0
+) {
+    fun validate() {
+        require(name.isNotBlank()) { "Benchmark name cannot be blank" }
+        require(baseUrl.isNotBlank()) { "Base URL cannot be blank" }
+        require(queriesDir.isNotBlank()) { "Queries directory cannot be blank" }
+        require(reportsDir.isNotBlank()) { "Reports directory cannot be blank" }
+        require(warmupRuns >= 0) { "Warmup runs must be non-negative" }
+        require(warmRuns >= 0) { "Warm runs must be non-negative" }
+        require(warmupRuns > 0 || warmRuns > 0) { "At least one of warmupRuns or warmRuns must be positive" }
+        require(connectTimeoutMs > 0) { "Connect timeout must be positive" }
+        require(readTimeoutMs > 0) { "Read timeout must be positive" }
+        require(maxTimeouts >= 0) { "Max timeouts must be non-negative" }
+    }
+}
+
+/**
+ * Generic SPARQL Benchmark Runner
+ *
+ * A configurable benchmark framework for measuring SPARQL query performance.
+ *
+ * Features:
+ * - Configurable warmup and measurement runs
+ * - Cold start measurement
+ * - Statistical analysis (min, max, mean, median, std dev)
+ * - Multiple output formats (Markdown, CSV, JSON)
+ */
+class SparqlBenchmarkRunner(private val config: BenchmarkConfig) {
+
+    private val objectMapper: ObjectMapper = jacksonObjectMapper()
+    private val sparqlClient: SparqlClient = SparqlClient(
+        endpoint = config.baseUrl,
+        connectTimeoutMs = config.connectTimeoutMs,
+        readTimeoutMs = config.readTimeoutMs
+    )
+
+    init {
+        config.validate()
+    }
+
+    // ============== Data Classes ==============
+
+    data class QueryResult(
+        val responseTimeMs: Long,
+        val resultCount: Int,
+        val success: Boolean,
+        val errorMessage: String? = null
+    )
+
+    data class BenchmarkStats(
+        val queryName: String,
+        val queryContent: String,
+        val minMs: Long,
+        val maxMs: Long,
+        val meanMs: Double,
+        val medianMs: Double,
+        val stdDevMs: Double,
+        val resultCount: Int,
+        val successfulRuns: Int,
+        val totalRuns: Int,
+        val allTimesMs: List<Long>
+    )
+
+    data class QueryBenchmarkResult(
+        val queryName: String,
+        val queryContent: String,
+        val coldStartMs: Long?,
+        val warmStats: BenchmarkStats?,
+        val skipped: Boolean = false,
+        val skippedReason: String? = null
+    )
+
+    data class BenchmarkReport(
+        val config: BenchmarkConfig,
+        val timestamp: String,
+        val results: List<QueryBenchmarkResult>,
+        val markdownReport: String
+    )
+
+    // ============== Public API ==============
+
+    /**
+     * Runs the complete benchmark and returns the report.
+     *
+     * @return BenchmarkReport containing all results and generated reports
+     * @throws IllegalStateException if the endpoint is not available
+     */
+    fun runBenchmark(): BenchmarkReport {
+        printHeader()
+
+        val queriesDir = findQueriesDirectory()
+        if (queriesDir == null || !queriesDir.exists()) {
+            throw IllegalStateException(
+                "SPARQL queries directory not found!\n" +
+                "Expected location: ${config.queriesDir}\n" +
+                "Please create the directory and add .sparql or .rq files."
+            )
+        }
+
+        val queryFiles = queriesDir.listFiles { file ->
+            file.isFile && (file.extension == "sparql" || file.extension == "rq")
+        }?.sortedBy { it.name }
+
+        if (queryFiles.isNullOrEmpty()) {
+            throw IllegalStateException(
+                "No SPARQL query files found in ${queriesDir.absolutePath}\n" +
+                "Please add .sparql or .rq files to the directory."
+            )
+        }
+
+        println("Found ${queryFiles.size} query file(s) in: ${queriesDir.absolutePath}")
+        println("Warmup runs: ${config.warmupRuns} (not measured, for JVM/cache warmup)")
+        println("Warm runs: ${config.warmRuns} (measured)")
+        println("Endpoint: ${config.baseUrl}")
+        println()
+
+        if (!isEndpointAvailable()) {
+            throw IllegalStateException(
+                "SPARQL endpoint is not available at ${config.baseUrl}\n" +
+                "Please start the server before running benchmarks."
+            )
+        }
+
+        val allResults = mutableListOf<QueryBenchmarkResult>()
+
+        for (queryFile in queryFiles) {
+            val result = benchmarkQuery(queryFile)
+            allResults.add(result)
+            printQueryResult(result)
+            println()
+        }
+
+        val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+        val markdownReport = generateMarkdownReport(allResults)
+
+        saveReports(markdownReport, allResults, timestamp)
+
+        printFooter()
+
+        return BenchmarkReport(
+            config = config,
+            timestamp = timestamp,
+            results = allResults,
+            markdownReport = markdownReport
+        )
+    }
+
+    /**
+     * Runs the benchmark for a single query string.
+     *
+     * @param queryName Name identifier for the query
+     * @param queryContent SPARQL query string
+     * @return QueryBenchmarkResult with statistics
+     */
+    fun benchmarkSingleQuery(queryName: String, queryContent: String): QueryBenchmarkResult {
+        if (!isEndpointAvailable()) {
+            throw IllegalStateException("SPARQL endpoint is not available at ${config.baseUrl}")
+        }
+
+        return executeBenchmark(queryName, queryContent)
+    }
+
+    /**
+     * Checks if the SPARQL endpoint is available.
+     */
+    fun isEndpointAvailable(): Boolean = sparqlClient.isAvailable()
+
+    // ============== Internal Implementation ==============
+
+    private fun printHeader() {
+        println("=".repeat(80))
+        println(config.name)
+        println("=".repeat(80))
+    }
+
+    private fun printFooter() {
+        println("=".repeat(80))
+        println("Benchmark Complete!")
+        println("=".repeat(80))
+    }
+
+    private fun findQueriesDirectory(): File? {
+        val possiblePaths = listOf(
+            config.queriesDir,
+            "../${config.queriesDir}",
+            config.queriesDir.substringAfterLast("/")
+        )
+
+        for (path in possiblePaths) {
+            val dir = File(path)
+            if (dir.exists() && dir.isDirectory) {
+                return dir
+            }
+        }
+
+        val resourceUrl = this::class.java.classLoader.getResource(
+            config.queriesDir.removePrefix("src/test/resources/")
+        )
+        if (resourceUrl != null) {
+            return File(resourceUrl.toURI())
+        }
+
+        return File(config.queriesDir)
+    }
+
+    private fun benchmarkQuery(queryFile: File): QueryBenchmarkResult {
+        val queryName = queryFile.nameWithoutExtension
+        val queryContent = queryFile.readText().trim()
+
+        println("-".repeat(80))
+        println("Query: $queryName")
+        println("-".repeat(80))
+        println("Content: ${queryContent.take(200)}${if (queryContent.length > 200) "..." else ""}")
+        println()
+
+        return executeBenchmark(queryName, queryContent)
+    }
+
+    private fun executeBenchmark(queryName: String, queryContent: String): QueryBenchmarkResult {
+        var coldStartMs: Long? = null
+        var timeoutCount = 0
+
+        // Warmup phase
+        if (config.warmupRuns > 0) {
+            println("Warmup (${config.warmupRuns} runs, not measured)...")
+            for (i in 0 until config.warmupRuns) {
+                val result = executeQuery(queryContent)
+                if (i == 0) {
+                    coldStartMs = result.responseTimeMs
+                    print("  Warmup ${i + 1} (cold start): ${result.responseTimeMs}ms")
+                } else {
+                    print("  Warmup ${i + 1}: ${result.responseTimeMs}ms")
+                }
+                if (result.success) {
+                    println(" (${result.resultCount} results)")
+                } else {
+                    println(" ERROR: ${result.errorMessage}")
+                    if (isTimeout(result)) {
+                        timeoutCount++
+                        if (config.maxTimeouts > 0 && timeoutCount >= config.maxTimeouts) {
+                            println("  *** Query skipped: $timeoutCount timeout(s) reached the limit of ${config.maxTimeouts} ***")
+                            return QueryBenchmarkResult(
+                                queryName = queryName,
+                                queryContent = queryContent,
+                                coldStartMs = coldStartMs,
+                                warmStats = null,
+                                skipped = true,
+                                skippedReason = "Skipped after $timeoutCount timeout(s) during warmup"
+                            )
+                        }
+                    }
+                }
+            }
+            println()
+        }
+
+        // Warm runs (measured)
+        var warmStats: BenchmarkStats? = null
+        if (config.warmRuns > 0) {
+            println("Warm runs (${config.warmRuns} measured executions)...")
+            val warmResults = mutableListOf<QueryResult>()
+            for (i in 0 until config.warmRuns) {
+                val result = executeQuery(queryContent)
+                warmResults.add(result)
+                if (i == 0 && config.warmupRuns == 0) {
+                    coldStartMs = result.responseTimeMs
+                    print("  Warm ${i + 1} (cold start): ${result.responseTimeMs}ms")
+                } else {
+                    print("  Warm ${i + 1}: ${result.responseTimeMs}ms")
+                }
+                if (result.success) {
+                    println(" (${result.resultCount} results)")
+                } else {
+                    println(" ERROR: ${result.errorMessage}")
+                    if (isTimeout(result)) {
+                        timeoutCount++
+                        if (config.maxTimeouts > 0 && timeoutCount >= config.maxTimeouts) {
+                            println("  *** Query skipped: $timeoutCount timeout(s) reached the limit of ${config.maxTimeouts} ***")
+                            return QueryBenchmarkResult(
+                                queryName = queryName,
+                                queryContent = queryContent,
+                                coldStartMs = coldStartMs,
+                                warmStats = calculateStats(queryName, queryContent, warmResults),
+                                skipped = true,
+                                skippedReason = "Skipped after $timeoutCount timeout(s) during measured runs"
+                            )
+                        }
+                    }
+                }
+            }
+            warmStats = calculateStats(queryName, queryContent, warmResults)
+            println()
+        }
+
+        return QueryBenchmarkResult(
+            queryName = queryName,
+            queryContent = queryContent,
+            coldStartMs = coldStartMs,
+            warmStats = warmStats
+        )
+    }
+
+    /**
+     * Checks if a query result represents a timeout error.
+     */
+    private fun isTimeout(result: QueryResult): Boolean {
+        if (result.success) return false
+        val msg = result.errorMessage?.lowercase() ?: return false
+        return msg.contains("timed out") || msg.contains("timeout") || msg.contains("sockettimeout")
+    }
+
+    private fun executeQuery(query: String): QueryResult {
+        val result = sparqlClient.executeQuery(query)
+        return QueryResult(
+            responseTimeMs = result.responseTimeMs,
+            resultCount = result.resultCount,
+            success = result.success,
+            errorMessage = result.errorMessage
+        )
+    }
+
+    private fun parseResultCount(jsonResponse: String): Int {
+        return try {
+            val json = objectMapper.readTree(jsonResponse)
+            val bindings = json.path("results").path("bindings")
+            if (bindings.isArray) bindings.size() else 0
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    private fun calculateStats(queryName: String, queryContent: String, results: List<QueryResult>): BenchmarkStats {
+        val successfulResults = results.filter { it.success }
+        val times = successfulResults.map { it.responseTimeMs }
+
+        if (times.isEmpty()) {
+            return BenchmarkStats(
+                queryName = queryName,
+                queryContent = queryContent,
+                minMs = 0,
+                maxMs = 0,
+                meanMs = 0.0,
+                medianMs = 0.0,
+                stdDevMs = 0.0,
+                resultCount = 0,
+                successfulRuns = 0,
+                totalRuns = results.size,
+                allTimesMs = emptyList()
+            )
+        }
+
+        // Use shared statistics utilities
+        val stats = BenchmarkStatistics.calculateLatencyStats(times, results.size)
+        val resultCount = successfulResults.firstOrNull()?.resultCount ?: 0
+
+        return BenchmarkStats(
+            queryName = queryName,
+            queryContent = queryContent,
+            minMs = stats.minMs,
+            maxMs = stats.maxMs,
+            meanMs = stats.meanMs,
+            medianMs = stats.medianMs,
+            stdDevMs = stats.stdDevMs,
+            resultCount = resultCount,
+            successfulRuns = successfulResults.size,
+            totalRuns = results.size,
+            allTimesMs = times
+        )
+    }
+
+    private fun printQueryResult(result: QueryBenchmarkResult) {
+        println("Statistics for: ${result.queryName}")
+
+        if (result.skipped) {
+            println("  *** SKIPPED: ${result.skippedReason} ***")
+        }
+
+        if (result.coldStartMs != null) {
+            println("  Cold start:      ${result.coldStartMs} ms")
+        }
+
+        if (result.warmStats != null) {
+            println("  Result count:    ${result.warmStats.resultCount}")
+            println("  Min:             ${result.warmStats.minMs} ms")
+            println("  Max:             ${result.warmStats.maxMs} ms")
+            println("  Mean:            ${"%.2f".format(result.warmStats.meanMs)} ms")
+            println("  Median:          ${"%.2f".format(result.warmStats.medianMs)} ms")
+            println("  Std Dev:         ${"%.2f".format(result.warmStats.stdDevMs)} ms")
+            println("  Success rate:    ${result.warmStats.successfulRuns}/${result.warmStats.totalRuns}")
+        } else {
+            println("  No results (no warm runs configured)")
+        }
+    }
+
+    private fun generateMarkdownReport(allResults: List<QueryBenchmarkResult>): String {
+        val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
+        return buildString {
+            appendLine("# ${config.name} Report")
+            appendLine()
+            appendLine("Generated: $timestamp")
+            appendLine("Endpoint: ${config.baseUrl}")
+            appendLine("Warmup runs: ${config.warmupRuns} (not measured)")
+            appendLine("Warm runs: ${config.warmRuns} (measured)")
+            appendLine()
+
+            // Summary table
+            appendLine("## Summary")
+            appendLine()
+            appendLine("| Query | Results | Cold Start (ms) | Min (ms) | Max (ms) | Mean (ms) | Median (ms) | Std Dev (ms) | Success Rate |")
+            appendLine("|-------|---------|-----------------|----------|----------|-----------|-------------|--------------|--------------|")
+            for (result in allResults) {
+                val warm = result.warmStats
+                val coldStart = result.coldStartMs?.toString() ?: "-"
+                if (result.skipped) {
+                    appendLine("| ${result.queryName} | SKIPPED | $coldStart | - | - | - | - | - | ${result.skippedReason ?: "timeout"} |")
+                } else if (warm != null) {
+                    appendLine("| ${result.queryName} | ${warm.resultCount} | $coldStart | ${warm.minMs} | ${warm.maxMs} | ${"%.2f".format(warm.meanMs)} | ${"%.2f".format(warm.medianMs)} | ${"%.2f".format(warm.stdDevMs)} | ${warm.successfulRuns}/${warm.totalRuns} |")
+                } else {
+                    appendLine("| ${result.queryName} | - | $coldStart | - | - | - | - | - | - |")
+                }
+            }
+
+            appendLine()
+            appendLine("## Query Details")
+            appendLine()
+
+            for (result in allResults) {
+                appendLine("### ${result.queryName}")
+                appendLine()
+                appendLine("```sparql")
+                appendLine(result.queryContent)
+                appendLine("```")
+                appendLine()
+
+                if (result.skipped) {
+                    appendLine("**⚠ SKIPPED:** ${result.skippedReason}")
+                    appendLine()
+                }
+
+                if (result.coldStartMs != null) {
+                    appendLine("- **Cold Start:** ${result.coldStartMs} ms")
+                }
+
+                if (result.warmStats != null) {
+                    appendLine()
+                    appendLine("#### Warm Statistics (${result.warmStats.totalRuns} runs)")
+                    appendLine("- **Min:** ${result.warmStats.minMs} ms")
+                    appendLine("- **Max:** ${result.warmStats.maxMs} ms")
+                    appendLine("- **Mean:** ${"%.2f".format(result.warmStats.meanMs)} ms")
+                    appendLine("- **Median:** ${"%.2f".format(result.warmStats.medianMs)} ms")
+                    appendLine("- **Std Dev:** ${"%.2f".format(result.warmStats.stdDevMs)} ms")
+                    appendLine("- **Result Count:** ${result.warmStats.resultCount}")
+                    appendLine("- **Success Rate:** ${result.warmStats.successfulRuns}/${result.warmStats.totalRuns}")
+                    appendLine("- **All Times (ms):** ${result.warmStats.allTimesMs.joinToString(", ")}")
+                    appendLine()
+                }
+            }
+        }
+    }
+
+    private fun saveReports(report: String, allResults: List<QueryBenchmarkResult>, timestamp: String) {
+        val reportsDir = File(config.reportsDir)
+
+        if (!reportsDir.exists()) {
+            reportsDir.mkdirs()
+        }
+
+        // Save Markdown report
+        val mdFile = File(reportsDir, "benchmark_report_$timestamp.md")
+        mdFile.writeText(report)
+        println("Report saved to: ${mdFile.absolutePath}")
+
+        // Save CSV report
+        val csvFile = File(reportsDir, "benchmark_report_$timestamp.csv")
+        csvFile.writeText(buildString {
+            appendLine("Query,Status,Result Count,Cold Start (ms),Min (ms),Max (ms),Mean (ms),Median (ms),Std Dev (ms),Successful Runs,Total Runs")
+            for (result in allResults) {
+                val warm = result.warmStats
+                val coldStart = result.coldStartMs?.toString() ?: ""
+                val status = if (result.skipped) "SKIPPED" else "OK"
+                if (warm != null) {
+                    appendLine("${result.queryName},$status,${warm.resultCount},$coldStart,${warm.minMs},${warm.maxMs},${"%.2f".format(warm.meanMs)},${"%.2f".format(warm.medianMs)},${"%.2f".format(warm.stdDevMs)},${warm.successfulRuns},${warm.totalRuns}")
+                } else {
+                    appendLine("${result.queryName},$status,0,$coldStart,,,,,,,")
+                }
+            }
+        })
+        println("CSV saved to: ${csvFile.absolutePath}")
+
+        // Save JSON report
+        val jsonFile = File(reportsDir, "benchmark_report_$timestamp.json")
+        val jsonReport = mapOf(
+            "benchmark" to config.name,
+            "timestamp" to timestamp,
+            "config" to mapOf(
+                "endpoint" to config.baseUrl,
+                "warmupRuns" to config.warmupRuns,
+                "warmRuns" to config.warmRuns,
+                "connectTimeoutMs" to config.connectTimeoutMs,
+                "readTimeoutMs" to config.readTimeoutMs
+            ),
+            "results" to allResults.map { result ->
+                mapOf(
+                    "queryName" to result.queryName,
+                    "query" to result.queryContent,
+                    "coldStartMs" to result.coldStartMs,
+                    "skipped" to result.skipped,
+                    "skippedReason" to result.skippedReason,
+                    "resultCount" to (result.warmStats?.resultCount ?: 0),
+                    "stats" to result.warmStats?.let { warm ->
+                        mapOf(
+                            "minMs" to warm.minMs,
+                            "maxMs" to warm.maxMs,
+                            "meanMs" to warm.meanMs,
+                            "medianMs" to warm.medianMs,
+                            "stdDevMs" to warm.stdDevMs,
+                            "successfulRuns" to warm.successfulRuns,
+                            "totalRuns" to warm.totalRuns,
+                            "allTimesMs" to warm.allTimesMs
+                        )
+                    }
+                )
+            }
+        )
+        jsonFile.writeText(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonReport))
+        println("JSON saved to: ${jsonFile.absolutePath}")
+    }
+}
+

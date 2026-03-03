@@ -44,6 +44,7 @@ object RestApi {
         val addTriplesPageHandler = AddTriplesPageHandler()
         val predicateInformationHandler = PredicateInformationHandler()
         val segmenterUiHandler = SegmenterUiHandler()
+        val graphNeighborhoodHandler = GraphNeighborhoodHandler(slQuadSet)
 
 
         javalin = Javalin.create {
@@ -123,6 +124,7 @@ object RestApi {
                 get("/predicateinformation", predicateInformationHandler::get)
                 get("/predicateinformation/<predicateUri>", predicateInformationHandler::get)
                 get("/segmenterui", segmenterUiHandler::get)
+                get("/query/neighborhood", graphNeighborhoodHandler::get)
             }
 
             it.staticFiles.add{ static ->

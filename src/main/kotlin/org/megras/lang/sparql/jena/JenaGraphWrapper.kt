@@ -8,6 +8,10 @@ import org.megras.lang.sparql.SparqlUtil.toQuadValue
 
 class JenaGraphWrapper(private val quads: QuadSet) : GraphBase() {
 
+    /**
+     * Returns the underlying QuadSet for direct access by custom query engines.
+     */
+    fun getQuadSet(): QuadSet = quads
 
     override fun graphBaseFind(triplePattern: Triple): ExtendedIterator<Triple> {
 

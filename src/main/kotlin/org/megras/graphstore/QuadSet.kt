@@ -42,4 +42,16 @@ interface QuadSet : Set<Quad> {
 
     fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet
 
+    /**
+     * Returns the set of distinct object values for the given predicate.
+     * This is optimized to avoid fetching full quads when only distinct objects are needed.
+     */
+    fun distinctObjects(predicate: QuadValue): Set<QuadValue> = filterPredicate(predicate).map { it.`object` }.toSet()
+
+    /**
+     * Returns the set of distinct subject values for the given predicate.
+     * This is optimized to avoid fetching full quads when only distinct subjects are needed.
+     */
+    fun distinctSubjects(predicate: QuadValue): Set<QuadValue> = filterPredicate(predicate).map { it.subject }.toSet()
+
 }

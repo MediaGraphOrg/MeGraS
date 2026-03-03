@@ -14,10 +14,10 @@ RUN gradle shadowJar --no-daemon
 FROM eclipse-temurin:17-jre-focal
 
 # Copy the built "fat JAR" from the builder stage
-COPY --from=builder /home/gradle/project/build/libs/megras-0.1-SNAPSHOT-all.jar /app/megras-0.1-SNAPSHOT-all.jar
+COPY --from=builder /home/gradle/project/build/libs/megras-*-all.jar /app/app.jar
 
 # Expose the port that your application listens on (e.g., 8080)
 EXPOSE 8080
 
 # Set the entrypoint to run the application
-ENTRYPOINT ["java", "-jar", "/app/megras-0.1-SNAPSHOT-all.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

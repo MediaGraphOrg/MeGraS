@@ -1,9 +1,9 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.8.10'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.8.10'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.23'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.23'
     id 'java'
     id 'application'
-    id 'org.jetbrains.kotlin.kapt' version '1.8.10'
+    id 'org.jetbrains.kotlin.kapt' version '1.9.23'
     id 'antlr'
     id 'org.openjfx.javafxplugin' version '0.0.14'
     id 'com.google.protobuf' version '0.9.4'
@@ -157,7 +157,7 @@ dependencies {
     /* LibSVM */
     implementation group: 'tw.edu.ntu.csie', name: 'libsvm', version: '3.31'
 
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.23'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
 
@@ -172,6 +172,19 @@ dependencies {
     implementation 'com.vladsch.flexmark:flexmark-all:0.64.8'
 
     implementation 'com.github.mjeanroy:exiftool-lib:3.1.0'
+
+    implementation 'com.zaxxer:HikariCP:5.0.1'
+}
+
+// Force consistent toolchains to avoid kapt/JDK module access issues
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 protobuf {
@@ -234,9 +247,9 @@ test {
 
 compileKotlin {
 //    dependsOn(tasks.generateGrammarSource)
-    kotlinOptions.jvmTarget = '1.8'
+    kotlinOptions.jvmTarget = '17'
 }
 
 compileTestKotlin {
-    kotlinOptions.jvmTarget = '1.8'
+    kotlinOptions.jvmTarget = '17'
 }

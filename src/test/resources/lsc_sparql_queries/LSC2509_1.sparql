@@ -1,0 +1,12 @@
+PREFIX lsc: <http://lsc.dcu.ie/schema#>
+PREFIX tag: <http://lsc.dcu.ie/tag#>
+
+SELECT DISTINCT ?img ?day ?id
+WHERE {
+	?img lsc:id ?id ;
+		lsc:day ?day ;
+		lsc:location_name "Car" ;
+		lsc:ocr ?ocr .
+	FILTER(CONTAINS(LCASE(STR(?ocr)), LCASE("smile")))
+}
+ORDER BY ?id

@@ -52,18 +52,9 @@ class ImplicitRelationMutableQuadSet(
     override fun getId(id: Long): Quad? = this.base.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet {
-        val existing = this.base.filterSubject(subject)
-
-        if (subject !is URIValue) {
-            return existing
-        }
-
-        val implicit = handlers.flatMap { (predicate, handler) ->
-            val objects = handler.findObjects(subject)
-            objects.map { Quad(subject, predicate, it) }
-        }.toSet()
-
-        return existing + BasicQuadSet(implicit)
+        // Skip implicit relations - this is a wildcard predicate query
+        // Implicit relations should only be computed when explicitly requested
+        return this.base.filterSubject(subject)
     }
 
     override fun filterPredicate(predicate: QuadValue): QuadSet {
@@ -72,18 +63,9 @@ class ImplicitRelationMutableQuadSet(
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet {
-        val existing = this.base.filterObject(`object`)
-
-        if (`object` !is URIValue) {
-            return existing
-        }
-
-        val implicit = handlers.flatMap { (predicate, handler) ->
-            val subjects = handler.findSubjects(`object`)
-            subjects.map { Quad(it, predicate, `object`) }
-        }.toSet()
-
-        return existing + BasicQuadSet(implicit)
+        // Skip implicit relations - this is a wildcard predicate query
+        // Implicit relations should only be computed when explicitly requested
+        return this.base.filterObject(`object`)
     }
 
     override fun filter(
@@ -93,7 +75,13 @@ class ImplicitRelationMutableQuadSet(
     ): QuadSet {
         val existing = this.base.filter(subjects, predicates, objects)
 
-        val relevantHandlers = predicates?.mapNotNull { findHandler(it) } ?: handlers.values
+        // Skip implicit relations when predicate is not specified (wildcard query)
+        // Implicit relations should only be computed when explicitly requested
+        if (predicates == null) {
+            return existing
+        }
+
+        val relevantHandlers = predicates.mapNotNull { findHandler(it) }
 
         if (relevantHandlers.isEmpty()) {
             return existing
@@ -144,7 +132,23 @@ class ImplicitRelationMutableQuadSet(
         predicate: QuadValue,
         objectFilterText: String
     ): QuadSet {
-        TODO("Not yet implemented")
+        // Check if this is an implicit relation predicate
+        val handler = findHandler(predicate)
+
+        if (handler != null) {
+            // For implicit relations, we need to compute all quads and filter in-memory
+            // since implicit relations are computed on-the-fly
+            val allQuads = handler.findAll()
+            val filtered = allQuads.filter { quad ->
+                val objValue = quad.`object`
+                objValue is org.megras.data.graph.StringValue &&
+                    objValue.value.contains(objectFilterText, ignoreCase = true)
+            }
+            return BasicQuadSet(filtered.toSet())
+        }
+
+        // Delegate to base for non-implicit predicates
+        return this.base.textFilter(predicate, objectFilterText)
     }
 
     override val size: Int
@@ -185,4 +189,26 @@ class ImplicitRelationMutableQuadSet(
     override fun removeAll(elements: Collection<Quad>): Boolean = this.base.removeAll(elements)
 
     override fun retainAll(elements: Collection<Quad>): Boolean = this.base.retainAll(elements)
+
+    override fun distinctObjects(predicate: QuadValue): Set<QuadValue> {
+        val handler = findHandler(predicate)
+        return if (handler != null) {
+            // For implicit relations, we need to compute all objects
+            handler.findAll().map { it.`object` }.toSet()
+        } else {
+            // Delegate to base for non-implicit predicates
+            this.base.distinctObjects(predicate)
+        }
+    }
+
+    override fun distinctSubjects(predicate: QuadValue): Set<QuadValue> {
+        val handler = findHandler(predicate)
+        return if (handler != null) {
+            // For implicit relations, we need to compute all subjects
+            handler.findAll().map { it.subject }.toSet()
+        } else {
+            // Delegate to base for non-implicit predicates
+            this.base.distinctSubjects(predicate)
+        }
+    }
 }

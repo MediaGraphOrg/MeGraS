@@ -102,4 +102,20 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
     override fun retainAll(elements: Collection<Quad>): Boolean {
         return base.retainAll(elements) or knn.retainAll(elements)
     }
+
+    override fun distinctObjects(predicate: QuadValue): Set<QuadValue> {
+        return if (predicate in knownVectorPredicates) {
+            knn.distinctObjects(predicate)
+        } else {
+            base.distinctObjects(predicate)
+        }
+    }
+
+    override fun distinctSubjects(predicate: QuadValue): Set<QuadValue> {
+        return if (predicate in knownVectorPredicates) {
+            knn.distinctSubjects(predicate)
+        } else {
+            base.distinctSubjects(predicate)
+        }
+    }
 }

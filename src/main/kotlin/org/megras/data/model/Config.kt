@@ -14,7 +14,9 @@ data class Config(
     val fileStore: FileGraphStorage? = FileGraphStorage(),
     val ffmpeg: FfmpegConfig = FfmpegConfig(),
     val cottontailConnection: CottontailConnection? = null,
-    val postgresConnection: PostgresConnection? = null
+    val postgresConnection: PostgresConnection? = null,
+    val grpcConnection: GrpcConnection = GrpcConnection(),
+    val sparqlQueryEngine: SparqlQueryEngine = SparqlQueryEngine.BATCHING
 ) {
 
     init {
@@ -83,5 +85,19 @@ data class Config(
         val ffmpegPath: String? = null,
         val ffprobePath: String? = null
     )
+
+    @Serializable
+    data class GrpcConnection(
+        val host: String = "localhost",
+        val port: Int = 50051
+    )
+
+    @Serializable
+    enum class SparqlQueryEngine {
+        /** Default Jena query engine */
+        DEFAULT,
+        /** Optimized batching query engine that reduces N+1 database calls */
+        BATCHING
+    }
 
 }

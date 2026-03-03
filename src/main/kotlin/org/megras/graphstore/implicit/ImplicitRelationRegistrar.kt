@@ -33,6 +33,7 @@ import org.megras.graphstore.implicit.handlers.StartsSegmentHandler
 import org.megras.graphstore.implicit.handlers.WithinSpatialHandler
 import org.megras.graphstore.implicit.handlers.ClipKnnRegexHandler
 import org.megras.graphstore.implicit.handlers.CrossesSpatialHandler
+import org.megras.graphstore.implicit.handlers.GenericKnnRegexHandler
 import org.megras.graphstore.implicit.handlers.LeftSpatialHandler
 import org.megras.graphstore.implicit.handlers.RightSpatialHandler
 import org.megras.graphstore.implicit.handlers.TouchesSpatialHandler
@@ -47,6 +48,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
         register(SegmentSiblingHandler())
 
         register(ClipKnnRegexHandler())
+        register(GenericKnnRegexHandler())
 
 //        register(AfterObjectHandler())
 //        register(PrecedesObjectHandler())

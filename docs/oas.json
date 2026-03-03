@@ -32,6 +32,40 @@
         "security" : [ ]
       }
     },
+    "/add/file" : {
+      "post" : {
+        "tags" : [ "Object Management" ],
+        "summary" : "Uploads one or more files and stores them in the object store.",
+        "operationId" : "postAddFile",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : { }
+          },
+          "required" : false
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Returns mapping of uploaded filenames to stored object IDs",
+            "content" : {
+              "application/json" : { }
+            }
+          },
+          "400" : {
+            "description" : "Invalid request",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RestErrorStatus"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
     "/add/quads" : {
       "post" : {
         "tags" : [ "Object Management" ],
@@ -101,6 +135,33 @@
         "responses" : {
           "200" : {
             "description" : "Successfully serves the HTML file upload page.",
+            "content" : {
+              "text/html" : { }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/predicateinformation" : {
+      "get" : {
+        "tags" : [ "User Interface" ],
+        "summary" : "Serves a page with information about available predicates.",
+        "parameters" : [ {
+          "name" : "predicateUri",
+          "in" : "path",
+          "description" : "Optional predicate URI to jump to",
+          "required" : false,
+          "deprecated" : false,
+          "allowEmptyValue" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "HTML page with predicate information",
             "content" : {
               "text/html" : { }
             }
@@ -604,6 +665,23 @@
           },
           "404" : {
             "description" : "Object not found."
+          }
+        },
+        "deprecated" : false,
+        "security" : [ ]
+      }
+    },
+    "/segmenterui" : {
+      "get" : {
+        "tags" : [ "User Interface" ],
+        "summary" : "Serves the image segmenter UI.",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "HTML page with the image segmenter",
+            "content" : {
+              "text/html" : { }
+            }
           }
         },
         "deprecated" : false,

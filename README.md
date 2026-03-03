@@ -47,7 +47,8 @@ The configuration options look as follows:
     "database": "megras",
     "user": "megras",
     "password": "megras"
-  }
+  },
+  "sparqlQueryEngine": "BATCHING" //query engine to use: "DEFAULT" (standard Jena) or "BATCHING" (optimized)
 }
 ````
 

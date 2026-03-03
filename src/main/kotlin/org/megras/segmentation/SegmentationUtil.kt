@@ -31,7 +31,8 @@ import kotlin.math.round
 object SegmentationUtil {
 
     fun shouldSwap(first: SegmentationType?, second: SegmentationType?): Boolean {
-        return (first != SegmentationType.TIME && second == SegmentationType.TIME) ||
+        val isTemporalLikeSecond = second == SegmentationType.TIME || second == SegmentationType.PAGE || second == SegmentationType.CHARACTER
+        return (first != SegmentationType.TIME && isTemporalLikeSecond) ||
             (first == SegmentationType.COLOR && second != SegmentationType.COLOR)
     }
 
@@ -284,9 +285,9 @@ object SegmentationUtil {
         objectStore: FileSystemObjectStore,
         quads: MutableQuadSet
     ): LocalQuadValue {
-        fun getStoredObjectInCache(objectId: String): ObjectStoreResult? {
+        fun getStoredObjectInCache(id: String): ObjectStoreResult? {
             val canonicalId = quads.filter(
-                setOf(ObjectId(objectId)),
+                setOf(ObjectId(id)),
                 setOf(MeGraS.CANONICAL_ID.uri),
                 null
             ).firstOrNull()?.`object` as? StringValue ?: return null
@@ -294,8 +295,9 @@ object SegmentationUtil {
             return objectStore.get(osId)
         }
 
-        val storedObject = getStoredObjectInCache(objectId)
-            ?: throw IllegalArgumentException("Unknown objectId")
+        // Use documentId to get the stored object, which could be a cached segment
+        val storedObject = getStoredObjectInCache(documentId)
+            ?: throw IllegalArgumentException("Unknown documentId")
         val mediaType = MediaType.mimeTypeMap[storedObject.descriptor.mimeType]
             ?: throw IllegalArgumentException("Unknown media type")
 
@@ -334,7 +336,11 @@ object SegmentationUtil {
                 Quad(cacheObject, MeGraS.SEGMENT_BOUNDS.uri, StringValue(segmentation.bounds.toString()))
             )
         )
-        quads.add(Quad(LocalQuadValue(objectId + "/" + segmentation.toURI()), SchemaOrg.SAME_AS.uri, cacheObject))
+
+        // Ensure path subject points to only the latest cache object
+        val pathSubject = LocalQuadValue(objectId + "/" + segmentation.toURI())
+        quads.removeAll(quads.filter(listOf(pathSubject), listOf(SchemaOrg.SAME_AS.uri), null))
+        quads.add(Quad(pathSubject, SchemaOrg.SAME_AS.uri, cacheObject))
 
         return cacheObject
     }

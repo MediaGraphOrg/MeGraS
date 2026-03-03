@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package org.megras.util.services;
+
+// DoclingService extracts content from PDF files.
+service DoclingService {
+  // Extracts plain text from a PDF file.
+  rpc ExtractText (PdfRequest) returns (ExtractTextResponse);
+
+  // Extracts the full Docling JSON for a PDF file as a raw JSON string.
+  rpc ExtractDocJson (PdfRequest) returns (ExtractDocJsonResponse);
+}
+
+// Request message containing the PDF bytes.
+message PdfRequest {
+  bytes pdf_data = 1; // Raw PDF file bytes
+}
+
+// Response with extracted plain text.
+message ExtractTextResponse {
+  string text = 1;
+}
+
+// Response with the full Docling JSON as a string.
+message ExtractDocJsonResponse {
+  string json = 1;
+}

@@ -34,16 +34,23 @@ object DocumentSegmenter {
                 }
             } ?: return null
 
+            // Compute bounds from the resulting PDF before closing it
+            val firstPage = newPdf.getPage(0)
+            val box: PDRectangle = firstPage.cropBox ?: firstPage.mediaBox
+            val widthMm = FileUtil.ptToMm(box.width)
+            val heightMm = FileUtil.ptToMm(box.height)
+            val pageCount = newPdf.numberOfPages
+            logger.info("PDF segmentation result: ${pageCount} pages, page size ${widthMm}mm x ${heightMm}mm, segType=${segmentation.getType()}")
+
             val out = ByteArrayOutputStream()
             newPdf.save(out)
             newPdf.close()
             pdf.close()
 
-            val page = pdf.getPage(0)
-
-            SegmentationResult(out.toByteArray(),
-                Bounds().addX(0, FileUtil.ptToMm(page.mediaBox.width))
-                    .addY(0, FileUtil.ptToMm(page.mediaBox.height)).addT(0, pdf.numberOfPages))
+            SegmentationResult(
+                out.toByteArray(),
+                Bounds().addX(0, widthMm).addY(0, heightMm).addT(0, pageCount)
+            )
         } catch (e: Exception) {
             logger.error("Error while segmenting PDF: ${e.localizedMessage}")
             null

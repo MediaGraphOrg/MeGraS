@@ -9,11 +9,12 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.ServiceConfig
 import org.megras.util.services.OcrClient
-import kotlin.system.exitProcess
 
 class OcrHandler(private val quadSet: QuadSet, private val objectStore: FileSystemObjectStore) : DerivedRelationHandler<StringValue> {
     override val predicate: URIValue = getPredicate()
+    override val requiresExternalService: Boolean = true
 
     companion object {
         fun getPredicate(): URIValue {
@@ -39,7 +40,7 @@ class OcrHandler(private val quadSet: QuadSet, private val objectStore: FileSyst
         val path = FileUtil.getPath(subject, this.quadSet, this.objectStore) ?: return emptyList()
 
         val recognizedText: String = runBlocking {
-            val client = OcrClient("localhost", 50051)
+            val client = OcrClient(ServiceConfig.grpcHost, ServiceConfig.grpcPort)
             try {
                 val recognizedText: String = client.recognizeText(path)
                 return@runBlocking recognizedText

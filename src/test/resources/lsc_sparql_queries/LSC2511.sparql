@@ -1,0 +1,9 @@
+PREFIX lsc: <http://lsc.dcu.ie/schema#>
+PREFIX implicit: <http://megras.org/implicit/>
+
+SELECT DISTINCT ?img ?id ?day
+WHERE {
+	?img lsc:id ?id ;
+		lsc:day ?day .
+	<http://localhost:8080/EiCc8JkYsNnCJgVoL6AcZPmN9mtElbnyvbRUdTdHPGqFyA> implicit:clip100nn ?img .
+} 

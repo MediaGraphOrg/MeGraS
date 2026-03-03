@@ -2,6 +2,7 @@ package org.megras.segmentation.type
 
 import org.apache.batik.ext.awt.geom.ExtendedPathIterator.*
 import org.apache.batik.parser.AWTPathProducer
+import org.apache.batik.parser.PathParser
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationType
 import org.megras.util.extensions.equalsEpsilon
@@ -11,7 +12,9 @@ import java.awt.Rectangle
 import java.awt.Shape
 import java.awt.geom.AffineTransform
 import java.awt.geom.Area
+import java.awt.geom.FlatteningPathIterator
 import java.awt.geom.Path2D
+import java.awt.geom.PathIterator
 import java.awt.geom.Rectangle2D
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
@@ -92,6 +95,43 @@ abstract class TwoDimensionalSegmentation : Segmentation {
         }
         return pathString.toString()
     }
+
+    override fun getArea(): Double {
+        val svgPath = createSVGPath(this.shape)
+        return svgPathArea(svgPath)
+    }
+
+    fun svgPathArea(pathStr: String, flatness: Double = 0.1): Double {
+        // Parse SVG path to Shape
+        val parser = PathParser()
+        val producer = AWTPathProducer()
+        parser.pathHandler = producer
+        parser.parse(pathStr)
+        val shape = producer.shape
+
+        // Flatten curves to line segments
+        val it = FlatteningPathIterator(shape.getPathIterator(null), flatness)
+        val points = mutableListOf<Pair<Double, Double>>()
+        val coords = DoubleArray(6)
+        while (!it.isDone) {
+            when (it.currentSegment(coords)) {
+                PathIterator.SEG_MOVETO, PathIterator.SEG_LINETO -> {
+                    points.add(coords[0] to coords[1])
+                }
+            }
+            it.next()
+        }
+        if (points.size < 3) return 0.0
+
+        // Shoelace formula
+        var area = 0.0
+        for (i in points.indices) {
+            val (x0, y0) = points[i]
+            val (x1, y1) = points[(i + 1) % points.size]
+            area += (x0 * y1) - (x1 * y0)
+        }
+        return abs(area) / 2.0
+    }
 }
 
 class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Double) : TwoDimensionalSegmentation(),
@@ -104,6 +144,18 @@ class Rect(val xmin: Double, val xmax: Double, val ymin: Double, val ymax: Doubl
     override var bounds: Bounds = Bounds(shape)
 
     override val isRelative = xmin in 0.0..1.0 && xmax in 0.0..1.0 && ymin in 0.0..1.0 && ymax in 0.0..1.0
+
+    override fun touches(rhs: Segmentation): Boolean {
+        if (rhs is Rect) {
+            return (
+                this.xmax == rhs.xmin ||
+                this.ymax == rhs.ymin ||
+                this.xmin == rhs.xmax ||
+                this.ymin == rhs.ymax
+            )
+        }
+        return super.touches(rhs)
+    }
 
     override fun translate(by: Bounds, direction: TranslateDirection): Segmentation {
         if (by.dimensions >= 2) {

@@ -1,6 +1,7 @@
-grpcio
-grpcio-tools
-transformers
-torch
-Pillow
-requests
+grpcio==1.74.0
+grpcio-tools==1.74.0
+transformers==4.56.1
+torch==2.8.0+cu126
+pillow==11.2.1
+requests==2.32.4
+docling==2.51.0

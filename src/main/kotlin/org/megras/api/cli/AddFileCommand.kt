@@ -17,6 +17,8 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
 
     private val recursive: Boolean by option("-r", "--recursive", help = "Scan provided folder recursively").flag(default = false)
 
+    private val metaSkip: Boolean by option("-m", "--meta-skip", help = "Skip metadata extraction from file").flag(default = false)
+
     override fun run() {
 
         for (fileName in fileNames) {
@@ -29,7 +31,7 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
             }
 
             if (file.isFile) {
-                val id = FileUtil.addFile(objectStore, quads, PseudoFile(file)).uri
+                val id = FileUtil.addFile(objectStore, quads, PseudoFile(file), metaSkip).uri
 
                 println("Added file '${file.absolutePath}' with id '${id}'")
             } else if (file.isDirectory) {
@@ -42,7 +44,7 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
                 file.walkTopDown().forEach {
 
                     if (it.isFile && it.canRead()) {
-                        val id = FileUtil.addFile(objectStore, quads, PseudoFile(it)).uri
+                        val id = FileUtil.addFile(objectStore, quads, PseudoFile(it), metaSkip).uri
                         println("Added file '${it.absolutePath}' with id '${id}'")
                     }
                 }

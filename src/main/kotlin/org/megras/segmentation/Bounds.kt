@@ -152,6 +152,73 @@ open class Bounds(private val bounds: DoubleArray = DoubleArray(8) { Double.NaN 
 
     fun getTDimension(): Double = bounds[7] - bounds[6]
 
+    fun getCenter(): DoubleArray =
+        doubleArrayOf(getCenterX(), getCenterY(), getCenterZ(), getCenterT())
+
+    fun getCenterX(): Double =
+        if (hasX()) {
+            (getMinX() + getMaxX()) / 2.0}
+        else {
+            Double.NaN
+        }
+
+    fun getCenterY(): Double =
+        if (hasY()) {
+            (getMinY() + getMaxY()) / 2.0}
+        else {
+            Double.NaN
+        }
+
+    fun getCenterZ(): Double =
+        if (hasZ()) {
+            (getMinZ() + getMaxZ()) / 2.0}
+        else {
+            Double.NaN
+        }
+
+    fun getCenterT(): Double =
+        if (hasT()) {
+            (getMinT() + getMaxT()) / 2.0}
+        else {
+            Double.NaN
+        }
+
+    fun getArea(): Double {
+        if (this.dimensions < 2) {
+            throw IllegalArgumentException("At least two dimensions are required.")
+        } else if (this.dimensions > 3) {
+            throw IllegalArgumentException("Too many dimensions.")
+        }
+        val area = when {
+            this.hasX() && this.hasY() -> this.getXYArea()
+            this.hasY() && this.hasZ() -> this.getYZArea()
+            this.hasX() && this.hasZ() -> this.getXZArea()
+            else -> throw IllegalArgumentException("Invalid dimensions.")
+        }
+        return area
+    }
+
+    fun getXYArea(): Double {
+        if (!this.hasX() || !this.hasY()) {
+            throw IllegalStateException("Bounds must have both X and Y dimensions to calculate area.")
+        }
+        return this.getXDimension() * this.getYDimension()
+    }
+
+    fun getYZArea(): Double {
+        if (!this.hasY() || !this.hasZ()) {
+            throw IllegalStateException("Bounds must have both Y and Z dimensions to calculate area.")
+        }
+        return this.getYDimension() * this.getZDimension()
+    }
+
+    fun getXZArea(): Double {
+        if (!this.hasX() || !this.hasZ()) {
+            throw IllegalStateException("Bounds must have both X and Z dimensions to calculate area.")
+        }
+        return this.getXDimension() * this.getZDimension()
+    }
+
     /**
      * converts a 3D spatial bound (x,y,z) to a temporal one (x,y,t)
      */

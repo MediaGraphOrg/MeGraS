@@ -32,10 +32,11 @@ object Cli {
 
     private lateinit var clikt: CliktCommand
 
-    fun init(quads: MutableQuadSet, objectStore: FileSystemObjectStore) {
+    fun init(quads: MutableQuadSet, objectStore: FileSystemObjectStore, slQuadSet: MutableQuadSet) {
         clikt = BaseCommand().subcommands(
             AddFileCommand(quads, objectStore),
-            ImportCommand(quads)
+            ImportCommand(quads),
+            DumpCommand(slQuadSet)
         )
     }
 

@@ -29,9 +29,16 @@ class AddTriplesPageHandler : GetRequestHandler {
                 <title>Add Triples</title>
                 <link rel="stylesheet" type="text/css" href="/static/styles.css">
                 <style>
+                    body {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        padding: 20px;
+                    }
                     #triples {
-                        width: 80vw;
-                        height: 80vh;
+                        width: 100%;
+                        max-width: 1200px;
+                        height: 60vh;
                         box-sizing: border-box;
                     }
                 </style>

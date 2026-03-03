@@ -6,10 +6,7 @@ import io.javalin.openapi.*
 import org.megras.api.rest.GetRequestHandler
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
-import org.megras.data.graph.LocalQuadValue
-import org.megras.data.graph.QuadValue
-import org.megras.data.graph.StringValue
-import org.megras.data.graph.URIValue
+import org.megras.data.graph.*
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.BasicMutableQuadSet
@@ -52,6 +49,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
           """
               <!DOCTYPE html>
               <head>
+                  <meta charset="UTF-8">
                   <title>About '$objectId'</title>
                   <link rel="stylesheet" type="text/css" href="/static/styles.css">
               </head>
@@ -78,7 +76,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         }
 
         val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(objectId)).map { it.subject as URIValue }.toSet()
-        val imgBounds = Bounds(
+        val itemBounds = Bounds(
             quads.filter(setOf(objectId), setOf(MeGraS.BOUNDS.uri), null)
                 .firstOrNull()?.`object`.toString().removeSuffix("^^String")
         )
@@ -94,7 +92,9 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                         "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6",
                         "#bcf60c", "#fabebe", "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000", "#aaffc3"
                     )
-                    svg = "<svg width='100%' height='100%' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
+                    val svgWidth = itemBounds.getMaxX()
+                    val svgHeight = itemBounds.getMaxY()
+                    svg = "<svg width='100%' height='100%' viewBox='0 0 $svgWidth $svgHeight' preserveAspectRatio='none' style='position: absolute; top: 0; left: 0;' xmlns:xlink='http://www.w3.org/1999/xlink'>\n"
 
                     // Sort children by area and store segmentation
                     val sortedChildrenWithSegmentation = children.mapNotNull { child ->
@@ -114,7 +114,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                 val svgPath = segmentation.getDefinition()
                                 val coords = svgPath.split(",").map { it.toDouble() }
                                 val x = coords[0]
-                                val y = imgBounds.getMaxY() - coords[3]
+                                val y = itemBounds.getMaxY() - coords[3]
                                 val width = coords[1] - coords[0]
                                 val height = coords[3] - coords[2]
                                 svg += """
@@ -129,7 +129,21 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                     .map { it.replace("(", "").replace(")", "") }
                                     .map { point ->
                                         val (x, y) = point.split(",").map(String::toDouble)
-                                        "$x,${imgBounds.getMaxY() - y}"
+                                        "$x,${itemBounds.getMaxY() - y}"
+                                    }
+                                svg += """
+                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                        <polygon points='${points.joinToString(" ")}' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
+                                    </a>
+                                """.trimIndent()
+                            }
+                            SegmentationType.BEZIER, SegmentationType.BSPLINE -> {
+                                val svgPath = segmentation.getDefinition()
+                                val points = svgPath.split("),(")
+                                    .map { it.replace("(", "").replace(")", "") }
+                                    .map { point ->
+                                        val (x, y) = point.split(",").map(String::toDouble)
+                                        "$x,${itemBounds.getMaxY() - y}"
                                     }
                                 svg += """
                                     <a xlink:href='$aboutUrl' target='_blank'>
@@ -143,7 +157,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                     val command = it.groupValues[1]
                                     val x = it.groupValues[2].toDouble()
                                     val y = it.groupValues[3].toDouble()
-                                    "$command$x,${imgBounds.getMaxY() - y}"
+                                    "$command$x,${itemBounds.getMaxY() - y}"
                                 }
                                 svg += """
                                     <a xlink:href='$aboutUrl' target='_blank'>
@@ -210,7 +224,211 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 )
             }
 
-            MediaType.TEXT.name, MediaType.DOCUMENT.name -> {
+            MediaType.TEXT.name -> {
+                // Build absolute character intervals from child segments (CHARACTER)
+                val charIntervals: MutableList<Pair<Int, Int>> = mutableListOf()
+                // Also keep mapping to child about URLs for click-through
+                val charLinks: MutableList<Triple<Int, Int, String>> = mutableListOf()
+                if (children.isNotEmpty()) {
+                    children.forEach { child ->
+                        val seg = getSegmentation(child)
+                        when (seg) {
+                            is org.megras.segmentation.type.Character -> {
+                                val absSeg = if (seg.isRelative) {
+                                    // Convert to absolute using this object's bounds (T dimension = text length)
+                                    (seg.toAbsolute(itemBounds) as? org.megras.segmentation.type.Character) ?: seg
+                                } else seg
+                                val aboutUrl = "${child.value}/about"
+                                // Parse definition "l-h,l-h,..." to intervals
+                                absSeg.getDefinition().split(",").forEach { part ->
+                                    val r = part.trim()
+                                    if (r.isNotEmpty()) {
+                                        val bounds = r.split("-")
+                                        if (bounds.size == 2) {
+                                            val l = bounds[0].toDoubleOrNull()?.toInt()
+                                            val h = bounds[1].toDoubleOrNull()?.toInt()
+                                            if (l != null && h != null && h > l) {
+                                                charIntervals.add(l to h)
+                                                charLinks.add(Triple(l, h, aboutUrl))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else -> { /* ignore non-character segments for text preview */ }
+                        }
+                    }
+                }
+
+                // JSON for client-side highlighting
+                val intervalsJson = charIntervals.joinToString(prefix = "[", postfix = "]") { "[${it.first},${it.second}]" }
+                // JSON for clickable segments: [ [l,h,"/child/about"], ... ]
+                val segmentsJson = charLinks.joinToString(prefix = "[", postfix = "]") {
+                    val url = it.third.replace("\\", "\\\\").replace("\"", "\\\"")
+                    "[${it.first},${it.second},\"$url\"]"
+                }
+
+                buf.append(
+                    """
+                    <div class='media-container'>
+                        <div style="position: relative; display: block; text-align: left;">
+                            <pre id="text-preview" class="text-preview" style="margin: 0; max-height: 600px; overflow: auto; padding: 12px; border-radius: 4px;">
+                                Loading text…
+                            </pre>
+                        </div>
+                        <button class="segments-toggle-btn" onclick="toggleTextSegments()">Toggle Segments</button>
+                    </div>
+                    <script>
+                        (function(){
+                            const src = '${objectId.toPath()}';
+                            const preview = document.getElementById('text-preview');
+                            const intervals = $intervalsJson; // [ [start,end], ... ] absolute character offsets
+                            const clickable = $segmentsJson;   // [ [start,end,href], ... ]
+
+                            function computeDisjointWithLinks(ranges){
+                                // Build events with href associations
+                                const events = [];
+                                ranges.forEach(r => {
+                                    if (Array.isArray(r) && r.length >= 2){
+                                        const s = r[0]|0, e = r[1]|0; if (e > s){
+                                            const href = r[2];
+                                            events.push({ pos: s, type: 'start', href });
+                                            events.push({ pos: e, type: 'end', href });
+                                        }
+                                    }
+                                });
+                                if (events.length === 0) return [];
+                                events.sort((a,b) => a.pos - b.pos || (a.type==='end'? -1:1)); // end before start at same pos when closing region first
+                                const out = [];
+                                const active = new Map(); // href -> count
+                                let prev = events[0].pos;
+                                let i = 0;
+                                while (i < events.length){
+                                    const pos = events[i].pos;
+                                    if (pos > prev && active.size > 0){
+                                        out.push({ start: prev, end: pos, hrefs: Array.from(active.keys()) });
+                                    }
+                                    // process all events at this pos
+                                    while (i < events.length && events[i].pos === pos){
+                                        const ev = events[i];
+                                        if (ev.type === 'start') {
+                                            active.set(ev.href, (active.get(ev.href) || 0) + 1);
+                                        } else {
+                                            const cur = (active.get(ev.href) || 0) - 1;
+                                            if (cur <= 0) active.delete(ev.href); else active.set(ev.href, cur);
+                                        }
+                                        i++;
+                                    }
+                                    prev = pos;
+                                }
+                                return out;
+                            }
+
+                            function computeDisjoint(regs){
+                                // Sweep-line to produce disjoint segments with coverage count
+                                const events = [];
+                                regs.forEach(r => { if (Array.isArray(r) && r.length===2){ events.push([r[0], +1]); events.push([r[1], -1]); }});
+                                if (events.length === 0) return [];
+                                events.sort((a,b) => a[0]-b[0] || b[1]-a[1]); // start(+1) before end(-1) at same pos
+                                const out = [];
+                                let cur = 0, prev = events[0][0];
+                                for (let i=0;i<events.length;i++){
+                                    const [pos, delta] = events[i];
+                                    if (pos > prev && cur > 0) out.push({start: prev, end: pos, count: cur});
+                                    cur += delta;
+                                    prev = pos;
+                                }
+                                return out;
+                            }
+
+                            function render(text){
+                                // Build content with highlighted spans
+                                const regions = computeDisjoint(intervals);
+                                const linkRegions = computeDisjointWithLinks(clickable);
+                                // Clamp to text length
+                                const len = text.length;
+                                regions.forEach(r => { r.start = Math.max(0, Math.min(len, r.start)); r.end = Math.max(0, Math.min(len, r.end)); });
+                                linkRegions.forEach(r => { r.start = Math.max(0, Math.min(len, r.start)); r.end = Math.max(0, Math.min(len, r.end)); });
+                                // Merge invalid/empty
+                                const filtered = regions.filter(r => r.end > r.start).sort((a,b)=>a.start-b.start);
+                                const frag = document.createDocumentFragment();
+                                let pos = 0;
+                                for (let i=0;i<filtered.length;i++){
+                                    const r = filtered[i];
+                                    if (r.start > pos) frag.appendChild(document.createTextNode(text.slice(pos, r.start)));
+                                    const span = document.createElement('span');
+                                    span.className = 'text-segment' + (r.count > 1 ? ' overlap' : '');
+                                    span.appendChild(document.createTextNode(text.slice(r.start, r.end)));
+                                    // find hrefs for this region (by overlap with linkRegions)
+                                    const hrefs = [];
+                                    for (let j=0;j<linkRegions.length;j++){
+                                        const lr = linkRegions[j];
+                                        if (lr.end <= r.start) continue;
+                                        if (lr.start >= r.end) break;
+                                        lr.hrefs.forEach(h => { if (!hrefs.includes(h)) hrefs.push(h); });
+                                    }
+                                    if (hrefs.length > 0){
+                                        span.style.cursor = 'pointer';
+                                        span.addEventListener('click', function(ev){
+                                            // open first matching about link in new tab
+                                            const href = hrefs[0];
+                                            if (href) window.open(href, '_blank');
+                                            ev.stopPropagation();
+                                            ev.preventDefault();
+                                        });
+                                        span.title = hrefs.length === 1 ? 'Open segment details' : 'Multiple segments overlap; opening first';
+                                    }
+                                    frag.appendChild(span);
+                                    pos = r.end;
+                                }
+                                if (pos < len) frag.appendChild(document.createTextNode(text.slice(pos)));
+                                // Replace content safely (preserve whitespace and not interpret as HTML)
+                                preview.textContent = '';
+                                preview.innerHTML = '';
+                                preview.appendChild(frag);
+                            }
+
+                            function init(){
+                                fetch(src, { credentials: 'same-origin' }).then(r => r.text()).then(t => {
+                                    render(t);
+                                }).catch(() => {
+                                    // Fallback: show without highlighting
+                                    preview.textContent = 'Failed to load text.';
+                                });
+                            }
+
+                            window.toggleTextSegments = function(){
+                                const hidden = preview.classList.toggle('segments-hidden');
+                                // When hidden, also remove tooltips and disable keyboard focus hints
+                                const spans = preview.querySelectorAll('.text-segment');
+                                spans.forEach(function(span){
+                                    if (hidden) {
+                                        if (span.hasAttribute('title')) {
+                                            span.setAttribute('data-title', span.getAttribute('title') || '');
+                                            span.removeAttribute('title');
+                                        }
+                                    } else {
+                                        const t = span.getAttribute('data-title');
+                                        if (t !== null) {
+                                            if (t) span.setAttribute('title', t);
+                                            span.removeAttribute('data-title');
+                                        }
+                                    }
+                                });
+                            };
+
+                            if (document.readyState === 'loading') {
+                                document.addEventListener('DOMContentLoaded', init);
+                            } else {
+                                init();
+                            }
+                        })();
+                    </script>
+                """.trimIndent()
+                )
+            }
+
+            MediaType.DOCUMENT.name -> {
                 buf.append("<div class='media-container'><embed src='${objectId.toPath()}'></div>")
             }
 
@@ -218,19 +436,99 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             }
         }
 
-        // construct a list of all the relevant triples in a html table
-        // Make the link clickable, only if it is a URI
-        // Ensure that the URIs are displayed correctly
-        // e.g., <http://localhost:8080/ig4eHDw8PBwehl44EMsGGVowgwnovvt3-tTGOdJd4baxnIRMdrTy6sg> <http://megras.org/schema#canonicalMimeType> image/png^^String
+        // Helper to escape a string for HTML display
+        fun esc(s: String): String = s
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+
+        // Extract a predicate namespace (up to last '#' or '/') to group by; return null if not a URI
+        fun predicateNamespace(p: QuadValue): String? = when (p) {
+            is URIValue -> {
+                val s = p.value
+                val idxHash = s.lastIndexOf('#')
+                val idxSlash = s.lastIndexOf('/')
+                val idx = if (idxHash > idxSlash) idxHash else idxSlash
+                if (idx >= 0) s.substring(0, idx + 1) else s
+            }
+            else -> null
+        }
+
+        // Helper to render a single quad row, optionally as part of a collapsible group
+        fun appendRow(q: Quad, groupClass: String? = null, hidden: Boolean = false, isLastInGroup: Boolean = false) {
+            if (groupClass != null) {
+                val extraClass = if (isLastInGroup) " group-last-row" else ""
+                buf.append("<tr class='" + groupClass + " group-content" + extraClass + "'" + (if (hidden) " style='display:none;'" else "") + ">")
+            } else {
+                buf.append("<tr>")
+            }
+            buf.append("<td>" + q.subject.toHtml() + "</td>")
+            buf.append("<td>" + q.predicate.toPredHtml() + "</td>")
+            buf.append("<td>" + q.`object`.toHtml() + "</td>")
+            buf.append("</tr>\n")
+        }
+
+        // Sort a list of quads alphabetically by predicate for consistent rendering
+        fun rowsSortedByPredicate(rows: List<Quad>): List<Quad> =
+            rows.sortedBy { it.predicate.toString().lowercase() }
+
+        // construct a list of all the relevant triples in a html table with collapsible predicate groups
         buf.append("<br><h2>Node Neighborhood</h2>")
         buf.append("\n<table>\n")
         buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
-        relevant.sortedBy { it.subject.toString().length }.forEach {
-            buf.append("<tr>")
-            buf.append("<td>${it.subject.toHtml()}</td>")
-            buf.append("<td>${it.predicate.toPredHtml()}</td>")
-            buf.append("<td>${it.`object`.toHtml()}</td>")
-            buf.append("</tr>\n")
+
+        val relevantList = relevant // grouping + per-group sort handles order
+        // Special-case: collect all segmentOf predicate rows into their own group ("Segments")
+        val segmentOfUri = "http://megras.org/schema#segmentOf"
+        val segmentOfGroupRows = relevantList.filter { it.predicate is URIValue && it.predicate.value == segmentOfUri }
+        val baseList = relevantList.filterNot { it.predicate is URIValue && it.predicate.value == segmentOfUri }
+        val groupsByNs = baseList.groupBy { predicateNamespace(it.predicate) }
+
+        // Determine which namespaces would be grouped (size >= 3)
+        val groupedCandidates = groupsByNs.filter { it.key != null && it.value.size >= 3 }
+        // Remaining rows that would not be grouped
+        val ungroupedRowsNode = groupsByNs.flatMap { (ns, rows) ->
+            val shouldGroup = ns != null && rows.size >= 3
+            if (!shouldGroup) rows else emptyList()
+        }
+
+        // Do not group if there is only one group and no other triples
+        val potentialGroupCount = groupedCandidates.size + if (segmentOfGroupRows.isNotEmpty()) 1 else 0
+        val doGroupNode = potentialGroupCount > 1 || ungroupedRowsNode.isNotEmpty()
+
+        if (doGroupNode) {
+            var groupCounter = 0
+
+            // Render the special Segments group first if present
+            if (segmentOfGroupRows.isNotEmpty()) {
+                val gid = "nodepred-group-" + (++groupCounter)
+                buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'><span id='tw-" + gid + "' class='tw-arrow'>&gt;</span> Segments (" + segmentOfGroupRows.size + ")</td></tr>\n")
+                val sorted = rowsSortedByPredicate(segmentOfGroupRows)
+                sorted.forEachIndexed { idx, q ->
+                    appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                }
+            }
+
+            // Render predicate-namespace groups (3+ items), with MeGraS namespace first
+            val preferredNs = "http://megras.org/schema#"
+            groupedCandidates
+                .toList()
+                .sortedWith(compareBy<Pair<String?, List<Quad>>> { it.first != preferredNs }.thenBy { it.first!! })
+                .forEach { (ns, rows) ->
+                    val nsDisplay = esc(ns!!.replace(LocalQuadValue.defaultPrefix, "/"))
+                    val gid = "nodepred-group-" + (++groupCounter)
+                    buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'><span id='tw-" + gid + "' class='tw-arrow'>&gt;</span> " + nsDisplay + " (" + rows.size + ")</td></tr>\n")
+                    val sorted = rowsSortedByPredicate(rows)
+                    sorted.forEachIndexed { idx, q ->
+                        appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                    }
+                }
+
+            // Then, render all remaining rows (no namespace or small groups) as normal rows, globally sorted by predicate
+            rowsSortedByPredicate(ungroupedRowsNode).forEach { q -> appendRow(q) }
+        } else {
+            // Render all rows flat if only one would-be group and nothing else
+            rowsSortedByPredicate(relevantList.toList()).forEach { q -> appendRow(q) }
         }
         buf.append("</table>\n")
 
@@ -238,12 +536,37 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
             buf.append("<br><h2>Ancestor Neighborhood</h2>")
             buf.append("\n<table>\n")
             buf.append("<tr><th>Subject</th><th>Predicate</th><th>Object</th></tr>\n")
-            extended.sortedBy { it.subject.toString().length }.forEach {
-                buf.append("<tr>")
-                buf.append("<td>${it.subject.toHtml()}</td>")
-                buf.append("<td>${it.predicate.toPredHtml()}</td>")
-                buf.append("<td>${it.`object`.toHtml()}</td>")
-                buf.append("</tr>\n")
+
+            val extendedList = extended // grouping + per-group sort handles order
+            val groupsBySubject = extendedList.groupBy { it.subject }
+
+            // Determine which subjects would be grouped (size >= 3)
+            val groupedSubjects = groupsBySubject.filter { it.value.size >= 3 }
+            val singletonRows = groupsBySubject.filter { it.value.size < 3 }.flatMap { it.value }
+
+            // Do not group if there is only one group and no other triples
+            val doGroupAncestor = groupedSubjects.size > 1 || singletonRows.isNotEmpty()
+
+            if (doGroupAncestor) {
+                var ancCounter = 0
+                // Render subject groups with 3+ rows as collapsible, sorted by subject
+                groupedSubjects
+                    .toList()
+                    .sortedBy { it.first.toString() }
+                    .forEach { (subj, rows) ->
+                        val gid = "ancestor-subj-group-" + (++ancCounter)
+                        buf.append("<tr class='group-header' style='background:#f6f6f6; cursor:pointer;' onclick=\"toggleGroup('" + gid + "')\"><td colspan='3'><span id='tw-" + gid + "' class='tw-arrow'>&gt;</span> " + subj.toHtml() + " (" + rows.size + ")</td></tr>\n")
+                        val sorted = rowsSortedByPredicate(rows)
+                        sorted.forEachIndexed { idx, q ->
+                            appendRow(q, gid, hidden = true, isLastInGroup = idx == sorted.lastIndex)
+                        }
+                    }
+
+                // Render singleton subjects as normal rows, globally sorted by predicate
+                rowsSortedByPredicate(singletonRows).forEach { q -> appendRow(q) }
+            } else {
+                // Only one would-be group and nothing else: render all rows flat
+                rowsSortedByPredicate(extendedList.toList()).forEach { q -> appendRow(q) }
             }
             buf.append("</table>\n")
         }
@@ -255,7 +578,543 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         }
         buf.append("</textarea>")*/
 
+        // Graph visualization - loaded on demand when collapsible is opened
+        val currentObjectUri = objectId.value.replace("\\", "\\\\").replace("\"", "\\\"")
         buf.append("""
+            <style>
+                #graph-wrapper {
+                    position: relative;
+                }
+                #graph-wrapper.fullscreen {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    z-index: 9999;
+                    background: white;
+                    padding: 10px;
+                    box-sizing: border-box;
+                }
+                #graph-wrapper.fullscreen #graph-container {
+                    height: calc(100vh - 60px) !important;
+                }
+                #graph-fullscreen-btn {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    z-index: 10;
+                    padding: 8px 12px;
+                    background: #4363d8;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                #graph-fullscreen-btn:hover {
+                    background: #3251b8;
+                }
+                #graph-wrapper.fullscreen #graph-fullscreen-btn {
+                    top: 15px;
+                    right: 20px;
+                }
+                #graph-toggle-literals-btn {
+                    position: absolute;
+                    top: 10px;
+                    right: 130px;
+                    z-index: 10;
+                    padding: 8px 12px;
+                    background: #aaffc3;
+                    color: #333;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                #graph-toggle-literals-btn:hover {
+                    background: #88dd9f;
+                }
+                #graph-toggle-literals-btn.hidden {
+                    background: #ccc;
+                }
+                #graph-wrapper.fullscreen #graph-toggle-literals-btn {
+                    top: 15px;
+                    right: 160px;
+                }
+            </style>
+            <br><details id="graph-details">
+                <summary style="cursor: pointer; font-size: 1.5em; font-weight: bold; margin-bottom: 10px;">Graph Visualization</summary>
+                <p style="font-size: 0.9em; color: #666;">Click a node to expand its neighborhood. Double-click a local node to navigate to it.</p>
+                <div id="graph-wrapper">
+                    <button id="graph-toggle-literals-btn" class="hidden" onclick="toggleLiteralNodes()">Show Literals</button>
+                    <button id="graph-fullscreen-btn" onclick="toggleGraphFullscreen()">⛶ Fullscreen</button>
+                    <div id="graph-container" style="width: 100%; height: 500px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;"></div>
+                </div>
+            </details>
+            <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+            <script>
+                (function(){
+                    var graphInitialized = false;
+                    var currentObjectUri = "$currentObjectUri";
+                    var localPrefix = '${LocalQuadValue.defaultPrefix}';
+                    var nodes, edges, network;
+                    var expandedNodes = new Set();
+                    var nextNodeId = 0;
+                    var nextEdgeId = 0;
+                    var literalsVisible = false;
+                    var hiddenLiteralNodes = []; // Store hidden literal node data
+                    var hiddenLiteralEdges = []; // Store hidden edges connected to literals
+                    
+                    // Toggle literal nodes visibility
+                    window.toggleLiteralNodes = function() {
+                        var btn = document.getElementById('graph-toggle-literals-btn');
+                        literalsVisible = !literalsVisible;
+                        
+                        if (literalsVisible) {
+                            // Show literals - restore hidden nodes and edges
+                            btn.textContent = 'Hide Literals';
+                            btn.classList.remove('hidden');
+                            
+                            // Restore nodes
+                            hiddenLiteralNodes.forEach(function(nodeData) {
+                                nodes.add(nodeData);
+                            });
+                            // Restore edges
+                            hiddenLiteralEdges.forEach(function(edgeData) {
+                                edges.add(edgeData);
+                            });
+                            hiddenLiteralNodes = [];
+                            hiddenLiteralEdges = [];
+                        } else {
+                            // Hide literals - remove non-URI nodes and their edges
+                            btn.textContent = 'Show Literals';
+                            btn.classList.add('hidden');
+                            
+                            var allNodes = nodes.get();
+                            var literalNodeIds = [];
+                            
+                            // Find all literal (non-URI) nodes
+                            allNodes.forEach(function(node) {
+                                if (!node.queryUri || !node.queryUri.startsWith('http')) {
+                                    literalNodeIds.push(node.id);
+                                    hiddenLiteralNodes.push(node);
+                                }
+                            });
+                            
+                            // Find and hide edges connected to literal nodes
+                            var allEdges = edges.get();
+                            allEdges.forEach(function(edge) {
+                                if (literalNodeIds.indexOf(edge.from) !== -1 || literalNodeIds.indexOf(edge.to) !== -1) {
+                                    hiddenLiteralEdges.push(edge);
+                                }
+                            });
+                            
+                            // Remove edges first, then nodes
+                            hiddenLiteralEdges.forEach(function(edge) {
+                                edges.remove(edge.id);
+                            });
+                            literalNodeIds.forEach(function(nodeId) {
+                                nodes.remove(nodeId);
+                            });
+                        }
+                    };
+                    
+                    // Fullscreen toggle function
+                    window.toggleGraphFullscreen = function() {
+                        var wrapper = document.getElementById('graph-wrapper');
+                        var btn = document.getElementById('graph-fullscreen-btn');
+                        var isFullscreen = wrapper.classList.toggle('fullscreen');
+                        btn.textContent = isFullscreen ? '✕ Exit Fullscreen' : '⛶ Fullscreen';
+                        // Resize network to fit new container size
+                        if (network) {
+                            setTimeout(function() {
+                                network.fit();
+                            }, 100);
+                        }
+                    };
+                    
+                    // Allow ESC key to exit fullscreen
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            var wrapper = document.getElementById('graph-wrapper');
+                            if (wrapper && wrapper.classList.contains('fullscreen')) {
+                                toggleGraphFullscreen();
+                            }
+                        }
+                    });
+                    
+                    document.getElementById('graph-details').addEventListener('toggle', function(e) {
+                        if (this.open && !graphInitialized) {
+                            graphInitialized = true;
+                            initGraph();
+                        }
+                    });
+                    
+                    function initGraph() {
+                        nodes = new vis.DataSet();
+                        edges = new vis.DataSet();
+                        var container = document.getElementById('graph-container');
+                        var data = { nodes: nodes, edges: edges };
+                        
+                        var options = {
+                            nodes: {
+                                shape: 'dot',
+                                size: 16,
+                                font: { size: 12, face: 'Arial' },
+                                borderWidth: 2,
+                                shadow: true
+                            },
+                            edges: {
+                                width: 1,
+                                font: { size: 10, align: 'middle' },
+                                arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                                smooth: { 
+                                    enabled: true,
+                                    type: 'dynamic',
+                                    roundness: 0.5
+                                }
+                            },
+                            physics: {
+                                enabled: true,
+                                solver: 'forceAtlas2Based',
+                                forceAtlas2Based: {
+                                    gravitationalConstant: -50,
+                                    centralGravity: 0.005,
+                                    springLength: 200,
+                                    springConstant: 0.01,
+                                    damping: 0.95,
+                                    avoidOverlap: 1
+                                },
+                                stabilization: { iterations: 200, fit: true },
+                                minVelocity: 1.5,
+                                maxVelocity: 15,
+                                timestep: 0.3
+                            },
+                            interaction: {
+                                hover: true,
+                                tooltipDelay: 200,
+                                navigationButtons: true,
+                                keyboard: true
+                            }
+                        };
+                        network = new vis.Network(container, data, options);
+                        
+                        // Handle click with delay to distinguish single vs double click
+                        var clickTimer = null;
+                        var clickDelay = 150; // ms to wait for potential double-click
+                        
+                        network.on('click', function(params) {
+                            if (params.nodes.length > 0) {
+                                var nodeId = params.nodes[0];
+                                // Clear any pending single-click action
+                                if (clickTimer) clearTimeout(clickTimer);
+                                // Set a delayed single-click action
+                                clickTimer = setTimeout(function() {
+                                    clickTimer = null;
+                                    expandNode(nodeId);
+                                }, clickDelay);
+                            }
+                        });
+                        
+                        // Double click: navigate to node's about page (only for local URIs)
+                        network.on('doubleClick', function(params) {
+                            // Cancel the pending single-click expand
+                            if (clickTimer) {
+                                clearTimeout(clickTimer);
+                                clickTimer = null;
+                            }
+                            if (params.nodes.length > 0) {
+                                var nodeId = params.nodes[0];
+                                var node = nodes.get(nodeId);
+                                if (node && node.isLocal && node.url) {
+                                    window.location.href = node.url;
+                                }
+                            }
+                        });
+                        
+                        // Change cursor on hover
+                        network.on('hoverNode', function() {
+                            container.style.cursor = 'pointer';
+                        });
+                        network.on('blurNode', function() {
+                            container.style.cursor = 'default';
+                        });
+                        
+                        // Load initial data for current object
+                        loadNeighborhood(currentObjectUri, true);
+                    }
+                    
+                    function findOrCreateNode(uri, isCurrent, x, y) {
+                        var existingNodes = nodes.get();
+                        for (var i = 0; i < existingNodes.length; i++) {
+                            if (existingNodes[i].queryUri === uri) {
+                                return existingNodes[i].id;
+                            }
+                        }
+                        // Also check hidden literal nodes
+                        for (var i = 0; i < hiddenLiteralNodes.length; i++) {
+                            if (hiddenLiteralNodes[i].queryUri === uri) {
+                                return hiddenLiteralNodes[i].id;
+                            }
+                        }
+                        // Create new node
+                        var shortLabel = uri.replace(localPrefix, '/').split('/').pop().substring(0, 30);
+                        var fullLabel = uri.replace(localPrefix, '/');
+                        var nodeIsLocal = uri.startsWith(localPrefix);
+                        var isUri = uri.startsWith('http');
+                        var color = isCurrent ? '#e6194b' : (nodeIsLocal ? '#4363d8' : (isUri ? '#9a6324' : '#aaffc3'));
+                        var newNode = {
+                            id: nextNodeId++,
+                            label: shortLabel || uri.substring(0, 30),
+                            title: fullLabel,
+                            color: color,
+                            url: nodeIsLocal ? uri + '/about' : '',
+                            isLocal: nodeIsLocal,
+                            queryUri: uri,
+                            fixed: { x: false, y: false }
+                        };
+                        // Set initial position if provided
+                        if (typeof x === 'number' && typeof y === 'number') {
+                            newNode.x = x;
+                            newNode.y = y;
+                        }
+                        // If literals are hidden and this is a literal, add to hidden list instead
+                        if (!literalsVisible && !isUri) {
+                            hiddenLiteralNodes.push(newNode);
+                        } else {
+                            nodes.add(newNode);
+                        }
+                        return newNode.id;
+                    }
+                    
+                    // Check if a position overlaps with any existing node
+                    function isPositionFree(x, y, minDist, positions) {
+                        for (var id in positions) {
+                            var pos = positions[id];
+                            var dx = pos.x - x;
+                            var dy = pos.y - y;
+                            if (Math.sqrt(dx*dx + dy*dy) < minDist) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                    
+                    // Find a free position in a circle, avoiding overlaps
+                    function findFreePosition(originX, originY, baseRadius, angleOffset, existingPositions, minNodeDist) {
+                        var radius = baseRadius;
+                        var angle = angleOffset;
+                        var attempts = 0;
+                        var maxAttempts = 36; // Try different angles
+                        
+                        while (attempts < maxAttempts) {
+                            var x = originX + radius * Math.cos(angle);
+                            var y = originY + radius * Math.sin(angle);
+                            
+                            if (isPositionFree(x, y, minNodeDist, existingPositions)) {
+                                return { x: x, y: y };
+                            }
+                            
+                            // Try next angle
+                            angle += Math.PI / 6; // 30 degree increments
+                            attempts++;
+                            
+                            // If we've gone full circle, increase radius
+                            if (attempts % 12 === 0) {
+                                radius += minNodeDist;
+                            }
+                        }
+                        
+                        // Fallback: just use increased radius
+                        return {
+                            x: originX + (baseRadius + minNodeDist * 2) * Math.cos(angleOffset),
+                            y: originY + (baseRadius + minNodeDist * 2) * Math.sin(angleOffset)
+                        };
+                    }
+                    
+                    function loadNeighborhood(uri, isCurrent) {
+                        if (expandedNodes.has(uri)) return;
+                        expandedNodes.add(uri);
+                        
+                        // Get all current node positions
+                        var allNodeIds = nodes.getIds();
+                        var allPositions = network.getPositions(allNodeIds);
+                        
+                        // Get the position of the origin node for circular placement
+                        var originPos = { x: 0, y: 0 };
+                        var originNodeId = null;
+                        var existingNodes = nodes.get();
+                        for (var i = 0; i < existingNodes.length; i++) {
+                            if (existingNodes[i].queryUri === uri) {
+                                originNodeId = existingNodes[i].id;
+                                if (allPositions[originNodeId]) {
+                                    originPos = allPositions[originNodeId];
+                                }
+                                break;
+                            }
+                        }
+                        
+                        var encodedUri = encodeURIComponent(uri);
+                        fetch('/query/neighborhood?uri=' + encodedUri)
+                            .then(function(response) {
+                                if (!response.ok) throw new Error('Failed to fetch');
+                                return response.json();
+                            })
+                            .then(function(data) {
+                                if (!data.results || data.results.length === 0) {
+                                    // Still create the node even if no results
+                                    findOrCreateNode(uri, isCurrent, originPos.x, originPos.y);
+                                    return;
+                                }
+                                
+                                // Refresh positions after potential changes
+                                var currentPositions = network.getPositions(nodes.getIds());
+                                
+                                // Collect new nodes to position them in a circle
+                                var newNodeUris = [];
+                                data.results.forEach(function(quad) {
+                                    var subjUri = quad.s.replace(/^<|>$/g, '');
+                                    var objUri = quad.o.replace(/^<|>$/g, '');
+                                    
+                                    // Check if these are new nodes
+                                    var subjExists = existingNodes.some(function(n) { return n.queryUri === subjUri; });
+                                    var objExists = existingNodes.some(function(n) { return n.queryUri === objUri; });
+                                    
+                                    if (!subjExists && newNodeUris.indexOf(subjUri) === -1) {
+                                        newNodeUris.push(subjUri);
+                                    }
+                                    if (!objExists && newNodeUris.indexOf(objUri) === -1) {
+                                        newNodeUris.push(objUri);
+                                    }
+                                });
+                                
+                                // Calculate positions for new nodes, avoiding overlaps
+                                var baseRadius = 120;
+                                var minNodeDist = 60; // Minimum distance between nodes
+                                var nodePositions = {};
+                                var placedPositions = Object.assign({}, currentPositions); // Copy existing positions
+                                
+                                newNodeUris.forEach(function(nodeUri, index) {
+                                    var angleOffset = (index * 2 * Math.PI / Math.max(newNodeUris.length, 1)) - Math.PI / 2;
+                                    var pos = findFreePosition(originPos.x, originPos.y, baseRadius, angleOffset, placedPositions, minNodeDist);
+                                    nodePositions[nodeUri] = pos;
+                                    // Add to placed positions to avoid future overlaps
+                                    placedPositions['new_' + index] = pos;
+                                });
+                                
+                                data.results.forEach(function(quad) {
+                                    var subjUri = quad.s.replace(/^<|>$/g, '');
+                                    var predUri = quad.p.replace(/^<|>$/g, '');
+                                    var objUri = quad.o.replace(/^<|>$/g, '');
+                                    
+                                    var subjPos = nodePositions[subjUri] || { x: undefined, y: undefined };
+                                    var objPos = nodePositions[objUri] || { x: undefined, y: undefined };
+                                    
+                                    var fromId = findOrCreateNode(subjUri, subjUri === currentObjectUri, subjPos.x, subjPos.y);
+                                    var toId = findOrCreateNode(objUri, objUri === currentObjectUri, objPos.x, objPos.y);
+                                    
+                                    // Check if edge already exists (in visible or hidden edges)
+                                    var currentEdges = edges.get();
+                                    var edgeExists = currentEdges.some(function(e) {
+                                        return e.from === fromId && e.to === toId && e.title === predUri;
+                                    }) || hiddenLiteralEdges.some(function(e) {
+                                        return e.from === fromId && e.to === toId && e.title === predUri;
+                                    });
+                                    
+                                    if (!edgeExists) {
+                                        var predLabel = predUri.split('#').pop().split('/').pop().substring(0, 20);
+                                        var newEdge = {
+                                            id: nextEdgeId++,
+                                            from: fromId,
+                                            to: toId,
+                                            label: predLabel,
+                                            title: predUri,
+                                            arrows: 'to'
+                                        };
+                                        
+                                        // Check if either endpoint is a hidden literal node
+                                        var fromIsHiddenLiteral = hiddenLiteralNodes.some(function(n) { return n.id === fromId; });
+                                        var toIsHiddenLiteral = hiddenLiteralNodes.some(function(n) { return n.id === toId; });
+                                        
+                                        if (!literalsVisible && (fromIsHiddenLiteral || toIsHiddenLiteral)) {
+                                            hiddenLiteralEdges.push(newEdge);
+                                        } else {
+                                            edges.add(newEdge);
+                                        }
+                                    }
+                                });
+                                
+                                // Mark expanded node with thicker border
+                                if (originNodeId !== null) {
+                                    nodes.update({ id: originNodeId, borderWidth: 4 });
+                                } else {
+                                    // Find and update the node
+                                    var updatedNodes = nodes.get();
+                                    for (var i = 0; i < updatedNodes.length; i++) {
+                                        if (updatedNodes[i].queryUri === uri) {
+                                            nodes.update({ id: updatedNodes[i].id, borderWidth: 4 });
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // Save current view position before stabilizing
+                                var viewPosition = network.getViewPosition();
+                                var scale = network.getScale();
+                                
+                                // Stabilize briefly to settle new nodes without much drift
+                                network.once('stabilizationIterationsDone', function() {
+                                    // Restore view position after stabilization
+                                    network.moveTo({
+                                        position: viewPosition,
+                                        scale: scale,
+                                        animation: false
+                                    });
+                                });
+                                network.stabilize(30);
+                            })
+                            .catch(function(err) {
+                                console.error('Error loading neighborhood:', err);
+                                expandedNodes.delete(uri);
+                            });
+                    }
+                    
+                    function expandNode(nodeId) {
+                        var node = nodes.get(nodeId);
+                        if (!node || !node.queryUri || node.queryUri === '') return;
+                        loadNeighborhood(node.queryUri, false);
+                    }
+                })();
+            </script>
+        """.trimIndent())
+
+        buf.append(
+            """
+            <style>
+                /* Visual indicator for the last row in a group */
+                .group-last-row td { border-bottom: 2px solid #dcdcdc; }
+                .tw-arrow { display: inline-block; width: 1ch; text-align: center; margin-right: 6px; }
+                /* Text preview and segment styles */
+                .text-preview { background: #fff; color: inherit; white-space: pre-wrap; font: inherit; }
+                .text-segment { background-color: rgba(255, 215, 0, 0.35); border-bottom: 2px solid rgba(255, 215, 0, 0.85); cursor: pointer; }
+                .text-segment.overlap { background-color: rgba(255, 215, 0, 0.55); box-shadow: inset 0 -3px 0 rgba(255, 215, 0, 0.85); }
+                .segments-hidden .text-segment { background: transparent !important; border-color: transparent !important; box-shadow: none !important; pointer-events: none; cursor: text; }
+            </style>
+            <script>
+                function toggleGroup(groupId) {
+                    var rows = document.getElementsByClassName(groupId);
+                    var anyVisible = false;
+                    for (var i = 0; i < rows.length; i++) {
+                        if (rows[i].style.display !== 'none') { anyVisible = true; break; }
+                    }
+                    for (var i = 0; i < rows.length; i++) {
+                        rows[i].style.display = anyVisible ? 'none' : '';
+                    }
+                    var tw = document.getElementById('tw-' + groupId);
+                    if (tw) { tw.textContent = anyVisible ? '>' : 'v'; }
+                }
+            </script>
             </body>
             </html>
         """.trimIndent())
@@ -271,13 +1130,13 @@ private fun QuadValue.toHtml(): String {
     // if it is a literal, return the value
     // if it is a vector, return the value as a string and add a tooltip with the full value
     return when (this) {
-        is org.megras.data.graph.URIValue -> {
+        is URIValue -> {
             // Make URI values clickable by replacing angle brackets with HTML entities
             // and wrapping them in an anchor tag
             val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
             "<a href='$value/about'>$displayValue</a>"
         }
-        is org.megras.data.graph.VectorValue -> {
+        is VectorValue -> {
             // For vector values, show them in a more readable form with a tooltip
             val shortDisplay = if (length > 8) {
                 "[${toString().substring(1, 50)}...]"
@@ -299,12 +1158,12 @@ private fun QuadValue.toPredHtml(): String {
     // if it is a literal, return the value
     // if it is a vector, return the value as a string and add a tooltip with the full value
     return when (this) {
-        is org.megras.data.graph.URIValue -> {
+        is URIValue -> {
             // Make URI values clickable by replacing angle brackets with HTML entities
             // and wrapping them in an anchor tag
             val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
-            val linkValue = value.toString().replace("#", "%23")
-            "<a href='/predicateinformation/$linkValue' target='_blank'>$displayValue</a>"
+            val linkValue = value
+            "<a href='$linkValue' target='_blank'>$displayValue</a>"
         }
         else -> {
             // For other types (StringValue, DoubleValue, etc.), just return string representation

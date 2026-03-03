@@ -21,8 +21,8 @@ class TrOCROCR:
                 Defaults to "cpu".
         """
         self.device = device
-        self.processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
-        self.model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
+        self.processor = TrOCRProcessor.from_pretrained(model_name)
+        self.model = VisionEncoderDecoderModel.from_pretrained(model_name)
 
 
     def recognize_text(self, image_bytes: bytes) -> str:

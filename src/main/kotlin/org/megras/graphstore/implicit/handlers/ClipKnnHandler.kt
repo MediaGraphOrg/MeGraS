@@ -11,6 +11,7 @@ import org.megras.graphstore.derived.handlers.ClipEmbeddingHandler
 import org.megras.graphstore.implicit.ImplicitRelationHandler
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.util.Constants
+import java.util.concurrent.ConcurrentHashMap
 
 class ClipKnnHandler(private val k: Int) : ImplicitRelationHandler {
     companion object {
@@ -26,54 +27,72 @@ class ClipKnnHandler(private val k: Int) : ImplicitRelationHandler {
         this.quadSet = quadSet
     }
 
-    private fun getImageEmbedding(subject: LocalQuadValue) : FloatVectorValue? {
-        val embedding = this.quadSet.filter(
+    private fun getImageEmbedding(subject: LocalQuadValue): FloatVectorValue? {
+        return this.quadSet.filter(
             setOf(subject),
             setOf(CLIP_EMBEDDING_PREDICATE),
             null
-        ).firstOrNull()?.`object` as? FloatVectorValue ?: return null
-        return embedding
-    }
-
-    fun findValues(value: URIValue): Set<URIValue> {
-        if (value !is LocalQuadValue) {
-            return emptySet()
-        }
-        val embedding = getImageEmbedding(value) ?: return emptySet()
-        return this.quadSet.nearestNeighbor(
-                CLIP_EMBEDDING_PREDICATE,
-                embedding,
-                k+1, // +1 because we include the subject itself
-                Distance.valueOf(DISTANCE),
-                false
-            )
-            .map { it.subject }
-            .filterIsInstance<LocalQuadValue>()
-            .filter { it != value } // Exclude the subject itself
-            .toSet()
+        ).firstOrNull()?.`object` as? FloatVectorValue
     }
 
     override fun findObjects(subject: URIValue): Set<URIValue> {
-        return findValues(subject)
+        if (subject !is LocalQuadValue) {
+            return emptySet()
+        }
+        val embedding = getImageEmbedding(subject) ?: return emptySet()
+        return this.quadSet.nearestNeighbor(
+            CLIP_EMBEDDING_PREDICATE,
+            embedding,
+            k + 1, // +1 because we include the subject itself
+            Distance.valueOf(DISTANCE),
+            false
+        )
+            .map { it.subject }
+            .filterIsInstance<LocalQuadValue>()
+            .filter { it != subject } // Exclude the subject itself
+            .toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        return findValues(`object`)
+        // This is a "reverse k-NN" query, which is computationally expensive without a pre-computed graph or specialized index.
+        // Returning an empty set to indicate this query is not efficiently supported.
+        return emptySet()
     }
 
     override fun findAll(): QuadSet {
-        val subjects = this.quadSet
-            .filter { it.subject is LocalQuadValue }
-            .map { it.subject as LocalQuadValue }
-            .toSet()
+        // 1. Bulk fetch all embeddings in one query
+        val allEmbeddingQuads = this.quadSet.filter(null, setOf(CLIP_EMBEDDING_PREDICATE), null)
 
-        val pairs = mutableSetOf<Quad>()
-        for (subject in subjects) {
-            val objects = findValues(subject)
-            for (obj in objects) {
-                pairs.add(Quad(subject, this.predicate, obj))
+        // 2. Create an in-memory cache of subjects and their embeddings
+        val embeddingCache = allEmbeddingQuads.mapNotNull { quad ->
+            val subject = quad.subject as? LocalQuadValue
+            val embedding = quad.`object` as? FloatVectorValue
+            if (subject != null && embedding != null) {
+                subject to embedding
+            } else {
+                null
+            }
+        }.toMap()
+
+        val resultingQuads = ConcurrentHashMap.newKeySet<Quad>()
+
+        // 3. For each subject, find its k-NN in parallel
+        embeddingCache.entries.parallelStream().forEach { (subject, embedding) ->
+            val neighbors = this.quadSet.nearestNeighbor(
+                CLIP_EMBEDDING_PREDICATE,
+                embedding,
+                k + 1, // +1 because we include the subject itself
+                Distance.valueOf(DISTANCE),
+                false
+            )
+                .mapNotNull { it.subject as? URIValue }
+                .filter { it != subject } // Exclude the subject itself
+
+            for (neighbor in neighbors) {
+                resultingQuads.add(Quad(subject, this.predicate, neighbor))
             }
         }
-        return BasicQuadSet(pairs)
+
+        return BasicQuadSet(resultingQuads)
     }
 }

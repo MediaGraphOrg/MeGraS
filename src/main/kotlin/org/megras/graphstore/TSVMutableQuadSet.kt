@@ -7,11 +7,15 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.time.LocalDateTime
 
 class TSVMutableQuadSet(private val tsvFileName : String, private val useCompression: Boolean = false) : MutableQuadSet, PersistableQuadSet {
+
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     private val cache = IndexedMutableQuadSet()
     private var lastStoreTime = 0L
@@ -30,7 +34,9 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
     }
 
     override fun load() {
-        print("loading quads from tsv...")
+        val startTime = System.currentTimeMillis()
+        logger.info("Starting load from TSV...")
+
         cache.clear()
 
         val tsvFile = File(tsvFileName)
@@ -45,7 +51,18 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
             FileInputStream(tsvFile)
         }
 
-        var i = 0
+        // Count total lines for progress (excluding header)
+        val totalLines = if (useCompression) {
+            BZip2CompressorInputStream(FileInputStream(tsvFile), true).bufferedReader().use { reader ->
+                reader.lineSequence().count() - 1
+            }
+        } else {
+            FileInputStream(tsvFile).bufferedReader().use { reader ->
+                reader.lineSequence().count() - 1
+            }
+        }
+
+        var linesProcessed = 0L
 
         tsvReader.open(inputStream) {
 
@@ -60,19 +77,25 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
                     )
                 )
                 if (buffer.size >= 10000) {
+                    linesProcessed += buffer.size
+
                     cache.addAll(buffer)
                     buffer.clear()
-                }
-                if (++i % 1_000_000 == 0) {
-                    print('.')
+
+                    val percentage = (linesProcessed * 100) / totalLines
+                    logger.info("Progress: $percentage% ($linesProcessed / $totalLines)")
                 }
             }
             cache.addAllUnindexed(buffer)
         }
+        linesProcessed = totalLines.toLong()
+        //val percentage = if (totalLines == 0) 100 else (linesProcessed * 100) / totalLines
+        //logger.info("Progress: $percentage% ($linesProcessed / $totalLines)")
 
         cache.rebuildIndex()
 
-        print("done\n")
+        val duration = (System.currentTimeMillis() - startTime) / 1000.0
+        println("Load complete in $duration seconds: $totalLines")
         lastStoreTime = System.currentTimeMillis()
 
     }

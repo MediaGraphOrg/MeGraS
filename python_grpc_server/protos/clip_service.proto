@@ -2,12 +2,15 @@ syntax = "proto3";
 
 package org.megras.util.services;
 
-// Define the service for CLIP embeddings
+// Define the legacy service for standard CLIP embeddings
 service ClipService {
-  // Method to get text embeddings
   rpc GetTextEmbedding (TextRequest) returns (EmbeddingResponse);
+  rpc GetImageEmbedding (ImageRequest) returns (EmbeddingResponse);
+}
 
-  // Method to get image embeddings
+// Define the modern service for SigLIP embeddings
+service SiglipService {
+  rpc GetTextEmbedding (TextRequest) returns (EmbeddingResponse);
   rpc GetImageEmbedding (ImageRequest) returns (EmbeddingResponse);
 }
 
@@ -18,10 +21,10 @@ message TextRequest {
 
 // Message for image embedding requests
 message ImageRequest {
-  bytes image_data = 1; // Now sends the raw bytes of the image
+  bytes image_data = 1;
 }
 
 // Message for embedding responses (for both text and image)
 message EmbeddingResponse {
-  repeated float embedding = 1; // CLIP embeddings are typically float arrays
+  repeated float embedding = 1;
 }

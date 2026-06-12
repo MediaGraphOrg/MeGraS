@@ -2,6 +2,7 @@
   "device": "cuda",
   "clip_embedder_model": "openai/clip-vit-base-patch16",
   "trocr_ocr_model": "microsoft/trocr-base-printed",
+  "siglip_embedder_model": "google/siglip-so400m-patch14-384",
   "grpc_host": "0.0.0.0",
   "grpc_port": 50051
 }

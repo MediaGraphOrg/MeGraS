@@ -3,9 +3,9 @@
 import grpc
 import warnings
 
-import clip_service_pb2 as clip__service__pb2
+import clip_service_pb2 as protos_dot_clip__service__pb2
 
-GRPC_GENERATED_VERSION = '1.74.0'
+GRPC_GENERATED_VERSION = '1.81.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,15 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in clip_service_pb2_grpc.py depends on'
+        + ' but the generated code in protos/clip_service_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ClipServiceStub(object):
-    """Define the service for CLIP embeddings
+class ClipServiceStub:
+    """Define the legacy service for standard CLIP embeddings
     """
 
     def __init__(self, channel):
@@ -37,30 +37,28 @@ class ClipServiceStub(object):
         """
         self.GetTextEmbedding = channel.unary_unary(
                 '/org.megras.util.services.ClipService/GetTextEmbedding',
-                request_serializer=clip__service__pb2.TextRequest.SerializeToString,
-                response_deserializer=clip__service__pb2.EmbeddingResponse.FromString,
+                request_serializer=protos_dot_clip__service__pb2.TextRequest.SerializeToString,
+                response_deserializer=protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
                 _registered_method=True)
         self.GetImageEmbedding = channel.unary_unary(
                 '/org.megras.util.services.ClipService/GetImageEmbedding',
-                request_serializer=clip__service__pb2.ImageRequest.SerializeToString,
-                response_deserializer=clip__service__pb2.EmbeddingResponse.FromString,
+                request_serializer=protos_dot_clip__service__pb2.ImageRequest.SerializeToString,
+                response_deserializer=protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
                 _registered_method=True)
 
 
-class ClipServiceServicer(object):
-    """Define the service for CLIP embeddings
+class ClipServiceServicer:
+    """Define the legacy service for standard CLIP embeddings
     """
 
     def GetTextEmbedding(self, request, context):
-        """Method to get text embeddings
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetImageEmbedding(self, request, context):
-        """Method to get image embeddings
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -70,13 +68,13 @@ def add_ClipServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetTextEmbedding': grpc.unary_unary_rpc_method_handler(
                     servicer.GetTextEmbedding,
-                    request_deserializer=clip__service__pb2.TextRequest.FromString,
-                    response_serializer=clip__service__pb2.EmbeddingResponse.SerializeToString,
+                    request_deserializer=protos_dot_clip__service__pb2.TextRequest.FromString,
+                    response_serializer=protos_dot_clip__service__pb2.EmbeddingResponse.SerializeToString,
             ),
             'GetImageEmbedding': grpc.unary_unary_rpc_method_handler(
                     servicer.GetImageEmbedding,
-                    request_deserializer=clip__service__pb2.ImageRequest.FromString,
-                    response_serializer=clip__service__pb2.EmbeddingResponse.SerializeToString,
+                    request_deserializer=protos_dot_clip__service__pb2.ImageRequest.FromString,
+                    response_serializer=protos_dot_clip__service__pb2.EmbeddingResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -86,8 +84,8 @@ def add_ClipServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ClipService(object):
-    """Define the service for CLIP embeddings
+class ClipService:
+    """Define the legacy service for standard CLIP embeddings
     """
 
     @staticmethod
@@ -105,8 +103,8 @@ class ClipService(object):
             request,
             target,
             '/org.megras.util.services.ClipService/GetTextEmbedding',
-            clip__service__pb2.TextRequest.SerializeToString,
-            clip__service__pb2.EmbeddingResponse.FromString,
+            protos_dot_clip__service__pb2.TextRequest.SerializeToString,
+            protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -132,8 +130,126 @@ class ClipService(object):
             request,
             target,
             '/org.megras.util.services.ClipService/GetImageEmbedding',
-            clip__service__pb2.ImageRequest.SerializeToString,
-            clip__service__pb2.EmbeddingResponse.FromString,
+            protos_dot_clip__service__pb2.ImageRequest.SerializeToString,
+            protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class SiglipServiceStub:
+    """Define the modern service for SigLIP embeddings
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetTextEmbedding = channel.unary_unary(
+                '/org.megras.util.services.SiglipService/GetTextEmbedding',
+                request_serializer=protos_dot_clip__service__pb2.TextRequest.SerializeToString,
+                response_deserializer=protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
+                _registered_method=True)
+        self.GetImageEmbedding = channel.unary_unary(
+                '/org.megras.util.services.SiglipService/GetImageEmbedding',
+                request_serializer=protos_dot_clip__service__pb2.ImageRequest.SerializeToString,
+                response_deserializer=protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
+                _registered_method=True)
+
+
+class SiglipServiceServicer:
+    """Define the modern service for SigLIP embeddings
+    """
+
+    def GetTextEmbedding(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetImageEmbedding(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_SiglipServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetTextEmbedding': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTextEmbedding,
+                    request_deserializer=protos_dot_clip__service__pb2.TextRequest.FromString,
+                    response_serializer=protos_dot_clip__service__pb2.EmbeddingResponse.SerializeToString,
+            ),
+            'GetImageEmbedding': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetImageEmbedding,
+                    request_deserializer=protos_dot_clip__service__pb2.ImageRequest.FromString,
+                    response_serializer=protos_dot_clip__service__pb2.EmbeddingResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'org.megras.util.services.SiglipService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('org.megras.util.services.SiglipService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class SiglipService:
+    """Define the modern service for SigLIP embeddings
+    """
+
+    @staticmethod
+    def GetTextEmbedding(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/org.megras.util.services.SiglipService/GetTextEmbedding',
+            protos_dot_clip__service__pb2.TextRequest.SerializeToString,
+            protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetImageEmbedding(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/org.megras.util.services.SiglipService/GetImageEmbedding',
+            protos_dot_clip__service__pb2.ImageRequest.SerializeToString,
+            protos_dot_clip__service__pb2.EmbeddingResponse.FromString,
             options,
             channel_credentials,
             insecure,

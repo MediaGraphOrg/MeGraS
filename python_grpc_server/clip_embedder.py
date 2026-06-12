@@ -23,7 +23,7 @@ class CLIPEmbedder:
         self.model_name = model_name
         self.device = device
         # Use AutoModel and AutoProcessor as in the provided scripts
-        self.model = AutoModel.from_pretrained(self.model_name).to(self.device)
+        self.model = AutoModel.from_pretrained(self.model_name, attn_implementation="eager").to(self.device)
         self.processor = AutoProcessor.from_pretrained(self.model_name)
 
     def get_text_embeddings(self, text: str) -> torch.Tensor:
@@ -36,24 +36,18 @@ class CLIPEmbedder:
         Returns:
             torch.Tensor: A tensor containing the normalized text embeddings.
         """
+        print(text)
         inputs = self.processor(text=[text], return_tensors="pt").to(self.device)
         with torch.no_grad():
-            # Call get_text_features as in get_text_embedding.py
-            text_embeddings = self.model.get_text_features(**inputs)
-        return F.normalize(text_embeddings, dim=-1) # Normalizing as done previously
+            text_outputs = self.model.text_model(**inputs)
+            text_embeddings = self.model.text_projection(text_outputs.pooler_output)
+        return F.normalize(text_embeddings, dim=-1)
 
     def get_image_embeddings(self, image_bytes: bytes) -> torch.Tensor:
         """
         Computes image embeddings for given image bytes.
-
-        Args:
-            image_bytes (bytes): The raw bytes of the image file.
-
-        Returns:
-            torch.Tensor: A tensor containing the normalized image embeddings.
         """
         try:
-            # Use io.BytesIO to treat the bytes as a file
             image = Image.open(io.BytesIO(image_bytes))
         except Exception as e:
             raise Exception(f"Failed to load image from bytes. Error: {e}")
@@ -63,6 +57,8 @@ class CLIPEmbedder:
 
         inputs = self.processor(images=image, return_tensors="pt").to(self.device)
         with torch.no_grad():
-            # Call get_image_features as in get_image_embedding.py
-            image_embeddings = self.model.get_image_features(**inputs)
-        return F.normalize(image_embeddings, dim=-1) # Normalizing as done previously
+            # FIX: Manually compute vision outputs and project them, matching your text workaround
+            vision_outputs = self.model.vision_model(**inputs)
+            image_embeddings = self.model.visual_projection(vision_outputs.pooler_output)
+            
+        return F.normalize(image_embeddings, dim=-1)

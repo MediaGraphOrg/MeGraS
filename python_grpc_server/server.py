@@ -18,6 +18,7 @@ import docling_service_pb2_grpc
 
 # Import service classes
 from clip_embedder import CLIPEmbedder
+from siglip_embedder import SigLIPEmbedder  # <-- New Import
 from trocr_ocr import TrOCROCR
 from docling_extractor import DoclingExtractor
 
@@ -32,65 +33,69 @@ GRPC_HOST = config.get("grpc_host", "0.0.0.0")
 GRPC_PORT = int(config.get("grpc_port", 50051))
 
 class ClipServiceServicer(clip_service_pb2_grpc.ClipServiceServicer):
-    """
-    Implements the gRPC methods for the ClipService.
-    """
     def __init__(self, device, model_name):
         self.clip_embedder = CLIPEmbedder(device=device, model_name=model_name)
         print(f"CLIPEmbedder initialized with model {model_name} on {device}.")
 
     def GetTextEmbedding(self, request, context):
-        """
-        Handles GetTextEmbedding RPC.
-        """
         try:
             text_embedding = self.clip_embedder.get_text_embeddings(request.text)
-            # Convert torch tensor to a list of floats for Protobuf
-            return clip_service_pb2.EmbeddingResponse(embedding=text_embedding.squeeze().tolist())
+            vec = text_embedding.squeeze().tolist()
+            return clip_service_pb2.EmbeddingResponse(embedding=vec)
         except Exception as e:
             context.set_details(f"Error getting text embedding: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
-            return clip_service_pb2.EmbeddingResponse() # Return an empty response on error
+            return clip_service_pb2.EmbeddingResponse()
 
     def GetImageEmbedding(self, request, context):
-        """
-        Handles GetImageEmbedding RPC.
-        """
         try:
-            # Pass the image_data bytes directly to the embedder
             image_embedding = self.clip_embedder.get_image_embeddings(request.image_data)
-            # Convert torch tensor to a list of floats for Protobuf
             return clip_service_pb2.EmbeddingResponse(embedding=image_embedding.squeeze().tolist())
         except Exception as e:
             context.set_details(f"Error getting image embedding: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
-            return clip_service_pb2.EmbeddingResponse() # Return an empty response on error
+            return clip_service_pb2.EmbeddingResponse()
+
+class SiglipServiceServicer(clip_service_pb2_grpc.SiglipServiceServicer):
+    """Implements the gRPC methods for the SiglipService."""
+    def __init__(self, device, model_name):
+        self.siglip_embedder = SigLIPEmbedder(device=device, model_name=model_name)
+        print(f"SigLIPEmbedder initialized with model {model_name} on {device}.")
+
+    def GetTextEmbedding(self, request, context):
+        try:
+            text_embedding = self.siglip_embedder.get_text_embeddings(request.text)
+            return clip_service_pb2.EmbeddingResponse(embedding=text_embedding.squeeze().tolist())
+        except Exception as e:
+            context.set_details(f"Error getting SigLIP text embedding: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return clip_service_pb2.EmbeddingResponse()
+
+    def GetImageEmbedding(self, request, context):
+        try:
+            image_embedding = self.siglip_embedder.get_image_embeddings(request.image_data)
+            return clip_service_pb2.EmbeddingResponse(embedding=image_embedding.squeeze().tolist())
+        except Exception as e:
+            context.set_details(f"Error getting SigLIP image embedding: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return clip_service_pb2.EmbeddingResponse()
 
 class OcrServiceServicer(ocr_service_pb2_grpc.OcrServiceServicer):
-    """
-    Implements the gRPC methods for the OCRService.
-    """
     def __init__(self, device, model_name):
-        # Initialize TrOCROCR with a suitable device and model for lifelog/printed text
         self.trocr_ocr = TrOCROCR(device=device, model_name=model_name)
         print(f"TrOCROCR initialized with model {model_name} on {device}.")
 
     def RecognizeText(self, request, context):
-        """
-        Handles RecognizeText RPC for OCR.
-        """
         try:
             recognized_text = self.trocr_ocr.recognize_text(request.image_data)
             return ocr_service_pb2.RecognizeTextResponse(recognized_text=recognized_text)
         except Exception as e:
             context.set_details(f"Error recognizing text: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
-            return ocr_service_pb2.RecognizeTextResponse() # Return an empty response on error
+            return ocr_service_pb2.RecognizeTextResponse()
 
 
 class DoclingServiceServicer(docling_service_pb2_grpc.DoclingServiceServicer):
-    """Implements DoclingService for PDF content extraction."""
-
     def __init__(self, num_threads: int = 4, ocr_langs=None):
         self.extractor = DoclingExtractor(num_threads=num_threads, ocr_langs=ocr_langs or ["en"])
         print(f"DoclingExtractor initialized with {num_threads} threads and langs {ocr_langs or ['en']}.")
@@ -121,11 +126,16 @@ def serve():
     clip_service_pb2_grpc.add_ClipServiceServicer_to_server(
         ClipServiceServicer(device=config["device"], model_name=config["clip_embedder_model"]), server)
 
+    # Add SigLIP Service
+    siglip_model = config.get("siglip_embedder_model", "google/siglip-so400m-patch14-384")
+    clip_service_pb2_grpc.add_SiglipServiceServicer_to_server(
+        SiglipServiceServicer(device=config["device"], model_name=siglip_model), server)
+
     # Add OCR Service
     ocr_service_pb2_grpc.add_OcrServiceServicer_to_server(
         OcrServiceServicer(device=config["device"], model_name=config["trocr_ocr_model"]), server)
 
-    # Add Docling Service (threads and langs optional in config)
+    # Add Docling Service
     docling_threads = config.get("docling_threads", 4)
     docling_langs = config.get("docling_ocr_langs", ["en"])
     docling_service_pb2_grpc.add_DoclingServiceServicer_to_server(

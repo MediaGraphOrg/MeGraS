@@ -12,6 +12,7 @@ import org.megras.graphstore.derived.handlers.FigureHandler
 import org.megras.graphstore.derived.handlers.TableHandler
 import org.megras.graphstore.derived.handlers.DocumentModelJsonHandler
 import org.megras.graphstore.derived.handlers.ParagraphHandler
+import org.megras.graphstore.derived.handlers.SigLipEmbeddingHandler
 
 class DerivedRelationRegistrar(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) {
     private val handlers = mutableListOf<DerivedRelationHandler<QuadValue>>()
@@ -19,6 +20,7 @@ class DerivedRelationRegistrar(private val quads: QuadSet, private val objectSto
     init {
         register(AverageColorHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(ClipEmbeddingHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
+        register(SigLipEmbeddingHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(OcrHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(PageHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)
         register(TextHandler(quads, objectStore) as DerivedRelationHandler<QuadValue>)

@@ -2,6 +2,8 @@ package org.megras.data.schema
 
 import org.megras.data.graph.URIValue
 
+private const val MEGRAS_PREFIX = "http://megras.org/schema#"
+
 enum class MeGraS(suffix: String) {
 
     RAW_ID("rawId"),
@@ -19,11 +21,7 @@ enum class MeGraS(suffix: String) {
     PREVIEW_ID("previewId") //raw id of object preview
     ;
 
-    companion object {
-        const val PREFIX = "http://megras.org/schema#"
-    }
-
-    val uri = URIValue(MeGraS.PREFIX, suffix)
+    val uri = URIValue(MEGRAS_PREFIX, suffix)
 
 
 }

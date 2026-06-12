@@ -2,16 +2,16 @@ package org.megras.data.schema
 
 import org.megras.data.graph.URIValue
 
+private const val SCHEMA_ORG_PREFIX = "http://schema.org/"
+
 enum class SchemaOrg(private val suffix: String) {
 
     SAME_AS("sameAs"),
     SHA256("sha256")
 
     ;
-    companion object {
-        private const val prefix = "http://schema.org/"
-    }
 
-    val uri = URIValue(SchemaOrg.prefix, suffix)
+
+    val uri = URIValue(SCHEMA_ORG_PREFIX, suffix)
 
 }

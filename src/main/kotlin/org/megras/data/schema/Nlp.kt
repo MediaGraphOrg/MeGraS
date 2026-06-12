@@ -2,6 +2,8 @@ package org.megras.data.schema
 
 import org.megras.data.graph.URIValue
 
+private const val NLP_PREFIX = "http://megras.org/nlp#"
+
 enum class Nlp(suffix: String) {
 
     PAGE("page"),
@@ -11,9 +13,6 @@ enum class Nlp(suffix: String) {
     ASSET("asset"),
     CAPTION("caption");
 
-    companion object {
-        const val PREFIX = "http://megras.org/nlp#"
-    }
 
-    val uri = URIValue(Nlp.PREFIX, suffix)
+    val uri = URIValue(NLP_PREFIX, suffix)
 }

@@ -11,6 +11,7 @@ import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.api.rest.GetRequestHandler
+import org.megras.util.SafeDecoding
 import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.ObjectStoreResult
@@ -188,7 +189,7 @@ class ObjectPreviewRequestHandler(private val quads: MutableQuadSet, private val
 
             MediaType.DOCUMENT -> {
                 val pdfStream = objectStoreResult.inputStream()
-                val pdf = PDDocument.load(pdfStream)
+                val pdf = SafeDecoding.loadPdf(pdfStream)
                 val pdfRenderer = PDFRenderer(pdf)
                 val page = pdfRenderer.renderImage(0, 1F, ImageType.ARGB)
 

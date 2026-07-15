@@ -8,9 +8,9 @@ import org.megras.graphstore.QuadSet
 import org.megras.graphstore.derived.DerivedRelationHandler
 import org.megras.util.Constants
 import org.megras.util.FileUtil
+import org.megras.util.SafeDecoding
 import java.awt.image.BufferedImage
 import java.io.IOException
-import javax.imageio.ImageIO
 
 class AverageColorHandler(private val quads: QuadSet, private val objectStore: FileSystemObjectStore) :
     DerivedRelationHandler<FloatVectorValue> {
@@ -68,7 +68,7 @@ class AverageColorHandler(private val quads: QuadSet, private val objectStore: F
         val osr = FileUtil.getOsr(subject, quads, objectStore) ?: return emptyList()
 
         val bufferedImage = try {
-            ImageIO.read(osr.inputStream())
+            SafeDecoding.readImage(osr.inputStream())
         } catch (_: IOException) {
             return emptyList()
         }

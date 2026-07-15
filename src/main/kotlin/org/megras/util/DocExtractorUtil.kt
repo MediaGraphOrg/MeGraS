@@ -111,7 +111,7 @@ object DocExtractorUtil {
                 DocExtractorUtilType.FIGURES -> {
                     val dpi = 300f
                     val path = FileUtil.getPath(subject, quadSet, objectStore)!!
-                    PDDocument.load(File(path)).use { doc ->
+                    SafeDecoding.loadPdf(File(path)).use { doc ->
                         val renderer = PDFRenderer(doc)
                         val pageImage = renderer.renderImageWithDPI(pageIndex, dpi)
                         val mediaBox = doc.getPage(pageIndex).mediaBox

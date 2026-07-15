@@ -3,6 +3,7 @@ package org.megras.segmentation.media
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
 import org.slf4j.LoggerFactory
+import org.megras.util.SafeDecoding
 import java.awt.AlphaComposite
 import java.awt.Color
 import java.awt.geom.AffineTransform
@@ -19,7 +20,7 @@ object ImageSegmenter {
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
     fun segment(inputStream: InputStream, segmentation: Segmentation, imageType: Int = BufferedImage.TYPE_4BYTE_ABGR): SegmentationResult? {
-        val image = ImageIO.read(inputStream)
+        val image = SafeDecoding.readImage(inputStream)
         val segmentedImage = segment(image, segmentation, imageType) ?: return null
 
         val outputStream = ByteArrayOutputStream()

@@ -9,6 +9,7 @@ import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.type.*
+import org.megras.util.SafeDecoding
 import org.megras.util.FileUtil
 import org.slf4j.LoggerFactory
 import java.awt.image.BufferedImage
@@ -22,7 +23,7 @@ object DocumentSegmenter {
 
     fun segment(inputStream: InputStream, segmentation: Segmentation): SegmentationResult? {
         return try {
-            val pdf = PDDocument.load(inputStream)
+            val pdf = SafeDecoding.loadPdf(inputStream)
             val newPdf = when (segmentation) {
                 is Page -> segmentPages(pdf, segmentation)
                 is Rect -> segmentRect(pdf, segmentation)

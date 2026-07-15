@@ -23,6 +23,7 @@ import org.megras.segmentation.media.MeshSegmenter
 import org.megras.segmentation.media.TextSegmenter
 import org.megras.segmentation.type.*
 import org.megras.util.HashUtil
+import org.megras.util.SafeDecoding
 import java.io.ByteArrayInputStream
 import java.util.*
 import javax.imageio.ImageIO
@@ -99,7 +100,7 @@ object SegmentationUtil {
                         TODO()
                     } else {
                         val decoded = Base64.getUrlDecoder().decode(segmentDefinition)
-                        val maskImage = ImageIO.read(ByteArrayInputStream(decoded))
+                        val maskImage = SafeDecoding.readImage(ByteArrayInputStream(decoded))
                         ImageMask(maskImage)
                     }
 

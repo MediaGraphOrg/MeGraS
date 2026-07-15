@@ -95,7 +95,7 @@ object FileUtil {
             MimeType.PNG, //png is the default canonical image format
             MimeType.JPEG_I -> { //we make an exception for jpg to not generate too much bloat
                 val imageStream = objectStore.get(rawDescriptor.id)!!.inputStream()
-                val image = ImageIO.read(imageStream)
+                val image = SafeDecoding.readImage(imageStream)
 
                 val descriptor = StoredObjectDescriptor(
                     rawDescriptor.id,
@@ -114,7 +114,7 @@ object FileUtil {
             MimeType.TIFF -> { //everything else gets transformed to png
 
                 try {
-                    val buffered = ImageIO.read(objectStore.get(rawDescriptor.id)!!.inputStream())
+                    val buffered = SafeDecoding.readImage(objectStore.get(rawDescriptor.id)!!.inputStream())
 
                     val rgbaImage = BufferedImage(buffered.width, buffered.height, BufferedImage.TYPE_INT_ARGB)
                     val g = rgbaImage.createGraphics()
@@ -265,7 +265,7 @@ object FileUtil {
 
             MimeType.PDF -> {
                 val pdfStream = objectStore.get(rawDescriptor.id)!!.inputStream()
-                val pdf = PDDocument.load(pdfStream)
+                val pdf = SafeDecoding.loadPdf(pdfStream)
                 val page = pdf.getPage(0)
 
                 val descriptor = StoredObjectDescriptor(

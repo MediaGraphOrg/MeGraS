@@ -2,8 +2,8 @@ package org.megras.benchmark
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.MutableQuadSet

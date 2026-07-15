@@ -1,6 +1,7 @@
 package org.megras.data.fs
 
 import org.megras.data.fs.file.PseudoFile
+import org.megras.data.mime.ContentDetection
 import org.megras.data.mime.MimeType
 import org.megras.segmentation.Bounds
 import org.megras.util.HashUtil
@@ -46,7 +47,10 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
 
     override fun store(file: PseudoFile): StoredObjectDescriptor {
         val id = idFromStream(file.inputStream())
-        val descriptor = StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length(), Bounds())
+        // Determine the media type from the content, not the client-supplied
+        // filename, so an attacker cannot pick a parser by renaming a file.
+        val mimeType = ContentDetection.detect(file.bytes(), MimeType.mimeType(file.extension))
+        val descriptor = StoredObjectDescriptor(id, mimeType, file.length(), Bounds())
 
         store(file.inputStream(), descriptor)
 
@@ -57,8 +61,9 @@ class FileSystemObjectStore(objectStoreBase: String) : ObjectStore {
         val id = idFromStream(file.inputStream())
         val target = storageFile(id)
         if(target.exists()) {
+            val mimeType = ContentDetection.detect(file.bytes(), MimeType.mimeType(file.extension))
             // Bounds is not correct, but does not matter for current use case
-            return StoredObjectDescriptor(id, MimeType.mimeType(file.extension), file.length(), Bounds())
+            return StoredObjectDescriptor(id, mimeType, file.length(), Bounds())
         }
         return null
     }

@@ -4,8 +4,11 @@ import org.apache.jena.graph.Node
 import org.apache.jena.graph.Triple
 import org.apache.jena.query.DatasetFactory
 import org.apache.jena.query.QueryExecution
+import org.apache.jena.query.Syntax
 import org.apache.jena.rdf.model.ModelFactory
 import org.apache.jena.sparql.core.DatasetGraphFactory
+import org.apache.jena.query.QueryFactory
+import org.apache.jena.query.Query
 import org.megras.data.graph.*
 import org.megras.data.model.Config
 import org.megras.graphstore.QuadSet
@@ -48,6 +51,94 @@ object SparqlUtil {
         currentEngineType = engineType
     }
 
+    /**
+     * Keywords whose presence would cause Jena ARQ to issue outbound HTTP
+     * requests from the server (SSRF). They are checked before execution:
+     *
+     *  - `SERVICE <url>`: ARQ federates the pattern to a remote endpoint.
+     *  - `FROM <url>` / `FROM NAMED <url>`: ARQ loads the named graph via HTTP.
+     *  - `LOAD` / `FETCH`: update/deprecated forms that fetch remote data
+     *    (defense-in-depth; the select path itself does not execute them).
+     *
+     * MeGraS wraps a local QuadSet as its only dataset, so there is no
+     * legitimate need for these clauses against external endpoints. Rejecting
+     * them closes the most direct SSRF vector exposed by /query/sparql.
+     */
+    private val REMOTE_CLAUSE_KEYWORDS = setOf(
+        "SERVICE", "FROM", "LOAD", "FETCH"
+    )
+
+    /**
+     * Scans [query] for [REMOTE_CLAUSE_KEYWORDS] occurring as SPARQL tokens
+     * (i.e. outside line comments and string/IRI literals) and rejects the
+     * query if any are found. Returns the parsed [Query] for downstream
+     * execution.
+     *
+     * The scan is intentionally conservative: it walks the text character by
+     * character, skipping `#` line comments and the SPARQL literal forms
+     * (`"`, `"""`, `'`, `<`), so a keyword appearing inside a string literal
+     * or IRI is not treated as an instruction.
+     */
+    private fun parseAndRejectRemoteClauses(query: String): Query {
+        val forbidden = findForbiddenKeywords(query)
+        if (forbidden.isNotEmpty()) {
+            throw IllegalArgumentException(
+                "Remote SPARQL clauses are disabled to prevent SSRF: ${forbidden.joinToString()}"
+            )
+        }
+        return QueryFactory.create(query, Syntax.syntaxARQ)
+    }
+
+    private fun findForbiddenKeywords(query: String): Set<String> {
+        val found = mutableSetOf<String>()
+        var i = 0
+        val n = query.length
+        while (i < n) {
+            val c = query[i]
+            when {
+                // line comment until end of line
+                c == '#' -> {
+                    while (i < n && query[i] != '\n') i++
+                }
+                // long string literal """ ... """
+                c == '"' && i + 2 < n && query[i + 1] == '"' && query[i + 2] == '"' -> {
+                    i += 3
+                    while (i + 2 < n && !(query[i] == '"' && query[i + 1] == '"' && query[i + 2] == '"')) i++
+                    i += 3
+                }
+                // single/double-quoted string literal with escape support
+                c == '"' || c == '\'' -> {
+                    val quote = c
+                    i++
+                    while (i < n) {
+                        if (query[i] == '\\') { i += 2; continue }
+                        if (query[i] == quote) { i++; break }
+                        i++
+                    }
+                }
+                // IRI literal <...>
+                c == '<' -> {
+                    i++
+                    while (i < n && query[i] != '>') i++
+                    if (i < n) i++ // consume '>'
+                }
+                else -> {
+                    if (c.isLetter() || c == '_') {
+                        val start = i
+                        while (i < n && (query[i].isLetterOrDigit() || query[i] == '_' || query[i] == '-')) i++
+                        val token = query.substring(start, i).uppercase()
+                        if (token in REMOTE_CLAUSE_KEYWORDS) {
+                            found.add(token)
+                        }
+                    } else {
+                        i++
+                    }
+                }
+            }
+        }
+        return found
+    }
+
     fun select(query: String, quads: QuadSet): ResultTable {
 
         // Log which query engine is configured
@@ -62,8 +153,11 @@ object SparqlUtil {
 
         // STEP 2: Query Execution setup and run (Jena Parsing, Planning, and DB Calls)
         val start2 = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+        // Reject clauses that make Jena issue outbound HTTP from the server
+        // (SERVICE / FROM / FROM NAMED) before handing the query to the engine.
+        val parsedQuery = parseAndRejectRemoteClauses(query)
         val resultSet =
-            QueryExecution.create(query, DatasetFactory.wrap(DatasetGraphFactory.wrap(jenaWrapper))).execSelect()
+            QueryExecution.create(parsedQuery, DatasetFactory.wrap(DatasetGraphFactory.wrap(jenaWrapper))).execSelect()
         if (TIMING_ENABLED) logger.info("Time spent in QueryExecution setup and run: ${System.currentTimeMillis() - start2}ms")
 
         val rows = mutableListOf<Map<String, QuadValue>>()

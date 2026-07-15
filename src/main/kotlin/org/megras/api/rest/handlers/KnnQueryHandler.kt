@@ -14,6 +14,13 @@ import org.megras.graphstore.QuadSet
 
 class KnnQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
+    private companion object {
+        // Unauthenticated callers could otherwise request the entire graph as
+        // neighbours or submit oversized vectors to exhaust the vector backend.
+        const val MAX_KNN_COUNT = 1_000
+        const val MAX_VECTOR_DIMENSIONS = 4_096
+    }
+
     @OpenApi(
         summary = "Queries the Graph for quads within a kNN-cluster.",
         path = "/query/knn",
@@ -36,10 +43,16 @@ class KnnQueryHandler(private val quads: QuadSet) : PostRequestHandler {
         }
 
         val predicate = QuadValue.of(query.predicate)
+        if (query.`object`.size > MAX_VECTOR_DIMENSIONS) {
+            throw RestErrorStatus(400, "query vector exceeds $MAX_VECTOR_DIMENSIONS dimensions")
+        }
         val `object` = QuadValue.of(query.`object`.map { it.toFloat() })
         val count = query.count
         if (count < 1) {
             throw RestErrorStatus(400, "invalid query: count smaller than one")
+        }
+        if (count > MAX_KNN_COUNT) {
+            throw RestErrorStatus(400, "count exceeds maximum of $MAX_KNN_COUNT")
         }
         val distance = Distance.valueOf(query.distance.toString())
 

@@ -15,6 +15,15 @@ import org.megras.graphstore.QuadSet
 
 class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
+    private companion object {
+        // Traversing the graph is exponential in depth; without bounds an
+        // unauthenticated caller can pin CPU/memory by asking for many seeds
+        // with Int.MAX_VALUE depth.
+        const val MAX_PATH_DEPTH = 5
+        const val MAX_SEEDS = 256
+        const val MAX_RESULT_QUADS = 5_000
+    }
+
     @OpenApi(
         summary = "Queries a path along a set of predicates starting from a set of subjects.",
         path = "/query/path",
@@ -37,8 +46,13 @@ class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
         }
 
         val seeds = query.seeds?.mapNotNull { if (it != null) QuadValue.of(it) else null } ?: throw RestErrorStatus(400, "invalid query")
+        if (seeds.size > MAX_SEEDS) {
+            throw RestErrorStatus(400, "too many seeds (max $MAX_SEEDS)")
+        }
         val predicates = query.predicates?.mapNotNull { if (it != null) QuadValue.of(it) else null } ?: throw RestErrorStatus(400, "invalid query")
-        val maxDepth = if(query.maxDepth > 0) query.maxDepth else Int.MAX_VALUE
+        // Clamp caller-supplied depth; a missing/zero depth used to mean
+        // Int.MAX_VALUE which enables unbounded graph traversal.
+        val maxDepth = if (query.maxDepth > 0) minOf(query.maxDepth, MAX_PATH_DEPTH) else MAX_PATH_DEPTH
         val reverse = query.reverse
 
         val results = mutableSetOf<Quad>()
@@ -59,6 +73,11 @@ class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
             }
 
             results.addAll(step)
+            // Stop once we have collected enough to satisfy any reasonable
+            // exploratory query but not enough to exhaust memory.
+            if (results.size >= MAX_RESULT_QUADS) {
+                break
+            }
             start = if (reverse) {
                 step.map { it.subject }.toSet()
             } else {
@@ -68,6 +87,6 @@ class PathQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
         }
 
-        ctx.json(ApiQueryResult(results.map { ApiQuad(it) }))
+        ctx.json(ApiQueryResult(results.take(MAX_RESULT_QUADS).map { ApiQuad(it) }))
     }
 }

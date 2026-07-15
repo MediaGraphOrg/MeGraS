@@ -14,6 +14,13 @@ import org.megras.graphstore.QuadSet
 
 class BasicQueryHandler(private val quads: QuadSet) : PostRequestHandler {
 
+    private companion object {
+        // Guards against unauthenticated callers requesting the entire graph
+        // (all-three-filters-null) and exhausting memory. Larger scans must go
+        // through SPARQL with explicit LIMITs or a privileged bulk-export tool.
+        const val MAX_RESULT_QUADS = 5_000
+    }
+
     @OpenApi(
         summary = "Queries the Graph.",
         path = "/query/quads",
@@ -45,6 +52,8 @@ class BasicQueryHandler(private val quads: QuadSet) : PostRequestHandler {
             if (o?.isNotEmpty() == true) o else null
         ).map { ApiQuad(it) }
 
-        ctx.json(ApiQueryResult(results))
+        // Cap the result set so an empty (all-null) query cannot stream the
+        // whole graph back to an unauthenticated caller.
+        ctx.json(ApiQueryResult(results.take(MAX_RESULT_QUADS)))
     }
 }

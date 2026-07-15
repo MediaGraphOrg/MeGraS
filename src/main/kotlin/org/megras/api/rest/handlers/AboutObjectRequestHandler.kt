@@ -107,7 +107,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
 
                     sortedChildrenWithSegmentation.forEachIndexed { idx, (child, segmentation, _) ->
                         val color = colorPalette[idx % colorPalette.size]
-                        val aboutUrl = "${child.value}/about"
+                        val aboutUrl = safeHrefRaw("${child.value}/about")
 
                         when (segmentation.segmentationType) {
                             SegmentationType.RECT -> {
@@ -118,7 +118,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                 val width = coords[1] - coords[0]
                                 val height = coords[3] - coords[2]
                                 svg += """
-                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                    <a xlink:href='${escapeAttr(aboutUrl ?: "")}' target='_blank'>
                                         <rect x='$x' y='$y' width='$width' height='$height' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
                                     </a>
                                 """.trimIndent()
@@ -132,7 +132,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                         "$x,${itemBounds.getMaxY() - y}"
                                     }
                                 svg += """
-                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                    <a xlink:href='${escapeAttr(aboutUrl ?: "")}' target='_blank'>
                                         <polygon points='${points.joinToString(" ")}' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
                                     </a>
                                 """.trimIndent()
@@ -146,7 +146,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                         "$x,${itemBounds.getMaxY() - y}"
                                     }
                                 svg += """
-                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                    <a xlink:href='${escapeAttr(aboutUrl ?: "")}' target='_blank'>
                                         <polygon points='${points.joinToString(" ")}' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
                                     </a>
                                 """.trimIndent()
@@ -160,7 +160,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                     "$command$x,${itemBounds.getMaxY() - y}"
                                 }
                                 svg += """
-                                    <a xlink:href='$aboutUrl' target='_blank'>
+                                    <a xlink:href='${escapeAttr(aboutUrl ?: "")}' target='_blank'>
                                         <path d='$adjustedPath' style='fill:$color; stroke:black; stroke-width:2; fill-opacity:0.25; stroke-opacity:0.8; cursor:pointer;' />
                                     </a>
                                 """.trimIndent()
@@ -203,7 +203,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                     """
                     <div class='media-container'>
                         <video controls>
-                          <source src='${objectId.toPath()}' type='${mimeType?.value}'>
+                          <source src='${objectId.toPath()}' type='${escapeAttr(mimeType?.value ?: "")}'>
                           Your browser does not support the video tag.
                         </video>
                     </div>
@@ -216,7 +216,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                     """
                     <div class='media-container'>
                         <audio controls>
-                          <source src='${objectId.toPath()}' type='${mimeType?.value}'>
+                          <source src='${objectId.toPath()}' type='${escapeAttr(mimeType?.value ?: "")}'>
                           Your browser does not support the audio tag.
                         </audio>
                     </div>
@@ -228,7 +228,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 // Build absolute character intervals from child segments (CHARACTER)
                 val charIntervals: MutableList<Pair<Int, Int>> = mutableListOf()
                 // Also keep mapping to child about URLs for click-through
-                val charLinks: MutableList<Triple<Int, Int, String>> = mutableListOf()
+                val charLinks: MutableList<Triple<Int, Int, String?>> = mutableListOf()
                 if (children.isNotEmpty()) {
                     children.forEach { child ->
                         val seg = getSegmentation(child)
@@ -238,7 +238,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                                     // Convert to absolute using this object's bounds (T dimension = text length)
                                     (seg.toAbsolute(itemBounds) as? org.megras.segmentation.type.Character) ?: seg
                                 } else seg
-                                val aboutUrl = "${child.value}/about"
+                                val aboutUrl = safeHrefRaw("${child.value}/about")
                                 // Parse definition "l-h,l-h,..." to intervals
                                 absSeg.getDefinition().split(",").forEach { part ->
                                     val r = part.trim()
@@ -264,7 +264,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 val intervalsJson = charIntervals.joinToString(prefix = "[", postfix = "]") { "[${it.first},${it.second}]" }
                 // JSON for clickable segments: [ [l,h,"/child/about"], ... ]
                 val segmentsJson = charLinks.joinToString(prefix = "[", postfix = "]") {
-                    val url = it.third.replace("\\", "\\\\").replace("\"", "\\\"")
+                    val url = escapeJsString(it.third ?: "")
                     "[${it.first},${it.second},\"$url\"]"
                 }
 
@@ -579,7 +579,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         buf.append("</textarea>")*/
 
         // Graph visualization - loaded on demand when collapsible is opened
-        val currentObjectUri = objectId.value.replace("\\", "\\\\").replace("\"", "\\\"")
+        val currentObjectUri = escapeJsString(objectId.value)
         buf.append("""
             <style>
                 #graph-wrapper {
@@ -1125,16 +1125,70 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
 }
 
 // TODO: move this to a common place
+// --- HTML / attribute / JS-string escapers ---------------------------------
+// Graph values (subjects, predicates, objects, mime types) are attacker
+// controllable via /add/quads and /add/file, and many of them are reflected
+// into the HTML/JS produced by this handler. These helpers neutralise the
+// relevant injection contexts.
+
+/** Escape text content for an HTML element body. */
+private fun escapeHtml(s: String): String = buildString(s.length) {
+    for (c in s) when (c) {
+        '&' -> append("&amp;")
+        '<' -> append("&lt;")
+        '>' -> append("&gt;")
+        '"' -> append("&quot;")
+        '\'' -> append("&#39;")
+        else -> append(c)
+    }
+}
+
+/** Escape a value for use inside a double- or single-quoted HTML attribute. */
+private fun escapeAttr(s: String): String = escapeHtml(s)
+
+/**
+ * Escape a value for embedding inside a JavaScript single/double-quoted string
+ * literal, also defeating `</script>` breakout and HTML/script delimiters.
+ */
+private fun escapeJsString(s: String): String = buildString(s.length) {
+    for (c in s) when (c) {
+        '\\' -> append("\\\\")
+        '"' -> append("\\\"")
+        '\'' -> append("\\'")
+        '\n' -> append("\\n")
+        '\r' -> append("\\r")
+        '<' -> append("\\u003c")
+        '>' -> append("\\u003e")
+        else -> append(c)
+    }
+}
+
+/**
+ * Returns the URL only if it uses an http(s) scheme, otherwise null. Used to
+ * stop `javascript:` / `data:` URIs planted as graph values from becoming
+ * clickable links. Returns null (rather than the raw string) so callers can
+ * omit the link entirely.
+ */
+private fun safeHrefRaw(url: String): String? =
+    if (url.startsWith("http://", true) || url.startsWith("https://", true)) url else null
+
+// ---------------------------------------------------------------------------
+
 private fun QuadValue.toHtml(): String {
     // if it is a URI, make it clickable
     // if it is a literal, return the value
     // if it is a vector, return the value as a string and add a tooltip with the full value
     return when (this) {
         is URIValue -> {
-            // Make URI values clickable by replacing angle brackets with HTML entities
-            // and wrapping them in an anchor tag
-            val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
-            "<a href='$value/about'>$displayValue</a>"
+            // Only link http(s) URIs; everything else is rendered as inert text
+            // to prevent javascript:/data: payloads planted via /add/quads.
+            val href = safeHrefRaw("$value/about")?.let { escapeAttr(it) } ?: ""
+            val displayValue = escapeHtml(value.replace(LocalQuadValue.defaultPrefix, "/"))
+            if (href.isEmpty()) {
+                displayValue
+            } else {
+                "<a href='$href'>$displayValue</a>"
+            }
         }
         is VectorValue -> {
             // For vector values, show them in a more readable form with a tooltip
@@ -1143,11 +1197,11 @@ private fun QuadValue.toHtml(): String {
             } else {
                 toString()
             }
-            "<span title='${toString()}'>$shortDisplay</span>"
+            "<span title='${escapeAttr(toString())}'>${escapeHtml(shortDisplay)}</span>"
         }
         else -> {
-            // For other types (StringValue, DoubleValue, etc.), just return string representation
-            toString()
+            // For other types (StringValue, DoubleValue, etc.), escape for HTML text.
+            escapeHtml(toString())
         }
     }
 }
@@ -1159,15 +1213,19 @@ private fun QuadValue.toPredHtml(): String {
     // if it is a vector, return the value as a string and add a tooltip with the full value
     return when (this) {
         is URIValue -> {
-            // Make URI values clickable by replacing angle brackets with HTML entities
-            // and wrapping them in an anchor tag
-            val displayValue = toString().replace("<", "&lt;").replace(">", "&gt;").replace(LocalQuadValue.defaultPrefix, "/")
+            // Only link http(s) URIs; everything else is rendered as inert text.
             val linkValue = value
-            "<a href='$linkValue' target='_blank'>$displayValue</a>"
+            val href = safeHrefRaw(linkValue)?.let { escapeAttr(it) } ?: ""
+            val displayValue = escapeHtml(linkValue.replace(LocalQuadValue.defaultPrefix, "/"))
+            if (href.isEmpty()) {
+                displayValue
+            } else {
+                "<a href='$href' target='_blank'>$displayValue</a>"
+            }
         }
         else -> {
-            // For other types (StringValue, DoubleValue, etc.), just return string representation
-            toString()
+            // For other types (StringValue, DoubleValue, etc.), escape for HTML text.
+            escapeHtml(toString())
         }
     }
 }

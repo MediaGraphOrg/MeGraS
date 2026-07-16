@@ -11,10 +11,14 @@ import org.megras.graphstore.db.QuadValueId
  *
  * Shape rules:
  * - Writes return a SINGLE owner: placement is deterministic. [addShard] places
- *   a quad (scalar or vector); the policy inspects the QuadValueId type
- *   discriminators to decide, and for a vector operand MUST return the corpus
- *   owner (co-location invariant — see [Shard]). Conflicting vector corpora in
- *   one quad are unplaceable; the policy signals that by throwing.
+ *   a SCALAR-ONLY quad (no vector operand); a vector-operand quad is placed by
+ *   [vectorShard] (the corpus owner mints the vector id and stores the row -
+ *   co-location invariant, see [Shard]). This split is forced: routing a
+ *   vector add to the corpus owner requires knowing the corpus (type info from
+ *   the value), but minting the vector id requires the owning shard, so the
+ *   add path cannot route from minted ids alone. [ClusterQuadSet] detects
+ *   conflicting vector corpora (two distinct corpora among one quad's
+ *   operands) and throws - such a quad is unplaceable.
  * - Reads return a SET of shards: future non-trivial policies may spread
  *   scalar-quad storage across shards and broadcast reads; a trivial policy
  *   returns a singleton of the one shard. Vector reads route only to owners.
@@ -33,7 +37,7 @@ import org.megras.graphstore.db.QuadValueId
  */
 interface ShardPolicy {
 
-    /** Places a quad add on its single owning shard. */
+    /** Places a SCALAR-ONLY quad add on its single owning shard. Vector-operand adds bypass this (see [vectorShard]). */
     fun addShard(s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard
 
     fun filterShards(

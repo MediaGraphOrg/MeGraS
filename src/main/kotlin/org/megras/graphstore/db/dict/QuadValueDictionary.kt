@@ -10,10 +10,10 @@ import org.megras.graphstore.db.QuadValueId
  * literal, double literal). In a distributed backend a single node owns this
  * surface so that quad encodings `(type, id)` are interpretable on every shard.
  *
- * Caching is the responsibility of the caller (the dispatcher), not this
- * interface: the methods here are leaf storage operations only. This keeps the
- * behavior of the existing single-node path identical when the leaf operations
- * are relocated behind this interface.
+ * Caching lives INSIDE this interface's leaf operations (value<->id caches
+ * per scalar kind), so every caller benefits uniformly; callers do not
+ * maintain their own scalar caches. getOrAdd methods compose lookUp + insert
+ * (both cache-inclusive) so add paths do not throw on already-present terms.
  *
  * `QuadValueId` is `Pair<Int, Long>`: a type discriminator paired with a
  * per-type row id. Vector value<->id resolution is intentionally NOT part of
@@ -32,6 +32,39 @@ interface QuadValueDictionary {
     fun insertStringValues(stringValues: Set<StringValue>): Map<StringValue, QuadValueId>
     fun insertPrefixValues(prefixValues: Set<String>): Map<String, Int>
     fun insertSuffixValues(suffixValues: Set<String>): Map<String, Long>
+
+    /**
+     * Lookup-then-insert (getOrAdd) for each scalar kind: returns the id of
+     * every requested value, minting ids only for values not already present.
+     * Composes the cache-inclusive lookUp + insert leaves, so add paths do not
+     * throw on already-present terms (a corpus where two quads share a scalar
+     * term is the normal case). Defaults belong here, not in callers, to keep
+     * the add-path uniform across the single-node forwarders and the cluster
+     * substrate.
+     */
+    fun getOrAddDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
+        val found = lookUpDoubleValueIds(doubleValues)
+        if (found.size == doubleValues.size) return found
+        return found + insertDoubleValues(doubleValues.filter { it !in found }.toSet())
+    }
+
+    fun getOrAddStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> {
+        val found = lookUpStringValueIds(stringValues)
+        if (found.size == stringValues.size) return found
+        return found + insertStringValues(stringValues.filter { it !in found }.toSet())
+    }
+
+    fun getOrAddPrefixValues(prefixValues: Set<String>): Map<String, Int> {
+        val found = lookUpPrefixIds(prefixValues)
+        if (found.size == prefixValues.size) return found
+        return found + insertPrefixValues(prefixValues.filter { it !in found }.toSet())
+    }
+
+    fun getOrAddSuffixValues(suffixValues: Set<String>): Map<String, Long> {
+        val found = lookUpSuffixIds(suffixValues)
+        if (found.size == suffixValues.size) return found
+        return found + insertSuffixValues(suffixValues.filter { it !in found }.toSet())
+    }
 
     fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue>
     fun lookUpStringValues(ids: Set<Long>): Map<QuadValueId, StringValue>

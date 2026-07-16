@@ -69,19 +69,19 @@ class ClusterQuadSet(
     }
 
     private fun resolveValueAdd(value: QuadValue): QuadValueId? = when (value) {
-        is DoubleValue -> dictionary.insertDoubleValues(setOf(value))[value]
-        is StringValue -> dictionary.insertStringValues(setOf(value))[value]
+        is DoubleValue -> dictionary.getOrAddDoubleValueIds(setOf(value))[value]
+        is StringValue -> dictionary.getOrAddStringValueIds(setOf(value))[value]
         is LongValue -> QuadValueId(AbstractDbStore.LONG_LITERAL_TYPE, value.value)
         is LocalQuadValue -> {
-            val suffix = dictionary.insertSuffixValues(setOf(value.suffix()))[value.suffix()]!!
+            val suffix = dictionary.getOrAddSuffixValues(setOf(value.suffix()))[value.suffix()]!!
             QuadValueId(AbstractDbStore.LOCAL_URI_TYPE, suffix)
         }
         is URIValue -> {
-            val prefix = dictionary.insertPrefixValues(setOf(value.prefix()))[value.prefix()]!!
-            val suffix = dictionary.insertSuffixValues(setOf(value.suffix()))[value.suffix()]!!
+            val prefix = dictionary.getOrAddPrefixValues(setOf(value.prefix()))[value.prefix()]!!
+            val suffix = dictionary.getOrAddSuffixValues(setOf(value.suffix()))[value.suffix()]!!
             QuadValueId(prefix, suffix)
         }
-        is VectorValue -> owningShardFor(value)?.insertVectorIds(setOf(value))?.get(value)
+        is VectorValue -> owningShardFor(value)?.getOrAddVectorIds(setOf(value))?.get(value)
         is TemporalValue -> TODO("TemporalValue not yet supported")
     }
 
@@ -144,15 +144,15 @@ class ClusterQuadSet(
                 is TemporalValue -> TODO("TemporalValue not yet supported")
             }
         }
-        if (doubles.isNotEmpty()) result.putAll(dictionary.insertDoubleValues(doubles))
-        if (strings.isNotEmpty()) result.putAll(dictionary.insertStringValues(strings))
+        if (doubles.isNotEmpty()) result.putAll(dictionary.getOrAddDoubleValueIds(doubles))
+        if (strings.isNotEmpty()) result.putAll(dictionary.getOrAddStringValueIds(strings))
         if (uris.isNotEmpty()) {
             val prefixes = mutableMapOf<String, Int>()
             val suffixes = mutableMapOf<String, Long>()
             val pVals = uris.filter { it !is LocalQuadValue }.map { it.prefix() }.toSet()
             val sVals = uris.map { it.suffix() }.toSet()
-            if (pVals.isNotEmpty()) prefixes.putAll(dictionary.insertPrefixValues(pVals))
-            if (sVals.isNotEmpty()) suffixes.putAll(dictionary.insertSuffixValues(sVals))
+            if (pVals.isNotEmpty()) prefixes.putAll(dictionary.getOrAddPrefixValues(pVals))
+            if (sVals.isNotEmpty()) suffixes.putAll(dictionary.getOrAddSuffixValues(sVals))
             for (u in uris) {
                 val p = if (u is LocalQuadValue) AbstractDbStore.LOCAL_URI_TYPE else prefixes[u.prefix()]
                 val s = suffixes[u.suffix()]
@@ -162,7 +162,7 @@ class ClusterQuadSet(
         if (vectors.isNotEmpty()) {
             vectors.groupBy { it.type to it.length }.forEach { (props, group) ->
                 policy.vectorShard(props.first, props.second)?.let {
-                    result.putAll(it.insertVectorIds(group.toSet()))
+                    result.putAll(it.getOrAddVectorIds(group.toSet()))
                 }
             }
         }

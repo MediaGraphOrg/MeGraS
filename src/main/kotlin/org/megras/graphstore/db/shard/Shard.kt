@@ -95,5 +95,17 @@ interface Shard {
     fun lookUpVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>
     fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue>
 
+    /**
+     * Lookup-then-insert (getOrAdd) for vector content owned by this shard:
+     * returns the id of every requested vector, minting only for absent ones.
+     * Composes the (cache-inclusive, when the shard impl caches) lookUp +
+     * insert leaves so the add path does not throw on already-present vectors.
+     */
+    fun getOrAddVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId> {
+        val found = lookUpVectorIds(vectors)
+        if (found.size == vectors.size) return found
+        return found + insertVectorIds(vectors.filter { it !in found }.toSet())
+    }
+
     fun ownsVectorCorpus(type: VectorValue.Type, length: Int): Boolean
 }

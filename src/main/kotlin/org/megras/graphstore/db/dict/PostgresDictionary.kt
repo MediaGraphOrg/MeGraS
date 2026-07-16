@@ -19,6 +19,7 @@ import org.megras.graphstore.db.QuadValueId
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.v1.core.Schema
+import com.google.common.cache.CacheBuilder
 
 /**
  * Concrete scalar dictionary: the single authority that mints and resolves IDs
@@ -34,6 +35,12 @@ import org.jetbrains.exposed.v1.core.Schema
  *
  * Type-discriminator constants are read from [AbstractDbStore] (single source
  * of truth). This file declares no ID-encoding policy of its own.
+ *
+ * Caching: value<->id caches for the four scalar kinds live HERE, on the
+ * dictionary, so every caller (single-node PostgresStore forwarders and the
+ * cluster substrate alike) benefits uniformly. The cache sits at the leaf
+ * lookup/insert boundary, not in any caller. Vector content is sharded, so
+ * vector value<->id caches belong on the owning shard, not here.
  */
 class PostgresDictionary(
     host: String = "localhost:5432/megras",
@@ -42,6 +49,18 @@ class PostgresDictionary(
 ) : QuadValueDictionary {
 
     private val dictDb: Database
+
+    private val stringLiteralIdCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<String, Long>()
+    private val stringLiteralValueCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<Long, String>()
+
+    private val doubleLiteralIdCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<Double, Long>()
+    private val doubleLiteralValueCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<Long, Double>()
+
+    private val prefixValueCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<Int, String>()
+    private val prefixIdCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<String, Int>()
+
+    private val suffixValueCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<Long, String>()
+    private val suffixIdCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<String, Long>()
 
     init {
         val config = HikariConfig().apply {
@@ -103,12 +122,20 @@ class PostgresDictionary(
     override fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
         if (doubleValues.isEmpty()) return emptyMap()
         val result = mutableMapOf<DoubleValue, QuadValueId>()
-        doubleValues.map { it.value }.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<DoubleValue>()
+        for (v in doubleValues) {
+            val cached = doubleLiteralIdCache.getIfPresent(v.value)
+            if (cached != null) result[v] = AbstractDbStore.DOUBLE_LITERAL_TYPE to cached else misses.add(v)
+        }
+        if (misses.isEmpty()) return result
+        misses.map { it.value }.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
-                DoubleLiteralTable.selectAll().where { DoubleLiteralTable.value inList chunk }
-
-                    .forEach {
-                    result[DoubleValue(it[DoubleLiteralTable.value])] = (AbstractDbStore.DOUBLE_LITERAL_TYPE to it[DoubleLiteralTable.id])
+                DoubleLiteralTable.selectAll().where { DoubleLiteralTable.value inList chunk }.forEach {
+                    val dv = DoubleValue(it[DoubleLiteralTable.value])
+                    val id = it[DoubleLiteralTable.id]
+                    result[dv] = AbstractDbStore.DOUBLE_LITERAL_TYPE to id
+                    doubleLiteralIdCache.put(dv.value, id)
+                    doubleLiteralValueCache.put(id, dv.value)
                 }
             }
         }
@@ -118,10 +145,20 @@ class PostgresDictionary(
     override fun lookUpStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> {
         if (stringValues.isEmpty()) return emptyMap()
         val result = mutableMapOf<StringValue, QuadValueId>()
-        stringValues.map { it.value }.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<StringValue>()
+        for (v in stringValues) {
+            val cached = stringLiteralIdCache.getIfPresent(v.value)
+            if (cached != null) result[v] = AbstractDbStore.STRING_LITERAL_TYPE to cached else misses.add(v)
+        }
+        if (misses.isEmpty()) return result
+        misses.map { it.value }.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 StringLiteralTable.selectAll().where { StringLiteralTable.value inList chunk }.forEach {
-                    result[StringValue(it[StringLiteralTable.value])] = (AbstractDbStore.STRING_LITERAL_TYPE to it[StringLiteralTable.id])
+                    val sv = StringValue(it[StringLiteralTable.value])
+                    val id = it[StringLiteralTable.id]
+                    result[sv] = AbstractDbStore.STRING_LITERAL_TYPE to id
+                    stringLiteralIdCache.put(sv.value, id)
+                    stringLiteralValueCache.put(id, sv.value)
                 }
             }
         }
@@ -131,10 +168,20 @@ class PostgresDictionary(
     override fun lookUpPrefixIds(prefixValues: Set<String>): Map<String, Int> {
         if (prefixValues.isEmpty()) return emptyMap()
         val result = mutableMapOf<String, Int>()
-        prefixValues.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<String>()
+        for (v in prefixValues) {
+            val cached = prefixIdCache.getIfPresent(v)
+            if (cached != null) result[v] = cached else misses.add(v)
+        }
+        if (misses.isEmpty()) return result
+        misses.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 EntityPrefixTable.selectAll().where { EntityPrefixTable.prefix inList chunk }.forEach {
-                    result[it[EntityPrefixTable.prefix]] = it[EntityPrefixTable.id]
+                    val p = it[EntityPrefixTable.prefix]
+                    val id = it[EntityPrefixTable.id]
+                    result[p] = id
+                    prefixIdCache.put(p, id)
+                    prefixValueCache.put(id, p)
                 }
             }
         }
@@ -144,10 +191,20 @@ class PostgresDictionary(
     override fun lookUpSuffixIds(suffixValues: Set<String>): Map<String, Long> {
         if (suffixValues.isEmpty()) return emptyMap()
         val result = mutableMapOf<String, Long>()
-        suffixValues.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<String>()
+        for (v in suffixValues) {
+            val cached = suffixIdCache.getIfPresent(v)
+            if (cached != null) result[v] = cached else misses.add(v)
+        }
+        if (misses.isEmpty()) return result
+        misses.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 EntityTable.selectAll().where { EntityTable.value inList chunk }.forEach {
-                    result[it[EntityTable.value]] = it[EntityTable.id]
+                    val s = it[EntityTable.value]
+                    val id = it[EntityTable.id]
+                    result[s] = id
+                    suffixIdCache.put(s, id)
+                    suffixValueCache.put(id, s)
                 }
             }
         }
@@ -161,7 +218,12 @@ class PostgresDictionary(
                 this[DoubleLiteralTable.value] = it.value
             }.map { AbstractDbStore.DOUBLE_LITERAL_TYPE to it[DoubleLiteralTable.id] }
         }
-        return list.zip(results).toMap()
+        val resultMap = list.zip(results).toMap()
+        resultMap.forEach { (v, id) ->
+            doubleLiteralIdCache.put(v.value, id.second)
+            doubleLiteralValueCache.put(id.second, v.value)
+        }
+        return resultMap
     }
 
     override fun insertStringValues(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> {
@@ -170,9 +232,13 @@ class PostgresDictionary(
             StringLiteralTable.batchInsert(list) {
                 this[StringLiteralTable.value] = it.value
             }.map { AbstractDbStore.STRING_LITERAL_TYPE to it[StringLiteralTable.id] }
-
         }
-        return list.zip(results).toMap()
+        val resultMap = list.zip(results).toMap()
+        resultMap.forEach { (v, id) ->
+            stringLiteralIdCache.put(v.value, id.second)
+            stringLiteralValueCache.put(id.second, v.value)
+        }
+        return resultMap
     }
 
     override fun insertPrefixValues(prefixValues: Set<String>): Map<String, Int> {
@@ -182,7 +248,12 @@ class PostgresDictionary(
                 this[EntityPrefixTable.prefix] = it
             }.map { it[EntityPrefixTable.id] }
         }
-        return list.zip(results).toMap()
+        val resultMap = list.zip(results).toMap()
+        resultMap.forEach { (v, id) ->
+            prefixIdCache.put(v, id)
+            prefixValueCache.put(id, v)
+        }
+        return resultMap
     }
 
     override fun insertSuffixValues(suffixValues: Set<String>): Map<String, Long> {
@@ -192,16 +263,31 @@ class PostgresDictionary(
                 this[EntityTable.value] = it
             }.map { it[EntityTable.id] }
         }
-        return list.zip(results).toMap()
+        val resultMap = list.zip(results).toMap()
+        resultMap.forEach { (v, id) ->
+            suffixIdCache.put(v, id)
+            suffixValueCache.put(id, v)
+        }
+        return resultMap
     }
 
     override fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue> {
         if (ids.isEmpty()) return emptyMap()
         val result = mutableMapOf<QuadValueId, DoubleValue>()
-        ids.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<Long>()
+        for (id in ids) {
+            val cached = doubleLiteralValueCache.getIfPresent(id)
+            if (cached != null) result[AbstractDbStore.DOUBLE_LITERAL_TYPE to id] = DoubleValue(cached) else misses.add(id)
+        }
+        if (misses.isEmpty()) return result
+        misses.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 DoubleLiteralTable.selectAll().where { DoubleLiteralTable.id inList chunk }.forEach {
-                    result[(AbstractDbStore.DOUBLE_LITERAL_TYPE to it[DoubleLiteralTable.id])] = DoubleValue(it[DoubleLiteralTable.value])
+                    val id = it[DoubleLiteralTable.id]
+                    val dv = DoubleValue(it[DoubleLiteralTable.value])
+                    result[AbstractDbStore.DOUBLE_LITERAL_TYPE to id] = dv
+                    doubleLiteralValueCache.put(id, dv.value)
+                    doubleLiteralIdCache.put(dv.value, id)
                 }
             }
         }
@@ -211,10 +297,20 @@ class PostgresDictionary(
     override fun lookUpStringValues(ids: Set<Long>): Map<QuadValueId, StringValue> {
         if (ids.isEmpty()) return emptyMap()
         val result = mutableMapOf<QuadValueId, StringValue>()
-        ids.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<Long>()
+        for (id in ids) {
+            val cached = stringLiteralValueCache.getIfPresent(id)
+            if (cached != null) result[AbstractDbStore.STRING_LITERAL_TYPE to id] = StringValue(cached) else misses.add(id)
+        }
+        if (misses.isEmpty()) return result
+        misses.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 StringLiteralTable.selectAll().where { StringLiteralTable.id inList chunk }.forEach {
-                    result[(AbstractDbStore.STRING_LITERAL_TYPE to it[StringLiteralTable.id])] = StringValue(it[StringLiteralTable.value])
+                    val id = it[StringLiteralTable.id]
+                    val sv = StringValue(it[StringLiteralTable.value])
+                    result[AbstractDbStore.STRING_LITERAL_TYPE to id] = sv
+                    stringLiteralValueCache.put(id, sv.value)
+                    stringLiteralIdCache.put(sv.value, id)
                 }
             }
         }
@@ -224,10 +320,20 @@ class PostgresDictionary(
     override fun lookUpPrefixes(ids: Set<Int>): Map<Int, String> {
         if (ids.isEmpty()) return emptyMap()
         val result = mutableMapOf<Int, String>()
-        ids.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<Int>()
+        for (id in ids) {
+            val cached = prefixValueCache.getIfPresent(id)
+            if (cached != null) result[id] = cached else misses.add(id)
+        }
+        if (misses.isEmpty()) return result
+        misses.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 EntityPrefixTable.selectAll().where { EntityPrefixTable.id inList chunk }.forEach {
-                    result[it[EntityPrefixTable.id]] = it[EntityPrefixTable.prefix]
+                    val id = it[EntityPrefixTable.id]
+                    val p = it[EntityPrefixTable.prefix]
+                    result[id] = p
+                    prefixValueCache.put(id, p)
+                    prefixIdCache.put(p, id)
                 }
             }
         }
@@ -237,10 +343,20 @@ class PostgresDictionary(
     override fun lookUpSuffixes(ids: Set<Long>): Map<Long, String> {
         if (ids.isEmpty()) return emptyMap()
         val result = mutableMapOf<Long, String>()
-        ids.chunked(10000).forEach { chunk ->
+        val misses = mutableListOf<Long>()
+        for (id in ids) {
+            val cached = suffixValueCache.getIfPresent(id)
+            if (cached != null) result[id] = cached else misses.add(id)
+        }
+        if (misses.isEmpty()) return result
+        misses.chunked(10000).forEach { chunk ->
             transaction(dictDb) {
                 EntityTable.selectAll().where { EntityTable.id inList chunk }.forEach {
-                    result[it[EntityTable.id]] = it[EntityTable.value]
+                    val id = it[EntityTable.id]
+                    val s = it[EntityTable.value]
+                    result[id] = s
+                    suffixValueCache.put(id, s)
+                    suffixIdCache.put(s, id)
                 }
             }
         }

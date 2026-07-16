@@ -15,6 +15,7 @@ data class Config(
     val ffmpeg: FfmpegConfig = FfmpegConfig(),
     val cottontailConnection: CottontailConnection? = null,
     val postgresConnection: PostgresConnection? = null,
+    val clusterConnection: ClusterConnection? = null,
     val grpcConnection: GrpcConnection = GrpcConnection(),
     val sparqlQueryEngine: SparqlQueryEngine = SparqlQueryEngine.BATCHING
 ) {
@@ -33,6 +34,9 @@ data class Config(
             StorageBackend.HYBRID -> {
                 require(cottontailConnection != null) { "cottontailConnection cannot be null" }
                 require(postgresConnection != null) { "postgresConnection cannot be null" }
+            }
+            StorageBackend.CLUSTER -> {
+                require(clusterConnection != null) { "clusterConnection cannot be null" }
             }
         }
     }
@@ -56,7 +60,8 @@ data class Config(
         FILE,
         COTTONTAIL,
         POSTGRES,
-        HYBRID
+        HYBRID,
+        CLUSTER
     }
 
     @Serializable
@@ -85,6 +90,26 @@ data class Config(
         val ffmpegPath: String? = null,
         val ffprobePath: String? = null
     )
+
+    /**
+     * Topology for the CLUSTER backend: a central scalar-dictionary endpoint
+     * and a list of shard endpoints. Selecting CLUSTER (vs POSTGRES) is the
+     * one-node/distributed switch; the policy id selects a distribution
+     * strategy, enabling comparison. TRIVIAL with a single shard collapses to
+     * single-node semantics; non-trivial policies and multi-shard topologies
+     * are additive future work.
+     */
+    @Serializable
+    data class ClusterConnection(
+        val dictEndpoint: String,
+        val shardEndpoints: List<String>,
+        val policy: ClusterPolicy
+    )
+
+    @Serializable
+    enum class ClusterPolicy {
+        TRIVIAL
+    }
 
     @Serializable
     data class GrpcConnection(

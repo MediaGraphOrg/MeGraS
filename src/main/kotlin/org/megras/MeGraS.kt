@@ -9,6 +9,9 @@ import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
 import org.megras.graphstore.db.dict.PostgresDictionary
+import org.megras.graphstore.db.ClusterQuadSet
+import org.megras.graphstore.db.shard.PostgresShard
+import org.megras.graphstore.db.shard.TrivialShardPolicy
 import org.megras.graphstore.derived.DerivedRelationMutableQuadSet
 import org.megras.graphstore.derived.DerivedRelationRegistrar
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
@@ -99,6 +102,22 @@ object MeGraS {
 
                 HybridMutableQuadSet(postgresStore, cottontailStore)
 
+            }
+
+            Config.StorageBackend.CLUSTER -> {
+                val cluster = config.clusterConnection!!
+                val dict = PostgresDictionary(cluster.dictEndpoint, "megras", "megras")
+                when (cluster.policy) {
+                    Config.ClusterPolicy.TRIVIAL -> {
+                        require(cluster.shardEndpoints.size == 1) {
+                            "TRIVIAL cluster policy requires exactly one shard endpoint"
+                        }
+                        val shard = PostgresShard(cluster.shardEndpoints.single(), "megras", "megras")
+                        ClusterQuadSet(dict, TrivialShardPolicy(shard)).also {
+                            dict.setup(); shard.setup()
+                        }
+                    }
+                }
             }
         }
 

@@ -253,7 +253,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                     }
                 }.single()[vectorTable.id]
 
-                val qvid = QuadValueId(vectorTable.typeId, id)
+                val qvid = QuadValueId(-vectorTable.typeId + VECTOR_ID_OFFSET, id)
 
                 vec to qvid
 

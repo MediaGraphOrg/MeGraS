@@ -8,6 +8,7 @@ import org.megras.graphstore.db.CottontailStore
 import org.megras.graphstore.HybridMutableQuadSet
 import org.megras.graphstore.TSVMutableQuadSet
 import org.megras.graphstore.db.PostgresStore
+import org.megras.graphstore.db.dict.PostgresDictionary
 import org.megras.graphstore.derived.DerivedRelationMutableQuadSet
 import org.megras.graphstore.derived.DerivedRelationRegistrar
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
@@ -68,8 +69,11 @@ object MeGraS {
             }
 
             Config.StorageBackend.POSTGRES -> {
+                val pgConnStr = "${config.postgresConnection!!.host}:${config.postgresConnection.port}/${config.postgresConnection.database}"
+                val dict = PostgresDictionary(pgConnStr, config.postgresConnection.user, config.postgresConnection.password)
                 val postgresStore = PostgresStore(
-                    "${config.postgresConnection!!.host}:${config.postgresConnection.port}/${config.postgresConnection.database}",
+                    dict,
+                    pgConnStr,
                     config.postgresConnection.user,
                     config.postgresConnection.password
                 )
@@ -83,8 +87,11 @@ object MeGraS {
                 )
                 cottontailStore.setup()
 
+                val pgConnStr = "${config.postgresConnection!!.host}:${config.postgresConnection.port}/${config.postgresConnection.database}"
+                val dict = PostgresDictionary(pgConnStr, config.postgresConnection.user, config.postgresConnection.password)
                 val postgresStore = PostgresStore(
-                    "${config.postgresConnection!!.host}:${config.postgresConnection.port}/${config.postgresConnection.database}",
+                    dict,
+                    pgConnStr,
                     config.postgresConnection.user,
                     config.postgresConnection.password
                 )

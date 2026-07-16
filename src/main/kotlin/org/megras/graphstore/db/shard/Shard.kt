@@ -57,8 +57,13 @@ interface Shard {
     /** Returns the existing row id for (s,p,o), or null if none. */
     fun quadId(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long?
 
-    /** Returns the (s,p,o) id tuple for a row id, or null. */
-    fun quadTuple(rowId: Long): Triple<QuadValueId, QuadValueId, QuadValueId>?
+    /**
+     * Batch reverse-resolve row ids to their (s,p,o) id tuples. Missing ids are
+     * absent from the map. Fusing row-id -> triple is the caller's
+     * ([ClusterQuadSet]) job, not the shard's; ops that produce quad results
+     * (filter, textFilterJoin, nearestNeighbor) return row ids and rely on this.
+     */
+    fun quadTuples(rowIds: Set<Long>): Map<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>
 
     /** Returns row ids matching the given id-tuple constraints; null operand = wildcard. */
     fun filter(
@@ -78,10 +83,6 @@ interface Shard {
      */
     fun textFilterJoin(predicate: QuadValueId, stringCandidateIds: Set<Long>): Set<Long>
 
-    fun insertVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>
-    fun lookUpVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>
-    fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue>
-
     fun nearestNeighborIds(
         predicate: QuadValueId,
         query: VectorValue,
@@ -89,6 +90,10 @@ interface Shard {
         distance: Distance,
         invert: Boolean = false
     ): Set<Long>
+
+    fun insertVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>
+    fun lookUpVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>
+    fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue>
 
     fun ownsVectorCorpus(type: VectorValue.Type, length: Int): Boolean
 }

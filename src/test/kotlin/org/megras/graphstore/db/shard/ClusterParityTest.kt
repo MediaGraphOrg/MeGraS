@@ -135,6 +135,12 @@ class ClusterParityTest {
         out.add(norm(store.filter(setOf(s1), setOf(p1), null)))
         out.add(norm(store.filter(null, setOf(pv), setOf(vec1))))
         out.add(norm(store.nearestNeighbor(pv, queryVec, 100, Distance.COSINE)))
+        // k<corpus exercises the distance-bearing top-k merge's SELECTION (not
+        // ordering — QuadSet is unordered). Single-shard, the merge collapses
+        // to the direct path; this guards against future regressions in the
+        // merge. Multi-shard selection is validated only in the stage-D rig.
+        out.add(norm(store.nearestNeighbor(pv, queryVec, 1, Distance.COSINE)))
+        out.add(norm(store.nearestNeighbor(pv, queryVec, 2, Distance.COSINE)))
         out.add(norm(store.textFilter(ps, "bravo")))
         out.add(store.distinctObjects(p1))
         out.add(store.distinctObjects(ps))

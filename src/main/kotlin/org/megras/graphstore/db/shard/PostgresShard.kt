@@ -251,8 +251,8 @@ class PostgresShard(
         count: Int,
         distance: Distance,
         invert: Boolean
-    ): Set<Long> {
-        val vectorTable = getVectorTable(query.type, query.length) ?: return emptySet()
+    ): List<Pair<Long, Double>> {
+        val vectorTable = getVectorTable(query.type, query.length) ?: return emptyList()
         val distanceExpression = VectorDistance(vectorTable.value, query, distance)
         return transaction(shardDb) {
             QuadsTable.join(
@@ -263,13 +263,13 @@ class PostgresShard(
             ) {
                 (QuadsTable.oType eq (-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET))
             }
-                .select(QuadsTable.id)
+                .select(QuadsTable.id, distanceExpression)
                 .where {
                     (QuadsTable.pType eq predicate.first) and (QuadsTable.p eq predicate.second)
                 }
                 .orderBy(distanceExpression to if (invert) SortOrder.DESC else SortOrder.ASC)
                 .limit(count)
-                .mapTo(mutableSetOf()) { it[QuadsTable.id] }
+                .map { it[QuadsTable.id] to it[distanceExpression] }
         }
     }
 
@@ -465,7 +465,7 @@ class PostgresShard(
         private val column: Expression<*>,
         private val target: VectorValue,
         private val distance: Distance
-    ) : Op<Float>() {
+    ) : Op<Double>() {
         override fun toQueryBuilder(queryBuilder: QueryBuilder) {
             val op = when (distance) {
                 Distance.COSINE -> "<=>"

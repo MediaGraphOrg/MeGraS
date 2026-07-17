@@ -356,13 +356,35 @@ class ClusterQuadSet(
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean): QuadSet {
         val pid = resolveValueLookup(predicate) ?: return BasicQuadSet()
-        val shardTuples = ArrayList<Pair<Shard, Set<Triple<QuadValueId, QuadValueId, QuadValueId>>>>()
+        // Gather (shard, localRow, distance) from every shard holding a slice of
+        // the corpus, then keep a GLOBAL top-k by distance. Each shard ranks only
+        // its own slice; without this merge the union of per-shard top-k is NOT
+        // the global top-k (a near candidate on a different shard loses to a
+        // farther one locally). Survivor rows partition back to their producing
+        // shard for reverse-resolution via the stage-A partitioned fuse.
+        //
+        // Limitations (acceptable for the parity corpus, documented for later):
+        // - Tie-breaking at the k boundary may differ from pgvector's, so ordered
+        //   parity holds only when the k-th and (k+1)-th distances are distinct.
+        // - Full candidate sort is O(numShards*count); a bounded heap is deferred
+        //   (perf, not correctness).
+        val candidates = ArrayList<Triple<Shard, Long, Double>>()
         for (shard in policy.nnShards(pid, `object`.type, `object`.length)) {
-            val rows = shard.nearestNeighborIds(pid, `object`, count, distance, invert)
-            if (rows.isNotEmpty()) {
-                val tuples = shard.quadTuples(rows).values.toSet()
-                if (tuples.isNotEmpty()) shardTuples.add(shard to tuples)
+            for ((row, dist) in shard.nearestNeighborIds(pid, `object`, count, distance, invert)) {
+                candidates.add(Triple(shard, row, dist))
             }
+        }
+        if (candidates.isEmpty()) return BasicQuadSet()
+        val selected = if (invert) candidates.sortedByDescending { it.third }.take(count)
+                       else candidates.sortedBy { it.third }.take(count)
+        val shardRows = mutableMapOf<Shard, MutableSet<Long>>()
+        for ((shard, row, _) in selected) {
+            shardRows.getOrPut(shard) { mutableSetOf() }.add(row)
+        }
+        val shardTuples = ArrayList<Pair<Shard, Set<Triple<QuadValueId, QuadValueId, QuadValueId>>>>()
+        for ((shard, rows) in shardRows) {
+            val tuples = shard.quadTuples(rows).values.toSet()
+            if (tuples.isNotEmpty()) shardTuples.add(shard to tuples)
         }
         return resolveQuadSet(shardTuples)
     }

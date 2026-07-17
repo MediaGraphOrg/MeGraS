@@ -83,13 +83,29 @@ interface Shard {
      */
     fun textFilterJoin(predicate: QuadValueId, stringCandidateIds: Set<Long>): Set<Long>
 
+    /**
+     * Local nearest-neighbour search on this shard's slice of the corpus.
+     * Returns (localRow, distance) pairs, NOT bare row ids: a multi-shard
+     * merge needs the distance to compare candidates across shards and keep
+     * a global top-k. [Shard.nearestNeighborIds] computes only its own
+     * local ranking; [ClusterQuadSet] merges across shards.
+     *
+     * Distance is the metric value the backing index uses (e.g. pgvector
+     * `<=>` cosine, `<#>` dotproduct), as Double. The merge compares these
+     * raw values; it does not re-rank by a different metric.
+     *
+     * The row id is the BARE local id; the caller pairs it with this shard
+     * reference (not an ordinal) for any cross-shard bookkeeping — see
+     * [ClusterQuadSet], which partitions survivor rows back to their
+     * producing shard for reverse-resolution.
+     */
     fun nearestNeighborIds(
         predicate: QuadValueId,
         query: VectorValue,
         count: Int,
         distance: Distance,
         invert: Boolean = false
-    ): Set<Long>
+    ): List<Pair<Long, Double>>
 
     fun insertVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>
     fun lookUpVectorIds(vectors: Set<VectorValue>): Map<VectorValue, QuadValueId>

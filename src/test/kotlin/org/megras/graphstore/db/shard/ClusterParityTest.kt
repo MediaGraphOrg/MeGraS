@@ -22,12 +22,16 @@ import java.sql.DriverManager
  * for a fixed, realistic corpus (one that shares scalar and vector terms
  * across quads — the case that forced the getOrAdd fix on the add path).
  *
- * Runs SEQUENTIALLY on one disposable PG: leg A (direct PostgresStore) records
- * a normalized result battery, the megras schema is dropped CASCADE, leg B
- * (cluster) re-initializes and records the same battery; the two recordings
- * are asserted equal. One DB suffices because the two legs never coexist —
- * both declare `quads`/`vector_types`, so they cannot share a schema
- * simultaneously.
+ * Runs SEQUENTIALLY on one disposable PG: the megras schema is dropped
+ * CASCADE, leg A (direct PostgresStore) records a normalized result battery,
+ * the schema is dropped CASCADE again, leg B (cluster) re-initializes and
+ * records the same battery; the two recordings are asserted equal. One DB
+ * suffices because the two legs never coexist — both declare
+ * `quads`/`vector_types`, so they cannot share a schema simultaneously. The
+ * leading reset is not optional: without it leg A reads whatever state a prior
+ * run (possibly against a different corpus revision) left on the persistent
+ * container, and the add booleans / read sets diverge from leg B's clean start
+ * — a harness artifact, not a substrate divergence.
  *
  * Self-skips unless localhost:55433 is listening, so `./gradlew test` stays
  * PG-free. The reset leaks leg A's connection pools (no close API); acceptable
@@ -142,6 +146,7 @@ class ClusterParityTest {
     @Test
     fun directVsClusterParity() {
         assumeTrue(pgAvailable(), "disposable PG not listening on localhost:55433")
+        resetSchema()
         val a = battery(directStore())
         resetSchema()
         val b = battery(clusterStore())

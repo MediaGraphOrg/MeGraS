@@ -61,6 +61,17 @@ class PostgresShard(
 
     private val shardDb: Database
 
+    // Vector value<->id caches live HERE, on the owning shard, not in callers:
+    // vector content is sharded by corpus (this shard owns a subset), so — like
+    // the scalar caches on PostgresDictionary — the cache must sit at the leaf
+    // boundary the Shard interface exposes, or ClusterQuadSet would have to
+    // duplicate it per call site. Count-bound at AbstractDbStore.cacheSize to
+    // match the existing single-node PostgresStore vector-cache policy (no
+    // byte-weight divergence, deliberately: footprint tuning is a separate
+    // orthogonal decision that should affect both sides equally).
+    private val vectorIdCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<VectorValue, QuadValueId>()
+    private val vectorValueCache = CacheBuilder.newBuilder().maximumSize(AbstractDbStore.cacheSize).build<QuadValueId, VectorValue>()
+
     init {
         val config = HikariConfig().apply {
             jdbcUrl = "jdbc:postgresql://$host"
@@ -291,7 +302,10 @@ class PostgresShard(
                             }
                         }
                     }.single()[vectorTable.id]
-                    vec to QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, id)
+                    val qid = QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, id)
+                    vectorIdCache.put(vec, qid)
+                    vectorValueCache.put(qid, vec)
+                    vec to qid
                 }
             }
         }.flatten().toMap()
@@ -301,7 +315,13 @@ class PostgresShard(
         if (vectorValues.isEmpty()) return emptyMap()
         val returnMap = HashMap<VectorValue, QuadValueId>(vectorValues.size)
         vectorValues.groupBy { it.type to it.length }.forEach { (properties, vectorList) ->
-            val vectorsInGroup = vectorList.toSet()
+            val uncached = ArrayList<VectorValue>(vectorList.size)
+            for (vec in vectorList) {
+                val cached = vectorIdCache.getIfPresent(vec)
+                if (cached != null) returnMap[vec] = cached else uncached.add(vec)
+            }
+            if (uncached.isEmpty()) return@forEach
+            val vectorsInGroup = uncached.toSet()
             val vectorTable = getOrCreateVectorTable(properties.first, properties.second)
             transaction(shardDb) {
                 when (properties.first) {
@@ -311,11 +331,14 @@ class PostgresShard(
                         val floats = vectorsInGroup.filterIsInstance<FloatVectorValue>()
                         if (floats.isNotEmpty()) {
                             floats.chunked(100).forEach { chunk ->
-                                returnMap.putAll(
-                                    vectorTable.selectAll().where { col inList chunk }
-                                        .map { it[vectorTable.id] to it[col] }
-                                        .associate { (id, value) -> value to (QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, id)) }
-                                )
+                                vectorTable.selectAll().where { col inList chunk }
+                                    .forEach {
+                                        val qid = QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, it[vectorTable.id])
+                                        val value = it[col]
+                                        returnMap[value] = qid
+                                        vectorIdCache.put(value, qid)
+                                        vectorValueCache.put(qid, value)
+                                    }
                             }
                         }
                     }
@@ -325,11 +348,14 @@ class PostgresShard(
                         val doubles = vectorsInGroup.filterIsInstance<DoubleVectorValue>()
                         if (doubles.isNotEmpty()) {
                             doubles.chunked(10000).forEach { chunk ->
-                                returnMap.putAll(
-                                    vectorTable.selectAll().where { col inList chunk }
-                                        .map { it[vectorTable.id] to it[col] }
-                                        .associate { (id, value) -> value to (QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, id)) }
-                                )
+                                vectorTable.selectAll().where { col inList chunk }
+                                    .forEach {
+                                        val qid = QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, it[vectorTable.id])
+                                        val value = it[col]
+                                        returnMap[value] = qid
+                                        vectorIdCache.put(value, qid)
+                                        vectorValueCache.put(qid, value)
+                                    }
                             }
                         }
                     }
@@ -339,11 +365,14 @@ class PostgresShard(
                         val longs = vectorsInGroup.filterIsInstance<LongVectorValue>()
                         if (longs.isNotEmpty()) {
                             longs.chunked(10000).forEach { chunk ->
-                                returnMap.putAll(
-                                    vectorTable.selectAll().where { col inList chunk }
-                                        .map { it[vectorTable.id] to it[col] }
-                                        .associate { (id, value) -> value to (QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, id)) }
-                                )
+                                vectorTable.selectAll().where { col inList chunk }
+                                    .forEach {
+                                        val qid = QuadValueId(-vectorTable.typeId + AbstractDbStore.VECTOR_ID_OFFSET, it[vectorTable.id])
+                                        val value = it[col]
+                                        returnMap[value] = qid
+                                        vectorIdCache.put(value, qid)
+                                        vectorValueCache.put(qid, value)
+                                    }
                             }
                         }
                     }
@@ -356,12 +385,21 @@ class PostgresShard(
     override fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue> {
         if (ids.isEmpty()) return emptyMap()
         val returnMap = HashMap<QuadValueId, VectorValue>(ids.size)
-        ids.groupBy { it.first }.forEach { (type, quadValueIds) ->
+        val uncached = ArrayList<QuadValueId>(ids.size)
+        for (id in ids) {
+            val cached = vectorValueCache.getIfPresent(id)
+            if (cached != null) returnMap[id] = cached else uncached.add(id)
+        }
+        if (uncached.isEmpty()) return returnMap
+        uncached.groupBy { it.first }.forEach { (type, quadValueIds) ->
             val longIds = quadValueIds.map { it.second }
             longIds.chunked(10000).forEach { chunk ->
                 val values = getVectorQuadValues(type, chunk)
                 values.forEach { (longId, vectorValue) ->
-                    returnMap[type to longId] = vectorValue
+                    val qid = type to longId
+                    returnMap[qid] = vectorValue
+                    vectorValueCache.put(qid, vectorValue)
+                    vectorIdCache.put(vectorValue, qid)
                 }
             }
         }

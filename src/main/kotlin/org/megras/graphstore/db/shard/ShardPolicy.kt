@@ -49,12 +49,28 @@ interface ShardPolicy {
         o: Collection<QuadValueId>?
     ): Set<Shard>
 
+    /**
+     * Shards to broadcast an NN search to. A split corpus's content spans
+     * multiple shards; every shard holding a slice must contribute its local
+     * top-k for [ClusterQuadSet] to merge a global top-k. A trivial policy
+     * returns its one shard (nothing to merge).
+     */
     fun nnShards(predicate: QuadValueId, type: VectorValue.Type, length: Int): Set<Shard>
 
     fun textFilterShards(predicate: QuadValueId): Set<Shard>
 
     fun distinctShards(predicate: QuadValueId): Set<Shard>
 
-    /** Owner for a vector corpus's value<->id and NN routing; null if none. */
-    fun vectorShard(type: VectorValue.Type, length: Int): Shard?
+    /**
+     * Owning shard for a single vector VALUE's value<->id resolution (mint and
+     * lookup) and for placing a quad that carries that vector as an operand.
+     * Routed by the VALUE, not by (type,length): under a split policy, vectors
+     * of the same corpus are spread across shards by content, so the one shard
+     * that holds a given vector's content is the only shard that can mint or
+     * resolve its id. Null when no shard owns the vector (read yields empty).
+     *
+     * NN search does NOT use this: a split corpus's content lives on multiple
+     * shards, so [nnShards] broadcasts to all of them for a global top-k merge.
+     */
+    fun vectorShard(value: VectorValue): Shard?
 }

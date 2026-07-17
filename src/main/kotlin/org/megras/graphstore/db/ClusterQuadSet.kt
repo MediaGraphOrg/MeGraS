@@ -49,7 +49,7 @@ class ClusterQuadSet(
 
     // ---- QuadValue <-> ID (no caches) --------------------------------------
 
-    private fun owningShardFor(value: VectorValue) = policy.vectorShard(value.type, value.length)
+    private fun owningShardFor(value: VectorValue) = policy.vectorShard(value)
 
     private fun resolveValueLookup(value: QuadValue): QuadValueId? = when (value) {
         is DoubleValue -> dictionary.lookUpDoubleValueIds(setOf(value))[value]
@@ -118,10 +118,8 @@ class ClusterQuadSet(
             }
         }
         if (vectors.isNotEmpty()) {
-            vectors.groupBy { it.type to it.length }.forEach { (props, group) ->
-                policy.vectorShard(props.first, props.second)?.let {
-                    result.putAll(it.lookUpVectorIds(group.toSet()))
-                }
+            vectors.groupBy { policy.vectorShard(it) }.forEach { (shard, group) ->
+                if (shard != null) result.putAll(shard.lookUpVectorIds(group.toSet()))
             }
         }
         return result
@@ -160,10 +158,8 @@ class ClusterQuadSet(
             }
         }
         if (vectors.isNotEmpty()) {
-            vectors.groupBy { it.type to it.length }.forEach { (props, group) ->
-                policy.vectorShard(props.first, props.second)?.let {
-                    result.putAll(it.getOrAddVectorIds(group.toSet()))
-                }
+            vectors.groupBy { policy.vectorShard(it) }.forEach { (shard, group) ->
+                if (shard != null) result.putAll(shard.getOrAddVectorIds(group.toSet()))
             }
         }
         return result
@@ -453,8 +449,8 @@ class ClusterQuadSet(
 
     private fun routeAdd(quad: Quad, s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard {
         for (v in listOf(quad.subject, quad.predicate, quad.`object`)) {
-            if (v is VectorValue) return policy.vectorShard(v.type, v.length)
-                ?: throw IllegalStateException("no shard owns vector corpus (${v.type}, ${v.length}); cannot place quad")
+            if (v is VectorValue) return policy.vectorShard(v)
+                ?: throw IllegalStateException("no shard owns vector (${v.type}, ${v.length}); cannot place quad")
         }
         return policy.addShard(s, p, o)
     }

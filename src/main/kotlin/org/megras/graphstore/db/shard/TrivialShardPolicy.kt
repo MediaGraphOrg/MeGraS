@@ -29,6 +29,4 @@ class TrivialShardPolicy(private val shard: Shard) : ShardPolicy {
     override fun distinctShards(predicate: QuadValueId): Set<Shard> = setOf(shard)
 
     override fun vectorShard(type: VectorValue.Type, length: Int): Shard? = shard
-
-    override fun vectorShard(id: QuadValueId): Shard? = shard
 }

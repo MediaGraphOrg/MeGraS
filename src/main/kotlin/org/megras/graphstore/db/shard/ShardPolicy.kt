@@ -26,8 +26,11 @@ import org.megras.graphstore.db.QuadValueId
  *   (type,length) — never bare Long — so a policy can route on type without
  *   interface changes (e.g. a policy that treats vector corpora as a separate
  *   [VectorCorpus]-style concern can be expressed here later).
- * - [vectorShard] maps a corpus to its owner for value<->id / reverse-resolve
- *   routing; returns null when no shard owns the corpus (read yields empty).
+ * - [vectorShard] maps a corpus to its owner for value<->id and NN routing;
+ *   returns null when no shard owns the corpus (read yields empty). It does
+ *   NOT participate in reverse-resolution: a vector QuadValueId resolves only
+ *   on the shard that produced the enclosing tuple (see [ClusterQuadSet]),
+ *   because vector ids are shard-local, not corpus-addressable.
  *
  * Caching is the caller's responsibility, not the policy's.
  *
@@ -54,7 +57,4 @@ interface ShardPolicy {
 
     /** Owner for a vector corpus's value<->id and NN routing; null if none. */
     fun vectorShard(type: VectorValue.Type, length: Int): Shard?
-
-    /** Owner for reverse-resolving a vector QuadValueId to its value; null if none. */
-    fun vectorShard(id: QuadValueId): Shard?
 }

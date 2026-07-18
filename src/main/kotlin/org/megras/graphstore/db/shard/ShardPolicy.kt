@@ -43,6 +43,17 @@ interface ShardPolicy {
     /** Places a SCALAR-ONLY quad add on its single owning shard. Vector-operand adds bypass this (see [vectorShard]). */
     fun addShard(s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard
 
+    /**
+     * Every shard the policy may route to. Filter operands that are SCALAR ids
+     * are broadcast to all of them (scalar ids are global: every shard that
+     * holds a row with that id can match, and a row with a given scalar id may
+     * live on any shard under a placement policy that routes by subject).
+     * Vector operands are NOT broadcast -- they route only to their content
+     * shard via [vectorShard] -- so this method is used solely for the scalar
+     * broadcast case, never for vectors.
+     */
+    fun allShards(): Collection<Shard>
+
     fun filterShards(
         s: Collection<QuadValueId>?,
         p: Collection<QuadValueId>?,

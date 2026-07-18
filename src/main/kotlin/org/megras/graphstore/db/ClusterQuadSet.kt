@@ -215,20 +215,89 @@ class ClusterQuadSet(
 
     // ---- routing + fuse ----------------------------------------------------
 
-    private fun routeFilter(
-        s: Collection<QuadValueId>?,
-        p: Collection<QuadValueId>?,
-        o: Collection<QuadValueId>?
+    /**
+     * Partition one filter-operand position into (scalarIds, vectorByShard).
+     * Scalar ids resolve through the global dict and broadcast to all shards
+     * (see [ShardPolicy.allShards]); vector ids resolve ONLY on their content
+     * shard ([ShardPolicy.vectorShard]) and route there exclusively. A vector
+     * QuadValueId is shard-local and its discriminator can collide across
+     * shards, so broadcasting it would let a foreign shard match a different
+     * vector that happens to share (discriminator, localId) -- a silent
+     * wrong-value result. Partitioning operands this way prevents that.
+     *
+     * Returns null for a wildcard (null) position. A non-null return with both
+     * maps empty means the position was provided but nothing resolved -- the
+     * caller treats that as an empty result, not a wildcard.
+     */
+    private fun partitionOperand(
+        values: Collection<QuadValue>?
+    ): Pair<Set<QuadValueId>, Map<Shard, Set<QuadValueId>>>? {
+        if (values == null) return null
+        val scalarIds = mutableSetOf<QuadValueId>()
+        val vectorByShard = mutableMapOf<Shard, MutableSet<QuadValueId>>()
+        val scalarValues = ArrayList<QuadValue>()
+        val vectorValues = ArrayList<VectorValue>()
+        for (v in values) {
+            if (v is VectorValue) vectorValues.add(v) else scalarValues.add(v)
+        }
+        if (scalarValues.isNotEmpty()) {
+            val resolved = resolveValuesLookup(scalarValues)
+            for (v in scalarValues) resolved[v]?.let { scalarIds.add(it) }
+        }
+        if (vectorValues.isNotEmpty()) {
+            vectorValues.groupBy { policy.vectorShard(it) }.forEach { (shard, group) ->
+                if (shard != null) {
+                    val ids = shard.lookUpVectorIds(group.toSet())
+                    vectorByShard.getOrPut(shard) { mutableSetOf() }.addAll(ids.values)
+                }
+            }
+        }
+        return scalarIds to vectorByShard
+    }
+
+    /**
+     * Fan filter execution across the shards that may hold matching rows:
+     * every shard (for broadcast scalar operands) plus the content shards of
+     * any vector operands. Each shard receives ONLY the operand ids meaningful
+     * on it -- scalar ids (broadcast) and the vector ids it minted. A position
+     * that yields no ids on a given shard is empty (match-nothing), not
+     * wildcard; the shard's own empty-operand short-circuit handles that.
+     * Surviving rows are fused by [resolveQuadSet] (stage-A partition).
+     */
+    private fun partitionedFanOut(
+        sPart: Pair<Set<QuadValueId>, Map<Shard, Set<QuadValueId>>>?,
+        pPart: Pair<Set<QuadValueId>, Map<Shard, Set<QuadValueId>>>?,
+        oPart: Pair<Set<QuadValueId>, Map<Shard, Set<QuadValueId>>>?
     ): List<Pair<Shard, Set<Triple<QuadValueId, QuadValueId, QuadValueId>>>> {
+        val contact = mutableSetOf<Shard>()
+        if (sPart != null && sPart.first.isNotEmpty()) contact.addAll(policy.allShards())
+        if (pPart != null && pPart.first.isNotEmpty()) contact.addAll(policy.allShards())
+        if (oPart != null && oPart.first.isNotEmpty()) contact.addAll(policy.allShards())
+        if (sPart != null) contact.addAll(sPart.second.keys)
+        if (pPart != null) contact.addAll(pPart.second.keys)
+        if (oPart != null) contact.addAll(oPart.second.keys)
         val out = ArrayList<Pair<Shard, Set<Triple<QuadValueId, QuadValueId, QuadValueId>>>>()
-        for (shard in policy.filterShards(s, p, o)) {
-            val localRows = shard.filter(s, p, o)
-            if (localRows.isNotEmpty()) {
-                val tuples = shard.quadTuples(localRows).values.toSet()
+        for (shard in contact) {
+            val sSet = operandForShard(sPart, shard)
+            val pSet = operandForShard(pPart, shard)
+            val oSet = operandForShard(oPart, shard)
+            if (sSet == null && pSet == null && oSet == null) continue
+            val rows = shard.filter(sSet, pSet, oSet)
+            if (rows.isNotEmpty()) {
+                val tuples = shard.quadTuples(rows).values.toSet()
                 if (tuples.isNotEmpty()) out.add(shard to tuples)
             }
         }
         return out
+    }
+
+    private fun operandForShard(
+        part: Pair<Set<QuadValueId>, Map<Shard, Set<QuadValueId>>>?,
+        shard: Shard
+    ): Set<QuadValueId>? {
+        if (part == null) return null
+        val v = part.second[shard]
+        return if (v.isNullOrEmpty()) part.first else part.first + v
     }
 
     /**
@@ -315,20 +384,14 @@ class ClusterQuadSet(
 
     // ---- QuadSet reads -----------------------------------------------------
 
-    override fun filterSubject(subject: QuadValue): QuadSet {
-        val sid = resolveValueLookup(subject) ?: return BasicQuadSet()
-        return resolveQuadSet(routeFilter(setOf(sid), null, null))
-    }
+    override fun filterSubject(subject: QuadValue): QuadSet =
+        resolveQuadSet(partitionedFanOut(partitionOperand(setOf(subject)), null, null))
 
-    override fun filterPredicate(predicate: QuadValue): QuadSet {
-        val pid = resolveValueLookup(predicate) ?: return BasicQuadSet()
-        return resolveQuadSet(routeFilter(null, setOf(pid), null))
-    }
+    override fun filterPredicate(predicate: QuadValue): QuadSet =
+        resolveQuadSet(partitionedFanOut(null, partitionOperand(setOf(predicate)), null))
 
-    override fun filterObject(`object`: QuadValue): QuadSet {
-        val oid = resolveValueLookup(`object`) ?: return BasicQuadSet()
-        return resolveQuadSet(routeFilter(null, null, setOf(oid)))
-    }
+    override fun filterObject(`object`: QuadValue): QuadSet =
+        resolveQuadSet(partitionedFanOut(null, null, partitionOperand(setOf(`object`))))
 
     override fun filter(
         subjects: Collection<QuadValue>?,
@@ -339,15 +402,14 @@ class ClusterQuadSet(
             TODO("full-scan filter is not supported yet on the cluster backend")
         }
         if (subjects?.isEmpty() == true || predicates?.isEmpty() == true || objects?.isEmpty() == true) return BasicQuadSet()
-        val all = (subjects ?: emptySet()) + (predicates ?: emptySet()) + (objects ?: emptySet())
-        val resolved = resolveValuesLookup(all)
-        val sIds = subjects?.mapNotNull { resolved[it] }
-        val pIds = predicates?.mapNotNull { resolved[it] }
-        val oIds = objects?.mapNotNull { resolved[it] }
-        if ((subjects != null && sIds!!.isEmpty()) || (predicates != null && pIds!!.isEmpty()) || (objects != null && oIds!!.isEmpty())) {
-            return BasicQuadSet()
-        }
-        return resolveQuadSet(routeFilter(sIds, pIds, oIds))
+        val sPart = partitionOperand(subjects)
+        val pPart = partitionOperand(predicates)
+        val oPart = partitionOperand(objects)
+        // Provided-but-unresolved position => nothing can match.
+        if (sPart != null && sPart.first.isEmpty() && sPart.second.isEmpty()) return BasicQuadSet()
+        if (pPart != null && pPart.first.isEmpty() && pPart.second.isEmpty()) return BasicQuadSet()
+        if (oPart != null && oPart.first.isEmpty() && oPart.second.isEmpty()) return BasicQuadSet()
+        return resolveQuadSet(partitionedFanOut(sPart, pPart, oPart))
     }
 
     override fun nearestNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, invert: Boolean): QuadSet {

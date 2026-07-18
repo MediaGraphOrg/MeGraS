@@ -11,6 +11,7 @@ import org.megras.graphstore.db.PostgresStore
 import org.megras.graphstore.db.dict.PostgresDictionary
 import org.megras.graphstore.db.ClusterQuadSet
 import org.megras.graphstore.db.shard.PostgresShard
+import org.megras.graphstore.db.shard.SplitShardPolicy
 import org.megras.graphstore.db.shard.TrivialShardPolicy
 import org.megras.graphstore.derived.DerivedRelationMutableQuadSet
 import org.megras.graphstore.derived.DerivedRelationRegistrar
@@ -115,6 +116,16 @@ object MeGraS {
                         val shard = PostgresShard(cluster.shardEndpoints.single(), "megras", "megras")
                         ClusterQuadSet(dict, TrivialShardPolicy(shard)).also {
                             dict.setup(); shard.setup()
+                        }
+                    }
+                    Config.ClusterPolicy.SPLIT -> {
+                        require(cluster.shardEndpoints.size >= 2) {
+                            "SPLIT cluster policy requires >= 2 shard endpoints, got ${cluster.shardEndpoints.size}"
+                        }
+                        val shards = cluster.shardEndpoints.map { PostgresShard(it, "megras", "megras") }
+                        ClusterQuadSet(dict, SplitShardPolicy(shards)).also {
+                            dict.setup()
+                            shards.forEach { it.setup() }
                         }
                     }
                 }

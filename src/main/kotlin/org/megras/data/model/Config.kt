@@ -108,7 +108,14 @@ data class Config(
 
     @Serializable
     enum class ClusterPolicy {
-        TRIVIAL
+        TRIVIAL,
+        /**
+         * Splits scalar-quad placement by subject hash and vector content by
+         * value hash across >= 2 shards; reads broadcast. The first
+         * non-trivial policy, for distributed merge validation. See
+         * SplitShardPolicy.
+         */
+        SPLIT
     }
 
     @Serializable

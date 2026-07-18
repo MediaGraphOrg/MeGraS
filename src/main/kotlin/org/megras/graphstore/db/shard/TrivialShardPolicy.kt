@@ -15,6 +15,7 @@ import org.megras.graphstore.db.QuadValueId
 class TrivialShardPolicy(private val shard: Shard) : ShardPolicy {
 
     override fun addShard(s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard = shard
+    override fun allShards(): Collection<Shard> = setOf(shard)
 
     override fun filterShards(
         s: Collection<QuadValueId>?,

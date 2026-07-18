@@ -115,7 +115,25 @@ data class Config(
          * non-trivial policy, for distributed merge validation. See
          * SplitShardPolicy.
          */
-        SPLIT
+        SPLIT,
+        /**
+         * Scalar-quad placement via a stateful round-robin counter; reads
+         * broadcast, vector content by value hash (inherited). Non-deterministic
+         * placement: dup-checks/contains broadcast. See RoundRobinShardPolicy.
+         */
+        ROUND_ROBIN,
+        /**
+         * Scalar-quad placement by a hash of the whole quad (s,p,o); reads
+         * broadcast, vector content by value hash (inherited). Deterministic.
+         * See QuadHashShardPolicy.
+         */
+        QUAD_HASH,
+        /**
+         * Scalar-quad placement by the subject URL prefix (scheme+host; non-URI
+         * subjects hashed by id); reads broadcast, vector content by value hash
+         * (inherited). Deterministic. See PrefixShardPolicy.
+         */
+        PREFIX
     }
 
     @Serializable

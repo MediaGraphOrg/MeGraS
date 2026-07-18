@@ -1,5 +1,6 @@
 package org.megras.graphstore.db.shard
 
+import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
 import org.megras.graphstore.db.QuadValueId
 
@@ -14,7 +15,8 @@ import org.megras.graphstore.db.QuadValueId
  */
 class TrivialShardPolicy(private val shard: Shard) : ShardPolicy {
 
-    override fun addShard(s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard = shard
+    override fun addShard(subjectValue: QuadValue, s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard = shard
+    override fun definiteShard(subjectValue: QuadValue, s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard? = shard
     override fun allShards(): Collection<Shard> = setOf(shard)
 
     override fun filterShards(

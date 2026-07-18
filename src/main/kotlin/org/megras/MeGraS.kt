@@ -11,6 +11,9 @@ import org.megras.graphstore.db.PostgresStore
 import org.megras.graphstore.db.dict.PostgresDictionary
 import org.megras.graphstore.db.ClusterQuadSet
 import org.megras.graphstore.db.shard.PostgresShard
+import org.megras.graphstore.db.shard.QuadHashShardPolicy
+import org.megras.graphstore.db.shard.RoundRobinShardPolicy
+import org.megras.graphstore.db.shard.PrefixShardPolicy
 import org.megras.graphstore.db.shard.SplitShardPolicy
 import org.megras.graphstore.db.shard.TrivialShardPolicy
 import org.megras.graphstore.derived.DerivedRelationMutableQuadSet
@@ -124,6 +127,36 @@ object MeGraS {
                         }
                         val shards = cluster.shardEndpoints.map { PostgresShard(it, "megras", "megras") }
                         ClusterQuadSet(dict, SplitShardPolicy(shards)).also {
+                            dict.setup()
+                            shards.forEach { it.setup() }
+                        }
+                    }
+                    Config.ClusterPolicy.ROUND_ROBIN -> {
+                        require(cluster.shardEndpoints.size >= 2) {
+                            "ROUND_ROBIN cluster policy requires >= 2 shard endpoints, got ${cluster.shardEndpoints.size}"
+                        }
+                        val shards = cluster.shardEndpoints.map { PostgresShard(it, "megras", "megras") }
+                        ClusterQuadSet(dict, RoundRobinShardPolicy(shards)).also {
+                            dict.setup()
+                            shards.forEach { it.setup() }
+                        }
+                    }
+                    Config.ClusterPolicy.QUAD_HASH -> {
+                        require(cluster.shardEndpoints.size >= 2) {
+                            "QUAD_HASH cluster policy requires >= 2 shard endpoints, got ${cluster.shardEndpoints.size}"
+                        }
+                        val shards = cluster.shardEndpoints.map { PostgresShard(it, "megras", "megras") }
+                        ClusterQuadSet(dict, QuadHashShardPolicy(shards)).also {
+                            dict.setup()
+                            shards.forEach { it.setup() }
+                        }
+                    }
+                    Config.ClusterPolicy.PREFIX -> {
+                        require(cluster.shardEndpoints.size >= 2) {
+                            "PREFIX cluster policy requires >= 2 shard endpoints, got ${cluster.shardEndpoints.size}"
+                        }
+                        val shards = cluster.shardEndpoints.map { PostgresShard(it, "megras", "megras") }
+                        ClusterQuadSet(dict, PrefixShardPolicy(shards)).also {
                             dict.setup()
                             shards.forEach { it.setup() }
                         }

@@ -486,10 +486,75 @@ class ClusterQuadSet(
 
     override fun add(element: Quad): Boolean {
         val (sid, pid, oid) = addOperands(element) ?: return false
-        val target = routeAdd(element, sid, pid, oid)
-        if (target.quadId(sid, pid, oid) != null) return false
-        target.addQuad(sid, pid, oid)
+        // Co-location: a vector-operand quad is placed on the vector content's
+        // owning shard (the only shard that can mint/resolve its id); the
+        // dup-check is definite there. A scalar quad's dup-check is definite
+        // ONLY when the policy names a definite holder -- a non-deterministic
+        // placement (e.g. round-robin) returns null and the dup-check
+        // BROADCASTS across all shards, so an add of an already-stored quad
+        // placed on a prior counter shard is still detected. The insert then
+        // goes to the policy's placement target (addShard), which for RR is
+        // the next counter shard -- distinct from the broadcast-checked set,
+        // but the broadcast covered all shards including that target.
+        if (isVectorOperand(element)) {
+            val owner = vectorOwner(element)
+            if (owner.quadId(sid, pid, oid) != null) return false
+            owner.addQuad(sid, pid, oid)
+            return true
+        }
+        if (dupExistsScalar(element.subject, sid, pid, oid)) return false
+        policy.addShard(element.subject, sid, pid, oid).addQuad(sid, pid, oid)
         return true
+    }
+
+    override fun contains(element: Quad): Boolean {
+        val s = resolveValueLookup(element.subject) ?: return false
+        val p = resolveValueLookup(element.predicate) ?: return false
+        val o = resolveValueLookup(element.`object`) ?: return false
+        if (isVectorOperand(element)) {
+            return vectorOwner(element).quadId(s, p, o) != null
+        }
+        val definite = policy.definiteShard(element.subject, s, p, o)
+        if (definite != null) return definite.quadId(s, p, o) != null
+        return anyShardHolds(s, p, o)
+    }
+
+    private fun isVectorOperand(quad: Quad): Boolean =
+        quad.subject is VectorValue || quad.predicate is VectorValue || quad.`object` is VectorValue
+
+    /**
+     * Owning shard for the (single) vector operand of [quad]; throws if no
+     * shard owns that vector's content. Mirrors the former routeAdd contract.
+     * Precondition: [isVectorOperand].
+     */
+    private fun vectorOwner(quad: Quad): Shard {
+        for (v in listOf(quad.subject, quad.predicate, quad.`object`)) {
+            if (v is VectorValue) {
+                return policy.vectorShard(v)
+                    ?: throw IllegalStateException("no shard owns vector (${v.type}, ${v.length}); cannot place quad")
+            }
+        }
+        throw IllegalStateException("vectorOwner called on a quad with no vector operand")
+    }
+
+    /**
+     * Scalar dup-probe: definite holder if the policy names one, else
+     * broadcast across [ShardPolicy.allShards]. The broadcast is the cost of
+     * non-deterministic placement (round-robin): every add of a scalar quad
+     * touches every shard to guarantee the add contract (true iff newly
+     * stored) despite placement that rotates across shards.
+     */
+    private fun dupExistsScalar(subjectValue: QuadValue, s: QuadValueId, p: QuadValueId, o: QuadValueId): Boolean {
+        val definite = policy.definiteShard(subjectValue, s, p, o)
+        if (definite != null) return definite.quadId(s, p, o) != null
+        return anyShardHolds(s, p, o)
+    }
+
+    private fun anyShardHolds(s: QuadValueId, p: QuadValueId, o: QuadValueId): Boolean {
+        for (shard in policy.allShards()) {
+            if (shard.quadId(s, p, o) != null) return true
+        }
+        return false
     }
 
     private fun addOperands(quad: Quad): Triple<QuadValueId, QuadValueId, QuadValueId>? {
@@ -509,22 +574,7 @@ class ClusterQuadSet(
         return Triple(s, p, o)
     }
 
-    private fun routeAdd(quad: Quad, s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard {
-        for (v in listOf(quad.subject, quad.predicate, quad.`object`)) {
-            if (v is VectorValue) return policy.vectorShard(v)
-                ?: throw IllegalStateException("no shard owns vector (${v.type}, ${v.length}); cannot place quad")
-        }
-        return policy.addShard(s, p, o)
-    }
-
     override fun addAll(elements: Collection<Quad>): Boolean = elements.any { add(it) }
-
-    override fun contains(element: Quad): Boolean {
-        val s = resolveValueLookup(element.subject) ?: return false
-        val p = resolveValueLookup(element.predicate) ?: return false
-        val o = resolveValueLookup(element.`object`) ?: return false
-        return routeAdd(element, s, p, o).quadId(s, p, o) != null
-    }
 
     override fun containsAll(elements: Collection<Quad>): Boolean = elements.all { contains(it) }
 

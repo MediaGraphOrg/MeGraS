@@ -1,5 +1,6 @@
 package org.megras.graphstore.db.shard
 
+import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
 import org.megras.graphstore.db.QuadValueId
 
@@ -40,8 +41,31 @@ import org.megras.graphstore.db.QuadValueId
  */
 interface ShardPolicy {
 
-    /** Places a SCALAR-ONLY quad add on its single owning shard. Vector-operand adds bypass this (see [vectorShard]). */
-    fun addShard(s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard
+    /**
+     * Places a SCALAR-ONLY quad add on its single owning shard. Vector-operand
+     * adds bypass this (see [vectorShard]).
+     *
+     * This is PLACEMENT, not retrieval: it names where an incoming quad is to
+     * be written. A non-deterministic placement (e.g. a round-robin counter)
+     * is legal here -- but then [definiteShard] returns null, and
+     * [ClusterQuadSet.add]/[contains] broadcast the dup-check across
+     * [allShards] instead of consulting one shard. Deterministic policies
+     * route placement and retrieval identically.
+     */
+    fun addShard(subjectValue: QuadValue, s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard
+
+    /**
+     * The single shard CERTAINLY holding scalar `(s,p,o)`, for the dup-check
+     * in [ClusterQuadSet.add] and the membership test in [.contains]. Returns
+     * null when no single shard can answer -- the caller MUST then broadcast
+     * the check across [allShards]. Vector-operand quads never reach here;
+     * their holder is [vectorShard] (always definite).
+     *
+     * Deterministic placement policies return the same shard as [addShard];
+     * non-deterministic ones (round-robin counter) return null. No default
+     * impl: every policy states its retrieval behavior explicitly.
+     */
+    fun definiteShard(subjectValue: QuadValue, s: QuadValueId, p: QuadValueId, o: QuadValueId): Shard?
 
     /**
      * Every shard the policy may route to. Filter operands that are SCALAR ids

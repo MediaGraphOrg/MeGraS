@@ -15,6 +15,7 @@ data class Config(
     val ffmpeg: FfmpegConfig = FfmpegConfig(),
     val cottontailConnection: CottontailConnection? = null,
     val postgresConnection: PostgresConnection? = null,
+    val clusterConnection: ClusterConnection? = null,
     val grpcConnection: GrpcConnection = GrpcConnection(),
     val sparqlQueryEngine: SparqlQueryEngine = SparqlQueryEngine.BATCHING
 ) {
@@ -33,6 +34,9 @@ data class Config(
             StorageBackend.HYBRID -> {
                 require(cottontailConnection != null) { "cottontailConnection cannot be null" }
                 require(postgresConnection != null) { "postgresConnection cannot be null" }
+            }
+            StorageBackend.CLUSTER -> {
+                require(clusterConnection != null) { "clusterConnection cannot be null" }
             }
         }
     }
@@ -56,7 +60,8 @@ data class Config(
         FILE,
         COTTONTAIL,
         POSTGRES,
-        HYBRID
+        HYBRID,
+        CLUSTER
     }
 
     @Serializable
@@ -85,6 +90,51 @@ data class Config(
         val ffmpegPath: String? = null,
         val ffprobePath: String? = null
     )
+
+    /**
+     * Topology for the CLUSTER backend: a central scalar-dictionary endpoint
+     * and a list of shard endpoints. Selecting CLUSTER (vs POSTGRES) is the
+     * one-node/distributed switch; the policy id selects a distribution
+     * strategy, enabling comparison. TRIVIAL with a single shard collapses to
+     * single-node semantics; non-trivial policies and multi-shard topologies
+     * are additive future work.
+     */
+    @Serializable
+    data class ClusterConnection(
+        val dictEndpoint: String,
+        val shardEndpoints: List<String>,
+        val policy: ClusterPolicy
+    )
+
+    @Serializable
+    enum class ClusterPolicy {
+        TRIVIAL,
+        /**
+         * Splits scalar-quad placement by subject hash and vector content by
+         * value hash across >= 2 shards; reads broadcast. The first
+         * non-trivial policy, for distributed merge validation. See
+         * SplitShardPolicy.
+         */
+        SPLIT,
+        /**
+         * Scalar-quad placement via a stateful round-robin counter; reads
+         * broadcast, vector content by value hash (inherited). Non-deterministic
+         * placement: dup-checks/contains broadcast. See RoundRobinShardPolicy.
+         */
+        ROUND_ROBIN,
+        /**
+         * Scalar-quad placement by a hash of the whole quad (s,p,o); reads
+         * broadcast, vector content by value hash (inherited). Deterministic.
+         * See QuadHashShardPolicy.
+         */
+        QUAD_HASH,
+        /**
+         * Scalar-quad placement by the subject URL prefix (scheme+host; non-URI
+         * subjects hashed by id); reads broadcast, vector content by value hash
+         * (inherited). Deterministic. See PrefixShardPolicy.
+         */
+        PREFIX
+    }
 
     @Serializable
     data class GrpcConnection(

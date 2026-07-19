@@ -8,6 +8,7 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
+import org.megras.id.SemanticId
 
 class ImplicitRelationMutableQuadSet(
     private val base: MutableQuadSet,
@@ -48,6 +49,8 @@ class ImplicitRelationMutableQuadSet(
         }
         return null
     }
+
+    override fun getId(id: SemanticId): Quad? = this.base.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet {
         // Skip implicit relations - this is a wildcard predicate query

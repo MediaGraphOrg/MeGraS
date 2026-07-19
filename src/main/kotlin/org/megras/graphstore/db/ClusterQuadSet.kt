@@ -10,6 +10,8 @@ import org.megras.data.graph.VectorValue
 import org.megras.data.graph.LocalQuadValue
 import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
+import org.megras.id.SemanticId
+import org.megras.id.id
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.db.dict.QuadValueDictionary
@@ -494,12 +496,25 @@ class ClusterQuadSet(
         if (isVectorOperand(element)) {
             val owner = vectorOwner(element)
             if (owner.quadId(sid, pid, oid) != null) return false
-            owner.addQuad(sid, pid, oid)
+            owner.addQuad(sid, pid, oid, element.id.toString())
             return true
         }
         if (dupExistsScalar(element.subject, sid, pid, oid)) return false
-        policy.addShard(element.subject, sid, pid, oid).addQuad(sid, pid, oid)
+        policy.addShard(element.subject, sid, pid, oid).addQuad(sid, pid, oid, element.id.toString())
         return true
+    }
+
+    override fun getId(id: SemanticId): Quad? {
+        // Broadcast: the semantic id is content-based, so at most one distinct
+        // quad matches across shards. Each shard returns the id-tuple of its
+        // local row (if any); reverse resolution to a Quad is centralized here
+        // via resolveQuadSet (scalars via the dict, vectors via the owning
+        // shard). First hit wins.
+        for (shard in policy.allShards()) {
+            val tuple = shard.getId(id) ?: continue
+            return resolveQuadSet(listOf(shard to setOf(tuple))).firstOrNull()
+        }
+        return null
     }
 
     override fun contains(element: Quad): Boolean {

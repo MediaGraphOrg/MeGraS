@@ -1,6 +1,7 @@
 package org.megras.id
 
 import org.megras.util.extensions.toBase64
+import org.apache.commons.codec.binary.Base64
 import java.io.Serializable
 
 /**
@@ -27,6 +28,36 @@ class SemanticId(private val multihash: ByteArray) : Serializable {
 
     init {
         require(multihash.isNotEmpty()) { "SemanticId requires non-empty multihash bytes" }
+    }
+
+    companion object {
+        /**
+         * Parses the [toString] form (base64 of the multihash bytes, url-safe)
+         * back into a [SemanticId]. Returns null if [s] is not a valid multihash
+         * encoding (wrong base64, unknown/varint code, wrong digest length).
+         * Strictly validates structure via [org.megras.util.HashUtil.decodeMultihash];
+         * the plain constructor only checks non-emptiness, so this is the path
+         * for untrusted input (e.g. REST path params).
+         */
+        fun fromString(s: String): SemanticId? {
+            val bytes = try {
+                Base64(true).decode(s)
+            } catch (e: Throwable) {
+                return null
+            }
+            return fromBytes(bytes)
+        }
+
+        /**
+         * Validates [bytes] as a multihash and wraps it, or returns null if
+         * malformed. Use over the plain constructor for untrusted input.
+         */
+        fun fromBytes(bytes: ByteArray): SemanticId? = try {
+            org.megras.util.HashUtil.decodeMultihash(bytes)
+            SemanticId(bytes)
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 
     /** Raw multihash bytes (defensive copy). */

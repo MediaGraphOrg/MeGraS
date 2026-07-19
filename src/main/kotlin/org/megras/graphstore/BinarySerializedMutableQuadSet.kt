@@ -5,6 +5,7 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.SemanticId
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -73,6 +74,8 @@ class BinarySerializedMutableQuadSet private constructor(
 
         println("done")
     }
+
+    override fun getId(id: SemanticId): Quad? = quads.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet = quads.filterSubject(subject)
 

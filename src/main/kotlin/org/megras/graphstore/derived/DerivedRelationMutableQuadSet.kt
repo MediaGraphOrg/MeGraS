@@ -3,6 +3,7 @@ package org.megras.graphstore.derived
 import org.megras.data.graph.*
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.*
+import org.megras.id.SemanticId
 import org.megras.util.knn.DistancePairComparator
 import org.megras.util.knn.FixedSizePriorityQueue
 import org.megras.util.services.GrpcServiceAvailability
@@ -47,6 +48,8 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
             }
         }
     }
+
+    override fun getId(id: SemanticId): Quad? = base.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet {
 

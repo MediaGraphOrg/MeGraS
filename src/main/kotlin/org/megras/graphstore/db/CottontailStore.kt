@@ -4,6 +4,8 @@ import com.google.common.cache.CacheBuilder
 import io.grpc.ManagedChannelBuilder
 import io.grpc.StatusRuntimeException
 import org.megras.data.graph.*
+import org.megras.id.SemanticId
+import org.megras.id.id
 import org.megras.data.schema.MeGraS
 import org.megras.graphstore.*
 import org.vitrivr.cottontail.client.SimpleClient
@@ -64,6 +66,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 .column(Name.ColumnName.create("o_type"), Types.Int)
                 .column(Name.ColumnName.create("o"), Types.Long)
                 .column(Name.ColumnName.create("hash"), Types.String)
+                .column(Name.ColumnName.create("semid"), Types.String)
                 .ifNotExists()
         )
 
@@ -105,6 +108,14 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                     Name.EntityName.create("megras", "quads"),
                     CottontailGrpc.IndexType.BTREE_UQ
                 ).column("hash")
+            )
+        }
+        catchExists {
+            client.create(
+                CreateIndex(
+                    Name.EntityName.create("megras", "quads"),
+                    CottontailGrpc.IndexType.BTREE_UQ
+                ).column("semid")
             )
         }
 
@@ -927,10 +938,24 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         return null
     }
 
-    override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long =
-        insert(s.first, s.second, p.first, p.second, o.first, o.second)
+    override fun getId(id: SemanticId): Quad? {
+        val result = client.query(
+            Query("megras.quads")
+                .select("*")
+                .where(Compare("semid", "=", id.toString()))
+        )
+        if (!result.hasNext()) return null
+        val tuple = result.next()
+        val s = getQuadValue(tuple.asInt("s_type") ?: return null, tuple.asLong("s") ?: return null) ?: return null
+        val p = getQuadValue(tuple.asInt("p_type") ?: return null, tuple.asLong("p") ?: return null) ?: return null
+        val o = getQuadValue(tuple.asInt("o_type") ?: return null, tuple.asLong("o") ?: return null) ?: return null
+        return Quad(s, p, o)
+    }
 
-    private fun insert(sType: Int, s: Long, pType: Int, p: Long, oType: Int, o: Long): Long {
+    override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId, semid: String): Long =
+        insert(s.first, s.second, p.first, p.second, o.first, o.second, semid)
+
+    private fun insert(sType: Int, s: Long, pType: Int, p: Long, oType: Int, o: Long, semid: String): Long {
         val result = client.insert(
             Insert("megras.quads")
                 .any("s_type", sType)
@@ -940,6 +965,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 .any("o_type", oType)
                 .any("o", o)
                 .any("hash", quadHash(sType, s, pType, p, oType, o))
+                .any("semid", semid)
         )
         if (result.hasNext()) {
             val id = result.next().asLong("id")
@@ -1424,13 +1450,13 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             return false
         }
 
-        val batchInsert = BatchInsert("megras.quads").columns("s_type", "s", "p_type", "p", "o_type", "o", "hash")
+        val batchInsert = BatchInsert("megras.quads").columns("s_type", "s", "p_type", "p", "o_type", "o", "hash", "semid")
 
         quadIdMap.forEach {
             val s = valueIdMap[it.value.subject]!!
             val p = valueIdMap[it.value.predicate]!!
             val o = valueIdMap[it.value.`object`]!!
-            batchInsert.any(s.first, s.second, p.first, p.second, o.first, o.second, it.key)
+            batchInsert.any(s.first, s.second, p.first, p.second, o.first, o.second, it.key, it.value.id.toString())
         }
 
         client.insert(batchInsert)

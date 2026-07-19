@@ -2,6 +2,8 @@ package org.megras.graphstore
 
 import org.megras.data.graph.*
 import org.megras.data.schema.MeGraS
+import org.megras.id.SemanticId
+import org.megras.id.id
 import org.megras.util.knn.DistancePairComparator
 import org.megras.util.knn.FixedSizePriorityQueue
 import java.io.Serializable
@@ -9,6 +11,8 @@ import java.io.Serializable
 open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by quads, Serializable {
 
     constructor() : this(setOf())
+
+    override fun getId(id: SemanticId): Quad? = quads.find { it.id == id }
 
     override fun filterSubject(subject: QuadValue): QuadSet = BasicQuadSet(quads.filter { it.subject == subject }.toSet())
 

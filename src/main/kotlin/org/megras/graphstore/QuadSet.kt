@@ -3,8 +3,19 @@ package org.megras.graphstore
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.SemanticId
 
 interface QuadSet : Set<Quad> {
+
+    /**
+     * Returns the [Quad] whose semantic id (content hash of (s,p,o), accessed
+     * via [org.megras.id.id]) equals [id], or null if no such quad is in this
+     * set. The id is storage-independent; backends satisfy this from a
+     * reverse index keyed on the semantic id. Distributed backends broadcast
+     * (the id is content-based, so at most one distinct quad matches across
+     * shards).
+     */
+    fun getId(id: SemanticId): Quad?
 
     /**
      * returns a [QuadSet] only containing the [Quad]s with a specified subject

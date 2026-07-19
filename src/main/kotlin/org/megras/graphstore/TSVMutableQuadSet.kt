@@ -7,6 +7,7 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.SemanticId
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileInputStream
@@ -145,6 +146,8 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
     override fun store() {
         hintStore(true)
     }
+
+    override fun getId(id: SemanticId): Quad? = cache.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet = cache.filterSubject(subject)
 

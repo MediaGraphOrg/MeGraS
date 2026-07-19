@@ -32,6 +32,7 @@ import org.megras.data.graph.VectorValue
 import org.megras.graphstore.Distance
 import org.megras.graphstore.db.AbstractDbStore
 import org.megras.graphstore.db.QuadValueId
+import org.megras.id.SemanticId
 import org.megras.util.extensions.toBase64
 import java.nio.ByteBuffer
 
@@ -101,6 +102,7 @@ class PostgresShard(
         val oType: Column<Int> = integer("o_type").index()
         val o: Column<Long> = long("o").index()
         val hash: Column<String> = varchar("hash", 48).uniqueIndex()
+        val semid: Column<String> = varchar("semid", 64).uniqueIndex()
 
         override val primaryKey = PrimaryKey(id)
 
@@ -138,7 +140,7 @@ class PostgresShard(
         return buf.array().toBase64()
     }
 
-    override fun addQuad(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long {
+    override fun addQuad(s: QuadValueId, p: QuadValueId, o: QuadValueId, semid: String): Long {
         quadId(s, p, o)?.let { return it }
         return transaction(shardDb) {
             QuadsTable.insert {
@@ -149,6 +151,7 @@ class PostgresShard(
                 it[oType] = o.first
                 it[this.o] = o.second
                 it[hash] = quadHash(s.first, s.second, p.first, p.second, o.first, o.second)
+                it[this.semid] = semid
             }[QuadsTable.id]
         }
     }
@@ -158,6 +161,14 @@ class PostgresShard(
             QuadsTable.select(QuadsTable.id)
                 .where { QuadsTable.hash eq quadHash(s.first, s.second, p.first, p.second, o.first, o.second) }
                 .firstOrNull()?.get(QuadsTable.id)
+        }
+
+    override fun getId(id: SemanticId): Triple<QuadValueId, QuadValueId, QuadValueId>? =
+        transaction(shardDb) {
+            QuadsTable.select(QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o)
+                .where { QuadsTable.semid eq id.toString() }.firstOrNull()?.let {
+                    Triple(it[QuadsTable.sType] to it[QuadsTable.s], it[QuadsTable.pType] to it[QuadsTable.p], it[QuadsTable.oType] to it[QuadsTable.o])
+                }
         }
 
     override fun quadTuples(rowIds: Set<Long>): Map<Long, Triple<QuadValueId, QuadValueId, QuadValueId>> {

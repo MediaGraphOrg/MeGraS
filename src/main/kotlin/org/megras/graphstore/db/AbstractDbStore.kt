@@ -3,6 +3,7 @@ package org.megras.graphstore.db
 import com.google.common.cache.CacheBuilder
 import org.megras.data.graph.*
 import org.megras.graphstore.MutableQuadSet
+import org.megras.id.id
 import org.megras.util.extensions.toBase64
 import java.io.Writer
 import java.nio.ByteBuffer
@@ -682,7 +683,7 @@ abstract class AbstractDbStore : MutableQuadSet {
     }
 
 
-    protected abstract fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId) : Long
+    protected abstract fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId, semid: String) : Long
     abstract fun getQuadId(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long?
 
     /**
@@ -700,7 +701,7 @@ abstract class AbstractDbStore : MutableQuadSet {
             return existingId
         }
 
-        return insert(s, p, o)
+        return insert(s, p, o, quad.id.toString())
 
     }
 
@@ -757,7 +758,7 @@ abstract class AbstractDbStore : MutableQuadSet {
             return false
         }
 
-        insert(s, p, o)
+        insert(s, p, o, element.id.toString())
 
         return true
     }

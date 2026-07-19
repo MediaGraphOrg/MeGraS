@@ -4,6 +4,7 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.SemanticId
 
 class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: MutableQuadSet) : MutableQuadSet {
 
@@ -14,6 +15,8 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
             QuadValue.of("<http://lsc.dcu.ie/feature#openai_embed>")
         )
     }
+
+    override fun getId(id: SemanticId): Quad? = base.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet{
         return base.filterSubject(subject) + knn.filter(setOf(subject), knownVectorPredicates, null)

@@ -208,6 +208,10 @@ object SparqlUtil {
 
 
     private fun toNode(value: QuadValue, property: Boolean = false): Node = when (value) {
+        is LocalQuadValue -> if (property) {
+            model.createProperty(value.value)
+        } else model.createResource(value.value)
+
         is URIValue -> if (property) {
             model.createProperty("${value.prefix()}${value.suffix()}")
         } else model.createResource(

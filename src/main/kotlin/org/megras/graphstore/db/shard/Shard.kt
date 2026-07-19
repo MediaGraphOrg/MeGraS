@@ -3,6 +3,7 @@ package org.megras.graphstore.db.shard
 import org.megras.data.graph.VectorValue
 import org.megras.graphstore.Distance
 import org.megras.graphstore.db.QuadValueId
+import org.megras.id.SemanticId
 
 /**
  * Composite identity for a quad row across a cluster: `(shardOrdinal, localRowId)`.
@@ -51,11 +52,23 @@ interface Shard {
 
     fun setup()
 
-    /** Get-or-insert: returns the existing row id for (s,p,o) or inserts and returns a new one. */
-    fun addQuad(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long
+    /** Get-or-insert: returns the existing row id for (s,p,o) or inserts and returns a new one.
+     *  [semid] is the content-hash semantic id (base64 multihash) of the quad's terms, carried
+     *  down from the caller that holds the QuadValues; stored for reverse lookup by [getId]. */
+    fun addQuad(s: QuadValueId, p: QuadValueId, o: QuadValueId, semid: String): Long
 
     /** Returns the existing row id for (s,p,o), or null if none. */
     fun quadId(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long?
+
+    /**
+     * Reverse lookup by semantic id: returns the (s,p,o) id-tuple of the local
+     * row whose stored semid equals [id], or null if none. Returns the
+     * id-tuple, NOT a Quad -- reverse resolution to a value-level Quad is the
+     * caller's ([ClusterQuadSet]) job (scalars via the central dict, vectors
+     * via the owning shard). The id is content-based so at most one distinct
+     * quad matches across the cluster; [ClusterQuadSet] broadcasts this.
+     */
+    fun getId(id: SemanticId): Triple<QuadValueId, QuadValueId, QuadValueId>?
 
     /**
      * Batch reverse-resolve row ids to their (s,p,o) id tuples. Missing ids are

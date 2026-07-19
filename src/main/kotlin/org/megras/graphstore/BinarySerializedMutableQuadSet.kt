@@ -74,8 +74,6 @@ class BinarySerializedMutableQuadSet private constructor(
         println("done")
     }
 
-    override fun getId(id: Long): Quad? = quads.getId(id)
-
     override fun filterSubject(subject: QuadValue): QuadSet = quads.filterSubject(subject)
 
     override fun filterPredicate(predicate: QuadValue): QuadSet = quads.filterPredicate(predicate)

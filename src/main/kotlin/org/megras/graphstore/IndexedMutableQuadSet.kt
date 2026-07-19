@@ -19,7 +19,6 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
 
 
-    override fun getId(id: Long): Quad? = quads.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet = BasicMutableQuadSet(sIndex[subject] ?: emptyList())
 

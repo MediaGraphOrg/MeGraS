@@ -48,8 +48,6 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         }
     }
 
-    override fun getId(id: Long): Quad? = base.getId(id)
-
     override fun filterSubject(subject: QuadValue): QuadSet {
 
         val existing = this.base.filterSubject(subject)

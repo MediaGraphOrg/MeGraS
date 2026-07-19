@@ -49,8 +49,6 @@ class ImplicitRelationMutableQuadSet(
         return null
     }
 
-    override fun getId(id: Long): Quad? = this.base.getId(id)
-
     override fun filterSubject(subject: QuadValue): QuadSet {
         // Skip implicit relations - this is a wildcard predicate query
         // Implicit relations should only be computed when explicitly requested

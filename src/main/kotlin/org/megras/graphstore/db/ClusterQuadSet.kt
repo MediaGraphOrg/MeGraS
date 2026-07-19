@@ -42,11 +42,6 @@ class ClusterQuadSet(
     private val policy: ShardPolicy
 ) : MutableQuadSet {
 
-    override fun getId(id: Long): Quad? = throw UnsupportedOperationException(
-        "getId by row id is not meaningful in a distributed backend; a bare row Long is ambiguous across shards. " +
-            "Pending the quad semantic-id redesign (content-hash id), use value-level filter ops instead."
-    )
-
     // ---- QuadValue <-> ID (no caches) --------------------------------------
 
     private fun owningShardFor(value: VectorValue) = policy.vectorShard(value)
@@ -336,7 +331,7 @@ class ClusterQuadSet(
                 val sv = valueFor(t.first, scalars, vm) ?: continue
                 val pv = valueFor(t.second, scalars, vm) ?: continue
                 val ov = valueFor(t.third, scalars, vm) ?: continue
-                quads.add(Quad(null, sv, pv, ov))
+                quads.add(Quad(sv, pv, ov))
             }
         }
         return BasicQuadSet(quads)

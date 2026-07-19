@@ -7,18 +7,6 @@ import org.megras.data.graph.VectorValue
 interface QuadSet : Set<Quad> {
 
     /**
-     * returns the [Quad] with the specified id in case it is contained within the [QuadSet]
-     *
-     * TODO(quad-semantic-id-redesign): this takes an internal storage pointer
-     * (per-store autoincrement Long), which is meaningless across shards and
-     * not a stable semantic identifier. The planned rework replaces it with
-     * retrieval by a content-hash semantic id (requiring a reverse index), or
-     * removes it in favour of value-level filtering. Distributed backends may
-     * mark this unsupported until then.
-     */
-    fun getId(id: Long): Quad?
-
-    /**
      * returns a [QuadSet] only containing the [Quad]s with a specified subject
      */
     fun filterSubject(subject: QuadValue): QuadSet

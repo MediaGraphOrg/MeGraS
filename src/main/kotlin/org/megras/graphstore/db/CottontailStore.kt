@@ -950,28 +950,10 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         throw IllegalStateException("could not obtain id for inserted value")
     }
 
-
-    override fun getId(id: Long): Quad? {
-
-        val result = client.query(
-            Query("megras.quads")
-                .select("*")
-                .where(Compare("id", "=", id))
-        )
-
-        if (!result.hasNext()) {
-            return null
-        }
-
-        val tuple = result.next()
-
-        val s = getQuadValue(tuple.asInt("s_type")!!, tuple.asLong("s")!!) ?: return null
-        val p = getQuadValue(tuple.asInt("p_type")!!, tuple.asLong("p")!!) ?: return null
-        val o = getQuadValue(tuple.asInt("o_type")!!, tuple.asLong("o")!!) ?: return null
-
-        return Quad(id, s, p, o)
-    }
-
+    // Reconstructs quads for a set of internal row ids WITHOUT surfacing the
+    // row id. The row id is an internal storage pointer; it stays inside the
+    // backend and never rides a Quad. Used by the filter* paths and the
+    // batched id-based lookups, which all resolve row ids to plain (s,p,o).
     private fun getIds(ids: Collection<Long>): BasicQuadSet {
 
         if (ids.isEmpty()) {
@@ -1023,12 +1005,14 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             val p = values[it.second.second] ?: return@forEach
             val o = values[it.second.third] ?: return@forEach
 
-            quads.add(Quad(it.first, s, p, o))
+            quads.add(Quad(s, p, o))
         }
 
         return BasicQuadSet(quads)
 
     }
+
+
 
 
     override fun filterSubject(subject: QuadValue): QuadSet {
@@ -1047,14 +1031,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 )
         )
 
-        val quadSet = BasicMutableQuadSet()
+        val ids = mutableSetOf<Long>()
         while (result.hasNext()) {
-            val id = result.next().asLong("id") ?: continue
-            val quad = getId(id) ?: continue
-            quadSet.add(quad)
+            result.next().asLong("id")?.let { ids.add(it) }
         }
 
-        return quadSet
+        return getIds(ids)
     }
 
     override fun filterPredicate(predicate: QuadValue): QuadSet {
@@ -1072,14 +1054,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 )
         )
 
-        val quadSet = BasicMutableQuadSet()
+        val ids = mutableSetOf<Long>()
         while (result.hasNext()) {
-            val id = result.next().asLong("id") ?: continue
-            val quad = getId(id) ?: continue
-            quadSet.add(quad)
+            result.next().asLong("id")?.let { ids.add(it) }
         }
 
-        return quadSet
+        return getIds(ids)
     }
 
     override fun filterObject(`object`: QuadValue): QuadSet {
@@ -1097,14 +1077,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                 )
         )
 
-        val quadSet = BasicMutableQuadSet()
+        val ids = mutableSetOf<Long>()
         while (result.hasNext()) {
-            val id = result.next().asLong("id") ?: continue
-            val quad = getId(id) ?: continue
-            quadSet.add(quad)
+            result.next().asLong("id")?.let { ids.add(it) }
         }
 
-        return quadSet
+        return getIds(ids)
     }
 
     override fun filter(
@@ -1295,16 +1273,44 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val relevantQuadIds =
             distances.keys.flatMap { oid -> quadIds.filter { it.second == oid } }.map { it.first }.toSet()
-        val relevantQuads = getIds(relevantQuadIds)
 
         val ret = BasicMutableQuadSet()
-        //ret.addAll(relevantQuads)
 
+        // Subject-only projection of the relevant quads: project (id, s_type, s)
+        // directly rather than going through a full Quad reconstruction. The row
+        // id (an internal storage pointer) stays inside the backend and never
+        // rides a Quad; it is only used here to join each relevant row to its
+        // distance (keyed indirectly via quadIdMap: row id -> vector value id).
         val quadIdMap = quadIds.toMap()
+        val subjectProjection = mutableMapOf<Long, QuadValueId>()
+        val subjResult = client.query(
+            Query("megras.quads")
+                .select("id")
+                .select("s_type")
+                .select("s")
+                .where(
+                    Compare(
+                        Column("id"),
+                        Compare.Operator.IN,
+                        ValueList(relevantQuadIds.toList())
+                    )
+                )
+        )
+        while (subjResult.hasNext()) {
+            val tuple = subjResult.next()
+            val id = tuple.asLong("id")!!
+            val st = tuple.asInt("s_type") ?: continue
+            val s = tuple.asLong("s") ?: continue
+            subjectProjection[id] = st to s
+        }
 
-        relevantQuads.forEach { quad ->
-            val d = distances[quadIdMap[quad.id!!]!!] ?: return@forEach
-            ret.add(Quad(quad.subject, MeGraS.QUERY_DISTANCE.uri, DoubleValue(d)))
+        val subjValues = getQuadValues(subjectProjection.values.toSet())
+
+        subjectProjection.forEach { (id, svid) ->
+            val subj = subjValues[svid] ?: return@forEach
+            val oid = quadIdMap[id] ?: return@forEach
+            val d = distances[oid] ?: return@forEach
+            ret.add(Quad(subj, MeGraS.QUERY_DISTANCE.uri, DoubleValue(d)))
         }
 
         return ret
@@ -1444,18 +1450,12 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             )
         }
 
-        if (element.id != null) {
-            val storedQuad = getId(element.id)
-            if (storedQuad == element) {
-                delete(element.id)
-                return true
-            }
-        } else {
-            val id = getQuadId(element) ?: return false
-            delete(id)
-            return true
-        }
-        return false
+        // Resolve the internal row id by (s,p,o) value lookup, then delete.
+        // The row id is an internal storage pointer; it is never carried on a
+        // Quad, so resolve it here via getQuadId rather than reading element.id.
+        val id = getQuadId(element) ?: return false
+        delete(id)
+        return true
     }
 
     override fun removeAll(elements: Collection<Quad>): Boolean {

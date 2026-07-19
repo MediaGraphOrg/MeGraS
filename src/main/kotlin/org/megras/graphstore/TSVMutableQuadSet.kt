@@ -146,8 +146,6 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
         hintStore(true)
     }
 
-    override fun getId(id: Long): Quad? = cache.getId(id)
-
     override fun filterSubject(subject: QuadValue): QuadSet = cache.filterSubject(subject)
 
     override fun filterPredicate(predicate: QuadValue): QuadSet = cache.filterPredicate(predicate)

@@ -248,7 +248,19 @@ class DoubleVectorValue(val vector: DoubleArray) : VectorValue(Type.Double, vect
 
         other as DoubleVectorValue
 
-        return vector.contentEquals(other.vector)
+        // Bit-uniform equality: compare element-wise via doubleToLongBits
+        // (NaN canonicalised/lumped, +0/-0 distinct), matching hashCode.
+        // The previous contentEquals (==) disagreed with contentHashCode
+        // (which already uses doubleToLongBits) on signed zero -- a latent
+        // hash/equals contract violation. Bit-uniform equality is also the
+        // precondition for a sound content hash of vector values.
+        if (vector.size != other.vector.size) return false
+        for (i in vector.indices) {
+            if (java.lang.Double.doubleToLongBits(vector[i]) !=
+                java.lang.Double.doubleToLongBits(other.vector[i])
+            ) return false
+        }
+        return true
     }
 
     private val hashCode = vector.contentHashCode()
@@ -289,7 +301,19 @@ class FloatVectorValue(val vector: FloatArray) : VectorValue(Type.Float, vector.
 
         other as FloatVectorValue
 
-        return vector.contentEquals(other.vector)
+        // Bit-uniform equality: compare element-wise via floatToIntBits
+        // (NaN canonicalised/lumped, +0/-0 distinct), matching hashCode.
+        // The previous contentEquals (==) disagreed with contentHashCode
+        // (which already uses floatToIntBits) on signed zero -- a latent
+        // hash/equals contract violation. Bit-uniform equality is also the
+        // precondition for a sound content hash of vector values.
+        if (vector.size != other.vector.size) return false
+        for (i in vector.indices) {
+            if (java.lang.Float.floatToIntBits(vector[i]) !=
+                java.lang.Float.floatToIntBits(other.vector[i])
+            ) return false
+        }
+        return true
     }
 
     private val hashCode = vector.contentHashCode()

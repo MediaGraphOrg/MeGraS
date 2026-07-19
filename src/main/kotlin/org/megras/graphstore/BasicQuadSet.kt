@@ -10,8 +10,6 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
 
     constructor() : this(setOf())
 
-    override fun getId(id: Long): Quad? = quads.find { it.id == id }
-
     override fun filterSubject(subject: QuadValue): QuadSet = BasicQuadSet(quads.filter { it.subject == subject }.toSet())
 
     override fun filterPredicate(predicate: QuadValue): QuadSet = BasicQuadSet(quads.filter { it.predicate == predicate }.toSet())

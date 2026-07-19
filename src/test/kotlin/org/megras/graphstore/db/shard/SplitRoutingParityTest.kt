@@ -133,16 +133,16 @@ class SplitRoutingParityTest {
     private val queryVec = QuadValue.of(floatArrayOf(0.9f, 0.1f, 0f)) as VectorValue
 
     private val corpus: List<Quad> = listOf(
-        Quad(null, s1, p1, ou1),
-        Quad(null, s1, p2, ou2),
-        Quad(null, s2, p1, ou3),
-        Quad(null, s2, p2, doub),
-        Quad(null, sl, p1, strx),
-        Quad(null, s1, ps, stra),
-        Quad(null, s2, ps, strb),
-        Quad(null, s1, pv, vec1),
-        Quad(null, s2, pv, vec1),
-        Quad(null, s1, pv, vec2),
+        Quad( s1, p1, ou1),
+        Quad( s1, p2, ou2),
+        Quad( s2, p1, ou3),
+        Quad( s2, p2, doub),
+        Quad( sl, p1, strx),
+        Quad( s1, ps, stra),
+        Quad( s2, ps, strb),
+        Quad( s1, pv, vec1),
+        Quad( s2, pv, vec1),
+        Quad( s1, pv, vec2),
     )
 
     // ---- ground-truth oracle ----------------------------------------------

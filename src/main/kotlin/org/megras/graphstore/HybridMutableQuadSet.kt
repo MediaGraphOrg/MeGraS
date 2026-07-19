@@ -15,8 +15,6 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
         )
     }
 
-    override fun getId(id: Long): Quad? = base.getId(id)
-
     override fun filterSubject(subject: QuadValue): QuadSet{
         return base.filterSubject(subject) + knn.filter(setOf(subject), knownVectorPredicates, null)
     }

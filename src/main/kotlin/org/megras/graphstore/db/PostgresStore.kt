@@ -483,26 +483,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
     }
 
-    override fun getId(id: Long): Quad? {
-        val quadIds = transaction {
-            QuadsTable.selectAll().where { QuadsTable.id eq id }.firstOrNull()?.let {
-                listOf(
-                    it[QuadsTable.sType] to it[QuadsTable.s],
-                    it[QuadsTable.pType] to it[QuadsTable.p],
-                    it[QuadsTable.oType] to it[QuadsTable.o]
-                )
-            }
-        } ?: return null
-
-        val values = getQuadValues(quadIds)
-
-        val s = values[quadIds[0]] ?: return null
-        val p = values[quadIds[1]] ?: return null
-        val o = values[quadIds[2]] ?: return null
-
-        return Quad(id, s, p, o)
-    }
-
     private val idCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>()
 
     private fun getIds(ids: Collection<Long>): QuadSet {
@@ -560,7 +540,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                 val o = quadValues[it.second.third]
 
                 if (s != null && p != null && o != null) {
-                    Quad(it.first, s, p, o)
+                    Quad(s, p, o)
                 } else {
                     null
                 }

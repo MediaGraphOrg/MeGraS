@@ -1123,6 +1123,57 @@ class BatchingOpExecutor(
     )
 
     /**
+     * Detected `id(?s,?p,?o) = "..."` (or symmetrical) restriction extracted
+     * from a filter expression: the three term variables the function was
+     * applied to, plus the constant id literal. Scaffold for a planner
+     * pushdown analogous to text-filter pushdown: in principle the constant
+     * id identifies at most one quad, so a BGP joined to this restriction
+     * could be replaced by a single [QuadSet.getId] lookup rather than a scan
+     * + per-row function evaluation.
+     *
+     * DORMANT — not wired into [executeFilter]'s pushdown path. The pushdown
+     * only composes once the semantic id is a graph term (reification, P3):
+     * today an id cannot flow into a BGP from another pattern as a bound
+     * variable, so there is no join to restrict — activating this would just
+     * special-case `id(?s,?p,?o)=const` into a one-row lookup, duplicating
+     * the REST endpoint / [org.megras.lang.sparql.functions.IdTermsPropertyFunction]
+     * inside the planner without a join benefit. Left detectable so the
+     * algebraic shape is encoded and unit-testable now; activation is turning
+     * the detection into a restriction handed to a BGP-intercept in
+     * [executeFilter], gated on reification landing.
+     */
+    @Suppress("unused")
+    private data class IdRestrictionInfo(
+        val subjectVar: Var,
+        val predicateVar: Var,
+        val objectVar: Var,
+        val idLiteral: String,
+        val originalExpr: Expr
+    )
+
+    /**
+     * Recognise `id(?s,?p,?o) = <string-const>` (either orientation) as an
+     * [IdRestrictionInfo], or null. Only the exact 3-variable-operand form of
+     * [org.megras.lang.sparql.functions.QuadSemanticIdFunction] against a
+     * string constant qualifies; any other shape falls through to normal
+     * filter evaluation. See [IdRestrictionInfo] for why the result is not
+     * yet pushed down.
+     */
+    @Suppress("unused")
+    private fun tryExtractIdRestriction(expr: Expr): IdRestrictionInfo? {
+        if (expr !is E_Equals) return null
+        val fn = listOf(expr.arg1, expr.arg2).firstNotNullOfOrNull { it as? E_Function } ?: return null
+        if (fn.functionIRI != "${org.megras.util.Constants.SPARQL_PREFIX}#ID") return null
+        val lit = listOf(expr.arg1, expr.arg2).firstOrNull { (it as? NodeValue)?.isString == true } as? NodeValue
+            ?: return null
+        val args = fn.args
+        if (args.size != 3) return null
+        val vars = args.mapNotNull { (it as? ExprVar)?.asVar() }
+        if (vars.size != 3) return null
+        return IdRestrictionInfo(vars[0], vars[1], vars[2], lit.asString(), expr)
+    }
+
+    /**
      * Try to extract a pushable text filter from a CONTAINS expression.
      * Supports patterns like:
      * - CONTAINS(?var, "text")

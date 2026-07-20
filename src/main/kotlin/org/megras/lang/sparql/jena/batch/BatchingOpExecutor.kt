@@ -7,6 +7,7 @@ import org.apache.jena.sparql.algebra.Op
 import org.apache.jena.sparql.algebra.OpVars
 import org.apache.jena.sparql.algebra.op.*
 import org.apache.jena.sparql.core.BasicPattern
+import org.apache.jena.sparql.core.TriplePath
 import org.apache.jena.sparql.core.Var
 import org.apache.jena.sparql.engine.ExecutionContext
 import org.apache.jena.sparql.engine.QueryIterator
@@ -16,6 +17,9 @@ import org.apache.jena.sparql.engine.iterator.*
 import org.apache.jena.sparql.engine.main.QC
 import org.apache.jena.sparql.expr.*
 import org.apache.jena.sparql.expr.nodevalue.NodeValueString
+import org.apache.jena.sparql.path.P_Link
+import org.apache.jena.sparql.path.P_Seq
+import org.apache.jena.sparql.path.Path
 import org.megras.data.graph.Quad
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.QuadValue
@@ -87,6 +91,7 @@ class BatchingOpExecutor(
             is OpExtend -> executeExtend(op, input, limit, requiredVars)
             is OpUnion -> executeUnion(op, input, limit, requiredVars)
             is OpTable -> executeTable(op, input)
+            is OpPath -> executePath(op, input, limit, requiredVars)
             is OpSequence -> executeSequence(op, input, limit, requiredVars)
             else -> {
                 // Fall back to default Jena execution for unsupported ops
@@ -102,7 +107,7 @@ class BatchingOpExecutor(
      * @param limit Maximum number of results to produce (-1 for no limit)
      * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeBGP(pattern: BasicPattern, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+    private fun executeBGP(pattern: BasicPattern, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null, extraFilters: Map<Var, Set<QuadValue>> = emptyMap()): QueryIterator {
         val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
 
         val triples = pattern.list
@@ -146,7 +151,7 @@ class BatchingOpExecutor(
             // For intermediate patterns, we need join variables; for the last pattern, we can use final required vars
             val isLastPattern = index == reorderedTriples.size - 1
             val patternRequiredVars = if (isLastPattern) requiredVars else effectiveRequiredVars
-            currentBindings = executeBatchedTriplePattern(triple, currentBindings, limit, patternRequiredVars)
+            currentBindings = executeBatchedTriplePattern(triple, currentBindings, limit, patternRequiredVars, extraFilters)
             if (currentBindings.isEmpty()) {
                 break
             }
@@ -360,7 +365,7 @@ class BatchingOpExecutor(
      * @param limit Maximum number of results to produce (-1 for no limit)
      * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
-    private fun executeBatchedTriplePattern(triple: Triple, inputBindings: List<Binding>, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): List<Binding> {
+    private fun executeBatchedTriplePattern(triple: Triple, inputBindings: List<Binding>, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null, extraFilters: Map<Var, Set<QuadValue>> = emptyMap()): List<Binding> {
         val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
 
         if (TIMING_ENABLED) {
@@ -378,13 +383,13 @@ class BatchingOpExecutor(
         // to avoid fetching all data when we only need a few results
         if (limit != NO_LIMIT && inputBindings.size > limit) {
             return executeBatchedTriplePatternIncremental(
-                triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime, requiredVars
+                triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime, requiredVars, extraFilters
             )
         }
 
         // Standard batch execution for no-limit or small input cases
         return executeBatchedTriplePatternFull(
-            triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime, requiredVars
+            triple, inputBindings, subjectVar, predicateVar, objectVar, effectiveLimit, startTime, requiredVars, extraFilters
         )
     }
 
@@ -402,7 +407,8 @@ class BatchingOpExecutor(
         @Suppress("UNUSED_PARAMETER") objectVar: Var?,
         effectiveLimit: Int,
         startTime: Long,
-        requiredVars: Set<Var>? = null
+        requiredVars: Set<Var>? = null,
+        extraFilters: Map<Var, Set<QuadValue>> = emptyMap()
     ): List<Binding> {
         val results = mutableListOf<Binding>()
 
@@ -415,7 +421,12 @@ class BatchingOpExecutor(
             mapOf(null to inputBindings)
         }
 
-        val uniqueSubjects = bindingsBySubject.keys.filterNotNull()
+        val uniqueSubjects = bindingsBySubject.keys.filterNotNull().toMutableList()
+
+        // Add equality filter subjects if applicable
+        if (subjectVar != null && extraFilters.containsKey(subjectVar)) {
+            uniqueSubjects.addAll(extraFilters[subjectVar]!!)
+        }
 
         // Shuffle subjects to avoid worst-case where matching subjects are at the end
         // This gives us a better chance of finding matches early with incremental batching
@@ -439,6 +450,7 @@ class BatchingOpExecutor(
 
             val objectFilter: Collection<QuadValue>? = when {
                 !triple.`object`.isVariable -> toQuadValue(triple.`object`)?.let { listOf(it) }
+                extraFilters.containsKey(objectVar) -> extraFilters[objectVar]
                 else -> null
             }
 
@@ -546,7 +558,8 @@ class BatchingOpExecutor(
         objectVar: Var?,
         effectiveLimit: Int,
         startTime: Long,
-        requiredVars: Set<Var>? = null
+        requiredVars: Set<Var>? = null,
+        extraFilters: Map<Var, Set<QuadValue>> = emptyMap()
     ): List<Binding> {
         // Collect all possible values for each position (S, P, O) based on current bindings
         val subjectValues = mutableSetOf<QuadValue>()
@@ -577,6 +590,18 @@ class BatchingOpExecutor(
                 hasObjectBinding = true
             } else if (!triple.`object`.isVariable) {
                 toQuadValue(triple.`object`)?.let { objectValues.add(it) }
+            }
+        }
+
+        // Add equality filter values pushed down from FILTER expressions
+        for ((filterVar, filterValues) in extraFilters) {
+            if (subjectVar != null && filterVar == subjectVar) {
+                subjectValues.addAll(filterValues)
+                hasSubjectBinding = true
+            }
+            if (objectVar != null && filterVar == objectVar) {
+                objectValues.addAll(filterValues)
+                hasObjectBinding = true
             }
         }
 
@@ -963,8 +988,46 @@ class BatchingOpExecutor(
             if (TIMING_ENABLED) {
                 logger.info("Executing JOIN - left: ${op.left.javaClass.simpleName}, right: ${op.right.javaClass.simpleName}")
             }
-            val left = execute(op.left, input, NO_LIMIT, joinRequiredVars)
-            return execute(op.right, left, limit, joinRequiredVars)
+
+            // Optimization 4: If left produces small value sets and right is a BGP,
+            // extract left-side bindings and inject them as extra filters into right BGP
+            val leftResults = materializeBindings(execute(op.left, input, NO_LIMIT, joinRequiredVars))
+
+            if (leftResults.size in 1..MAX_BATCH_SIZE && op.right is OpBGP) {
+                val leftValueSets = extractValueSetsFromBindings(leftResults)
+                if (leftValueSets.isNotEmpty()) {
+                    if (TIMING_ENABLED) {
+                        logger.info("Join VALUES injection: left produced ${leftResults.size} bindings with value sets for ${leftValueSets.keys}")
+                    }
+
+                    // Find join variables that appear in right's BGP
+                    val rightBgp = op.right as OpBGP
+                    val rightBgpVars = mutableSetOf<Var>()
+                    for (triple in rightBgp.pattern.list) {
+                        if (triple.subject.isVariable) rightBgpVars.add(Var.alloc(triple.subject))
+                        if (triple.predicate.isVariable) rightBgpVars.add(Var.alloc(triple.predicate))
+                        if (triple.`object`.isVariable) rightBgpVars.add(Var.alloc(triple.`object`))
+                    }
+
+                    // Only use value sets for variables that exist in the right BGP
+                    val injectableFilters = leftValueSets.filter { (v, _) -> v in rightBgpVars }
+
+                    if (injectableFilters.isNotEmpty()) {
+                        // Use the left results as input and inject equality filters into right BGP
+                        return executeBGP(
+                            rightBgp.pattern,
+                            bindingsToIterator(leftResults),
+                            limit,
+                            joinRequiredVars,
+                            injectableFilters
+                        )
+                    }
+                }
+            }
+
+            // Standard path: execute left, then right
+            val leftIter = bindingsToIterator(leftResults)
+            return execute(op.right, leftIter, limit, joinRequiredVars)
         }
     }
 
@@ -1053,6 +1116,25 @@ class BatchingOpExecutor(
             }})"
             else -> op.javaClass.simpleName
         }
+    }
+
+    /**
+     * Extract a map of variable -> unique QuadValues from a list of bindings.
+     * Used by Optimization 4 to inject subquery results as filter constraints.
+     * Only includes variables with a small number of unique values (to keep filter sets manageable).
+     */
+    private fun extractValueSetsFromBindings(bindings: List<Binding>): Map<Var, Set<QuadValue>> {
+        val varValues = mutableMapOf<Var, MutableSet<QuadValue>>()
+
+        for (binding in bindings) {
+            binding.vars().forEachRemaining { var_ ->
+                val qv = toQuadValue(binding.get(var_)) ?: return@forEachRemaining
+                varValues.getOrPut(var_) { mutableSetOf() }.add(qv)
+            }
+        }
+
+        // Only return variable value sets that are small enough to be useful as filters
+        return varValues.filter { (_, values) -> values.size <= MAX_BATCH_SIZE }
     }
 
     /**
@@ -1186,6 +1268,84 @@ class BatchingOpExecutor(
     }
 
     /**
+     * Try to extract equality/IN-list filter values that can be pushed down to QuadSet.filter().
+     * Detects:
+     * - Direct equality: FILTER(?s = <http://example.org/a>) → E_Equals
+     * - IN-list: FILTER(?x IN (<a>, <b>)) → E_OneOf
+     * - Compound equality via OR: FILTER(?x = <a> || ?x = <b>) → E_LogicalOr(E_Equals, E_Equals)
+     *
+     * @return Pair of (variable, set of constant QuadValues) if extractable, null otherwise
+     */
+    private fun tryExtractEqualityValues(expr: Expr): Pair<Var, Set<QuadValue>>? {
+        return when (expr) {
+            is E_Equals -> extractEqualityPair(expr)
+            is E_OneOf -> extractOneOfValues(expr)
+            is E_LogicalOr -> {
+                val left = tryExtractEqualityValues(expr.getArg1()) ?: return null
+                val right = tryExtractEqualityValues(expr.getArg2()) ?: return null
+                // Both sides must reference the same variable
+                if (left.first == right.first) {
+                    left.first to (left.second + right.second)
+                } else null
+            }
+            else -> null
+        }
+    }
+
+    /**
+     * Extract a variable and constant value from an ExprEquals expression.
+     * Handles both ?x = <value> and <value> = ?x forms.
+     */
+    private fun extractEqualityPair(expr: E_Equals): Pair<Var, Set<QuadValue>>? {
+        val (varExpr, valueExpr) = when {
+            expr.getArg1() is ExprVar && expr.getArg2() is NodeValue -> expr.getArg1() as ExprVar to expr.getArg2() as NodeValue
+            expr.getArg2() is ExprVar && expr.getArg1() is NodeValue -> expr.getArg2() as ExprVar to expr.getArg1() as NodeValue
+            else -> return null
+        }
+        val variable = varExpr.asVar()
+        val value = nodeValueToQuadValue(valueExpr) ?: return null
+        return variable to setOf(value)
+    }
+
+    /**
+     * Extract variable and value set from an E_OneOf expression.
+     * Handles: FILTER(?x IN (<a>, <b>, <c>))
+     */
+    private fun extractOneOfValues(expr: E_OneOf): Pair<Var, Set<QuadValue>>? {
+        val lhs = expr.getLHS()
+        if (lhs !is ExprVar) return null
+        val variable = lhs.asVar()
+
+        val rhs = expr.getRHS()
+        val values = mutableSetOf<QuadValue>()
+        for (i in 0 until rhs.size()) {
+            val elem = rhs.get(i)
+            if (elem !is NodeValue) return null  // All elements must be constant values
+            val qv = nodeValueToQuadValue(elem) ?: return null
+            values.add(qv)
+        }
+        if (values.isEmpty()) return null
+        return variable to values
+    }
+
+    /**
+     * Convert a Jena NodeValue to a QuadValue.
+     */
+    private fun nodeValueToQuadValue(nv: NodeValue): QuadValue? {
+        return try {
+            if (nv.hasNode()) {
+                toQuadValue(nv.asNode())
+            } else if (nv.isString) {
+                StringValue(nv.asString())
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
      * Execute a filter operation with text filter pushdown optimization.
      * @param limit Maximum number of results to produce (-1 for no limit)
      * @param requiredVars Set of variables that are actually needed in the result (null means all)
@@ -1252,7 +1412,45 @@ class BatchingOpExecutor(
             }
         }
 
-        // No text filter pushdown - use standard execution
+        // No text filter pushdown - try equality filter pushdown (Optimization 1)
+        val equalityFilters = mutableMapOf<Var, MutableSet<QuadValue>>()
+        val trulyRemainingExprs = mutableListOf<Expr>()
+
+        for (expr in remainingExprs) {
+            val eqFilter = tryExtractEqualityValues(expr)
+            if (eqFilter != null) {
+                equalityFilters.getOrPut(eqFilter.first) { mutableSetOf() }.addAll(eqFilter.second)
+                if (TIMING_ENABLED) {
+                    logger.info("Equality filter pushdown: ${eqFilter.first} IN {${eqFilter.second.joinToString(", ")}}")
+                }
+            } else {
+                trulyRemainingExprs.add(expr)
+            }
+        }
+
+        // If we found equality filters and the sub-op is a BGP, push them down
+        if (equalityFilters.isNotEmpty() && op.subOp is OpBGP) {
+            val bgp = op.subOp as OpBGP
+
+            // Execute BGP with equality filters pushed down as extra constant constraints
+            val subResults = executeBGP(bgp.pattern, input, NO_LIMIT, filterRequiredVars, equalityFilters)
+
+            // Apply remaining filters that couldn't be pushed down
+            var result = subResults
+            for (expr in trulyRemainingExprs) {
+                result = QueryIterFilterExpr(result, expr, execCxt)
+            }
+
+            // Apply limit after filtering if specified
+            if (limit != NO_LIMIT) {
+                val bindings = materializeBindings(result).take(limit.toInt())
+                return bindingsToIterator(bindings)
+            }
+
+            return result
+        }
+
+        // No pushdown possible - use standard execution
         val subResults = execute(op.subOp, input, NO_LIMIT, filterRequiredVars)
 
         // Apply each filter expression in sequence
@@ -1762,10 +1960,107 @@ class BatchingOpExecutor(
 
     /**
      * Execute a table operation.
+     * Optimizes unit tables (single empty binding) by passing through the input directly,
+     * since they don't add any variable bindings.
      */
     @Suppress("UNUSED_PARAMETER")
     private fun executeTable(op: OpTable, input: QueryIterator): QueryIterator {
+        // If the table is empty or is a unit table (single empty binding), return input as-is
+        // since it adds no variable bindings that would affect downstream operations
+        if (op.table.size() <= 1 && !op.table.iterator(execCxt).hasNext()) {
+            return input
+        }
+        // Otherwise, return the table's bindings (these feed into downstream batching
+        // via materializeBindings and executeBatchedTriplePatternFull)
         return op.table.iterator(execCxt)
+    }
+
+    /**
+     * Execute a property path operation.
+     * Expands fixed-length property paths into BGP patterns for batch execution.
+     * Falls back to Jena's default executor for complex paths (star, plus, alternatives, inverse).
+     * @param limit Maximum number of results to produce (-1 for no limit)
+     * @param requiredVars Set of variables that are actually needed in the result (null means all)
+     */
+    private fun executePath(op: OpPath, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+        val triplePath = op.triplePath
+
+        // If it's already a simple triple (no path expression), execute as BGP
+        if (triplePath.isTriple) {
+            val pattern = BasicPattern()
+            pattern.add(triplePath.asTriple())
+            return executeBGP(pattern, input, limit, requiredVars)
+        }
+
+        // Try to expand fixed-length paths into a BGP
+        val path = triplePath.path
+        val subjectNode = triplePath.subject
+        val objectNode = triplePath.`object`
+
+        val expandedPattern = tryExpandFixedLengthPath(path, subjectNode, objectNode)
+        if (expandedPattern != null) {
+            if (TIMING_ENABLED) {
+                logger.info("Path expansion: expanded property path into BGP with ${expandedPattern.size()} triple patterns")
+            }
+            return executeBGP(expandedPattern, input, limit, requiredVars)
+        }
+
+        // Fall back to Jena's default path executor for complex paths
+        if (TIMING_ENABLED) {
+            logger.debug("Cannot expand property path to BGP, falling back to default executor: {}", path)
+        }
+        return QC.execute(op, input, execCxt)
+    }
+
+    /**
+     * Try to expand a fixed-length property path into a BasicPattern.
+     * Only handles sequences of simple predicate links (P_Seq of P_Link nodes).
+     *
+     * @param path The property path to expand
+     * @param subjectNode The subject node of the triple path
+     * @param objectNode The object node of the triple path
+     * @return BasicPattern if expandable, null otherwise
+     */
+    private fun tryExpandFixedLengthPath(path: Path, subjectNode: Node, objectNode: Node): BasicPattern? {
+        val predicates = collectLinearPathPredicates(path) ?: return null
+
+        if (predicates.isEmpty()) return null
+
+        val pattern = BasicPattern()
+
+        // Build chain of triples with intermediate blank variables
+        var currentNode: Node = subjectNode
+        for ((index, predicateNode) in predicates.withIndex()) {
+            val isLast = index == predicates.size - 1
+            val nextJenaNode: Node = if (isLast) {
+                objectNode
+            } else {
+                // Create a fresh blank variable for intermediate nodes
+                Var.alloc("_path_$index")
+            }
+
+            pattern.add(Triple.create(currentNode, predicateNode, nextJenaNode))
+            currentNode = nextJenaNode
+        }
+
+        return pattern
+    }
+
+    /**
+     * Collect predicate nodes from a linear property path (sequences of simple links).
+     * Returns null if the path contains non-expandable elements (star, plus, alternatives, inverse, etc.).
+     */
+    private fun collectLinearPathPredicates(path: Path): List<Node>? {
+        return when (path) {
+            is P_Link -> listOf(path.node)
+            is P_Seq -> {
+                val left = collectLinearPathPredicates(path.left) ?: return null
+                val right = collectLinearPathPredicates(path.right) ?: return null
+                left + right
+            }
+            // Non-expandable path types - fall back to Jena default
+            else -> null
+        }
     }
 
     /**

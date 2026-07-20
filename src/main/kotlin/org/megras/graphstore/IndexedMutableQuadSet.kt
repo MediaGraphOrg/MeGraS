@@ -87,6 +87,15 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet = filterPredicate(predicate).textFilter(predicate, objectFilterText)
 
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        return filterPredicate(predicate).any { it.subject == subject }
+    }
+
+    override fun filterNotIn(predicate: QuadValue, excludedValues: Collection<QuadValue>): QuadSet {
+        val excludedSet = excludedValues.toSet()
+        return BasicQuadSet(filterPredicate(predicate).filter { it.`object` !in excludedSet }.toSet())
+    }
+
     override val size: Int
         get() = quads.size
 

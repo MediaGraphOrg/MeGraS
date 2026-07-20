@@ -51,6 +51,20 @@ class ImplicitRelationMutableQuadSet(
 
     override fun getId(id: Long): Quad? = this.base.getId(id)
 
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        // Check base first
+        if (this.base.exists(subject, predicate)) {
+            return true
+        }
+        // Check if this is an implicit relation predicate
+        if (subject is URIValue) {
+            val handler = findHandler(predicate) ?: return false
+            val objects = handler.findObjects(subject)
+            return objects.isNotEmpty()
+        }
+        return false
+    }
+
     override fun filterSubject(subject: QuadValue): QuadSet {
         // Skip implicit relations - this is a wildcard predicate query
         // Implicit relations should only be computed when explicitly requested

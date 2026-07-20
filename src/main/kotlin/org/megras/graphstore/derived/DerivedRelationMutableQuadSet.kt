@@ -50,6 +50,24 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
     override fun getId(id: Long): Quad? = base.getId(id)
 
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        // Fast path: check base first
+        if (base.exists(subject, predicate)) {
+            return true
+        }
+        // Check if a handler can derive this predicate for the subject
+        if (subject is URIValue) {
+            val handler = this.handlers[predicate] ?: return false
+            if (!handler.canDerive(subject)) return false
+            val objs = handler.derive(subject)
+            if (objs.isNotEmpty()) {
+                base.addAll(objs.map { Quad(subject, handler.predicate, it) })
+                return true
+            }
+        }
+        return false
+    }
+
     override fun filterSubject(subject: QuadValue): QuadSet {
 
         val existing = this.base.filterSubject(subject)
@@ -63,10 +81,8 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         val relevantHandlers = availableHandlers.filter { handler -> handler.canDerive(subject) }
 
         val derived = relevantHandlers.flatMap { handler ->
-            //check if already present
-            if (existing.filterPredicate(handler.predicate)
-                    .isNotEmpty()
-            ) { //TODO a hasPredicate method would be more efficient
+            //check if already present using efficient exists check
+            if (base.exists(subject, handler.predicate)) {
                 return@flatMap emptyList()
             }
             handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
@@ -81,9 +97,12 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         return existing
     }
 
-    private fun getAllBySubject(): Map<URIValue, Collection<Quad>> =
-        //FIXME this is not efficient, but it works for now
-        this.base.iterator().asSequence().filter { it.subject is URIValue }.groupBy { it.subject as URIValue }
+    /**
+     * Collects all distinct subjects from the base set.
+     * More efficient than getAllBySubject() which builds a full Map<QuadValue, Collection<Quad>>.
+     */
+    private fun collectDistinctSubjects(): Set<URIValue> =
+        this.base.map { it.subject }.filterIsInstance<URIValue>().toSet()
 
 
     override fun filterPredicate(predicate: QuadValue): QuadSet {
@@ -96,13 +115,14 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
             return existing
         }
 
-        val subjects = getAllBySubject()
+        // Collect unique subjects instead of building full Map<QuadValue, Collection<Quad>>
+        val subjects = collectDistinctSubjects()
 
-        val derived = subjects.flatMap { (subject, quads) ->
+        val derived = subjects.flatMap { subject ->
             if (!handler.canDerive(subject)) {
                 return@flatMap emptyList()
             }
-            if (quads.any { it.predicate == predicate }) { //already exists
+            if (base.exists(subject, predicate)) { //already exists - uses short-circuit check
                 return@flatMap emptyList()
             }
             handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }
@@ -139,7 +159,7 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         logger.debug("Deriving relations with ${relevantHandlers.size} handlers: ${relevantHandlers.map { it.predicate }}")
 
-        val subs = (subjects ?: getAllBySubject().keys).filterIsInstance<URIValue>()
+        val subs = (subjects ?: collectDistinctSubjects().toList()).filterIsInstance<URIValue>()
         val derived = subs.chunked(100).flatMap { chunk ->
             val existingQuads = this.base.filter(
                 chunk,
@@ -202,13 +222,14 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
 
         val handler = this.handlers[predicate] ?: return existing
 
-        val subjects = getAllBySubject()
+        // Collect unique subjects instead of building full Map<QuadValue, Collection<Quad>>
+        val subjects = collectDistinctSubjects()
 
-        val derived = subjects.flatMap { (subject, quads) ->
+        val derived = subjects.flatMap { subject ->
             if (!handler.canDerive(subject)) {
                 return@flatMap emptyList()
             }
-            if (quads.any { it.predicate == predicate }) { //already exists
+            if (base.exists(subject, predicate)) { //already exists - uses short-circuit check
                 return@flatMap emptyList()
             }
             handler.derive(subject).map { obj ->

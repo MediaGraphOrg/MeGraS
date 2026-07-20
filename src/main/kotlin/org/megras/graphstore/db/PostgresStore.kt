@@ -1055,6 +1055,182 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         return result
     }
 
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val sId = getQuadValueId(subject)
+        if (sId.first == null || sId.second == null) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.exists: Unknown subject, returning false in ${System.currentTimeMillis() - startTime}ms")
+            return false
+        }
+        val pId = getQuadValueId(predicate)
+        if (pId.first == null || pId.second == null) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.exists: Unknown predicate, returning false in ${System.currentTimeMillis() - startTime}ms")
+            return false
+        }
+
+        val found = transaction {
+            var result = false
+            exec("SELECT 1 FROM quads WHERE s_type = ${sId.first} AND s = ${sId.second} AND p_type = ${pId.first} AND p = ${pId.second} LIMIT 1") { rs ->
+                result = rs.next()
+            }
+            result
+        }
+
+        if (TIMING_ENABLED) logger.info("PostgresStore.exists: Result=$found in ${System.currentTimeMillis() - startTime}ms")
+        return found
+    }
+
+    override fun filterRange(predicate: QuadValue, min: Double?, max: Double?): QuadSet {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val pId = getQuadValueId(predicate)
+        if (pId.first == null || pId.second == null) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.filterRange: Unknown predicate, returning empty in ${System.currentTimeMillis() - startTime}ms")
+            return BasicQuadSet()
+        }
+
+        val conditions = mutableListOf("q.p_type = ${pId.first}", "q.p = ${pId.second}", "q.o_type = ${DOUBLE_LITERAL_TYPE}")
+
+        if (min != null) {
+            conditions.add("d.value >= $min")
+        }
+        if (max != null) {
+            conditions.add("d.value <= $max")
+        }
+
+        val whereClause = conditions.joinToString(" AND ")
+        val sql = """
+            SELECT q.id, q.s_type, q.s, q.p_type, q.p, q.o_type, q.o
+            FROM quads q
+            INNER JOIN literal_double d ON q.o = d.id AND q.o_type = $DOUBLE_LITERAL_TYPE
+            WHERE $whereClause
+        """.trimIndent()
+
+        val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+
+        transaction {
+            exec(sql) { rs ->
+                while (rs.next()) {
+                    val id = rs.getLong("id")
+                    val sType = rs.getInt("s_type")
+                    val s = rs.getLong("s")
+                    val pType = rs.getInt("p_type")
+                    val p = rs.getLong("p")
+                    val oType = rs.getInt("o_type")
+                    val o = rs.getLong("o")
+
+                    finalSeptuples.add(
+                        id to Triple(
+                            (sType to s),
+                            (pType to p),
+                            (oType to o)
+                        )
+                    )
+                }
+            }
+        }
+
+        val result = getIds(finalSeptuples)
+        if (TIMING_ENABLED) logger.info("PostgresStore.filterRange: Returning ${result.size} quads in ${System.currentTimeMillis() - startTime}ms")
+        return result
+    }
+
+    override fun filterNotIn(predicate: QuadValue, excludedValues: Collection<QuadValue>): QuadSet {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        val pId = getQuadValueId(predicate)
+        if (pId.first == null || pId.second == null) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.filterNotIn: Unknown predicate, returning empty in ${System.currentTimeMillis() - startTime}ms")
+            return BasicQuadSet()
+        }
+
+        if (excludedValues.isEmpty()) {
+            return filterPredicate(predicate)
+        }
+
+        // Resolve excluded values to (oType, oId) pairs
+        val excludedIds = excludedValues.mapNotNull { getQuadValueId(it) }.filter { it.first != null && it.second != null }
+
+        if (excludedIds.isEmpty()) {
+            return filterPredicate(predicate)
+        }
+
+        // For large exclusion sets, use NOT IN with VALUES approach via raw SQL
+        val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+
+        if (excludedIds.size <= OR_CHAIN_THRESHOLD) {
+            // OR-chain approach for small exclusion sets
+            transaction {
+                val orConditions = excludedIds.joinToString(" OR ") { "(q.o_type = ${it.first} AND q.o = ${it.second})" }
+                val sql = """
+                    SELECT q.id, q.s_type, q.s, q.p_type, q.p, q.o_type, q.o
+                    FROM quads q
+                    WHERE q.p_type = ${pId.first} AND q.p = ${pId.second}
+                    AND NOT ($orConditions)
+                """.trimIndent()
+
+                exec(sql) { rs ->
+                    while (rs.next()) {
+                        val id = rs.getLong("id")
+                        val sType = rs.getInt("s_type")
+                        val s = rs.getLong("s")
+                        val pType = rs.getInt("p_type")
+                        val p = rs.getLong("p")
+                        val oType = rs.getInt("o_type")
+                        val o = rs.getLong("o")
+
+                        finalSeptuples.add(
+                            id to Triple(
+                                (sType to s),
+                                (pType to p),
+                                (oType to o)
+                            )
+                        )
+                    }
+                }
+            }
+        } else {
+            // VALUES clause approach for large exclusion sets
+            transaction {
+                val valuesClause = excludedIds.joinToString(",") { "(${it.first},${it.second})" }
+                val sql = """
+                    SELECT q.id, q.s_type, q.s, q.p_type, q.p, q.o_type, q.o
+                    FROM quads q
+                    WHERE q.p_type = ${pId.first} AND q.p = ${pId.second}
+                    AND NOT EXISTS (
+                        SELECT 1 FROM (VALUES $valuesClause) AS ex(o_type, o_id)
+                        WHERE q.o_type = ex.o_type AND q.o = ex.o_id
+                    )
+                """.trimIndent()
+
+                exec(sql) { rs ->
+                    while (rs.next()) {
+                        val id = rs.getLong("id")
+                        val sType = rs.getInt("s_type")
+                        val s = rs.getLong("s")
+                        val pType = rs.getInt("p_type")
+                        val p = rs.getLong("p")
+                        val oType = rs.getInt("o_type")
+                        val o = rs.getLong("o")
+
+                        finalSeptuples.add(
+                            id to Triple(
+                                (sType to s),
+                                (pType to p),
+                                (oType to o)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        val result = getIds(finalSeptuples)
+        if (TIMING_ENABLED) logger.info("PostgresStore.filterNotIn: Returning ${result.size} quads in ${System.currentTimeMillis() - startTime}ms")
+        return result
+    }
+
 
     private class FullTextSearch(
         private val q: String,

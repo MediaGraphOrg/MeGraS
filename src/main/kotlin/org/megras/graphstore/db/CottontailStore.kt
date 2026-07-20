@@ -1199,6 +1199,34 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         return findNeighbor(predicate, `object`, count, distance, if (invert) Direction.DESC else Direction.ASC)
     }
 
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        val s = getQuadValueId(subject)
+        if (s.first == null || s.second == null) return false
+
+        val p = getQuadValueId(predicate)
+        if (p.first == null || p.second == null) return false
+
+        val result = client.query(
+            Query("megras.quads")
+                .select("id")
+                .where(
+                    And(
+                        And(
+                            Compare("s_type", "=", s.first!!),
+                            Compare("s", "=", s.second!!)
+                        ),
+                        And(
+                            Compare("p_type", "=", p.first!!),
+                            Compare("p", "=", p.second!!)
+                        )
+                    )
+                )
+                .limit(1)
+        )
+
+        return result.hasNext()
+    }
+
 
     private fun findNeighbor(predicate: QuadValue, `object`: VectorValue, count: Int, distance: Distance, direction: Direction): QuadSet {
         val predId = getQuadValueId(predicate)
@@ -1209,52 +1237,71 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
 
         val vectorEntity = getVectorEntity(`object`.type, `object`.length) ?: return BasicQuadSet()
         val vectorId = -vectorEntity + VECTOR_ID_OFFSET
-//
-//        val result = client.query(
-//            Query("megras.quads")
-//                .select("id")
-//                .select("o")
-//                .where(
-//                    And(
-//                        predicateFilterExpression(predId.first!!, predId.second!!),
-//                        Expression("o_type", "=", vectorId)
-//                    )
-//                )
-//        )
-//
-//        if (!result.hasNext()) {
-//            return BasicQuadSet()
-//        }
-//
-//        val objectIds = mutableSetOf<Long>()
 
-        val quadIds = mutableListOf<Pair<Long, Long>>() //quad id to object id
-
-//        while (result.hasNext()) {
-//            val tuple = result.next()
-//            val o = tuple.asLong("o")!!
-//            objectIds.add(o)
-//            quadIds.add(tuple.asLong("id")!! to o)
-//        }
-
-
-        val knnResult = client.query(
-            Query("megras.vector_values_${vectorEntity}")
-                .select("id")
-//                .where(Expression("id", "in", objectIds))
-                .distance(
-                    "value",
-                    when (`object`) {
-                        is DoubleVectorValue -> org.vitrivr.cottontail.core.values.DoubleVectorValue(`object`.vector)
-                        is LongVectorValue -> org.vitrivr.cottontail.core.values.LongVectorValue(`object`.vector)
-                        is FloatVectorValue -> org.vitrivr.cottontail.core.values.FloatVectorValue(`object`.vector)
-                        else -> error("unknown vector value type")
-                    }, distance.cottontail(), "distance"
+        // Pre-filter: fetch object IDs from quads that match the predicate and vector type.
+        // This allows us to constrain the KNN search and oversample to compensate for filtering.
+        val matchingObjectIds = mutableSetOf<Long>()
+        val prefilterResult = client.query(
+            Query("megras.quads")
+                .select("o")
+                .where(
+                    And(
+                        predicateFilterExpression(predId.first!!, predId.second!!),
+                        Compare("o_type", "=", vectorId)
+                    )
                 )
-                .limit(count.toLong())
-                .order("distance", direction)
-
         )
+
+        while (prefilterResult.hasNext()) {
+            val o = prefilterResult.next().asLong("o") ?: continue
+            matchingObjectIds.add(o)
+        }
+
+        if (matchingObjectIds.isEmpty()) {
+            return BasicQuadSet()
+        }
+
+        // Oversample the KNN limit to compensate for predicate filtering.
+        // If matchingObjectIds is small, we limit KNN to just those objects.
+        // Otherwise, oversample by a factor to ensure we find enough matches.
+        val oversampleFactor = 10
+        val knnLimit = if (matchingObjectIds.size <= count * oversampleFactor) {
+            // Small matching set: constrain KNN directly to matching object IDs
+            matchingObjectIds.size.toLong()
+        } else {
+            // Large matching set: oversample to increase chance of enough predicate matches
+            (count * oversampleFactor).toLong()
+        }
+
+        // If the matching set is small enough, filter KNN by matching object IDs directly
+        val useKnnFilter = matchingObjectIds.size <= count * oversampleFactor
+
+        val knnQuery = Query("megras.vector_values_${vectorEntity}")
+            .select("id")
+            .distance(
+                "value",
+                when (`object`) {
+                    is DoubleVectorValue -> org.vitrivr.cottontail.core.values.DoubleVectorValue(`object`.vector)
+                    is LongVectorValue -> org.vitrivr.cottontail.core.values.LongVectorValue(`object`.vector)
+                    is FloatVectorValue -> org.vitrivr.cottontail.core.values.FloatVectorValue(`object`.vector)
+                    else -> error("unknown vector value type")
+                }, distance.cottontail(), "distance"
+            )
+            .limit(knnLimit)
+            .order("distance", direction)
+
+        // Apply predicate-aware filter on the KNN query if the matching set is small enough
+        if (useKnnFilter) {
+            knnQuery.where(
+                Compare(
+                    Column("id"),
+                    Compare.Operator.IN,
+                    ValueList(matchingObjectIds.toList())
+                )
+            )
+        }
+
+        val knnResult = client.query(knnQuery)
 
         if (!knnResult.hasNext()) {
             return BasicQuadSet()
@@ -1267,6 +1314,24 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
             distances[tuple.asLong("id")!!] = tuple.asDouble("distance")!!
         }
 
+        // Filter KNN results by predicate-matching object IDs (for the oversampled case)
+        val filteredDistances = if (useKnnFilter) {
+            distances // Already filtered by KNN WHERE clause
+        } else {
+            distances.filterKeys { it in matchingObjectIds }
+        }
+
+        if (filteredDistances.isEmpty()) {
+            return BasicQuadSet()
+        }
+
+        // Take only top `count` results from the filtered set
+        val topDistances = filteredDistances.entries
+            .sortedBy { if (direction == Direction.ASC) it.value else -it.value }
+            .take(count)
+            .associate { it.key to it.value }
+
+        val quadIds = mutableListOf<Pair<Long, Long>>() //quad id to object id
 
         val result = client.query(
             Query("megras.quads")
@@ -1281,7 +1346,7 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
                         Compare(
                             Column("o"),
                             Compare.Operator.IN,
-                            ValueList(distances.keys.toList())
+                            ValueList(topDistances.keys.toList())
                         )
                     )
                 )
@@ -1294,16 +1359,15 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         }
 
         val relevantQuadIds =
-            distances.keys.flatMap { oid -> quadIds.filter { it.second == oid } }.map { it.first }.toSet()
+            topDistances.keys.flatMap { oid -> quadIds.filter { it.second == oid } }.map { it.first }.toSet()
         val relevantQuads = getIds(relevantQuadIds)
 
         val ret = BasicMutableQuadSet()
-        //ret.addAll(relevantQuads)
 
         val quadIdMap = quadIds.toMap()
 
         relevantQuads.forEach { quad ->
-            val d = distances[quadIdMap[quad.id!!]!!] ?: return@forEach
+            val d = topDistances[quadIdMap[quad.id!!]!!] ?: return@forEach
             ret.add(Quad(quad.subject, MeGraS.QUERY_DISTANCE.uri, DoubleValue(d)))
         }
 

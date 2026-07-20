@@ -118,4 +118,28 @@ class HybridMutableQuadSet(private val base: MutableQuadSet, private val knn: Mu
             base.distinctSubjects(predicate)
         }
     }
+
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        return if (predicate in knownVectorPredicates) {
+            knn.exists(subject, predicate)
+        } else {
+            base.exists(subject, predicate)
+        }
+    }
+
+    override fun filterRange(predicate: QuadValue, min: Double?, max: Double?): QuadSet {
+        return if (predicate in knownVectorPredicates) {
+            knn.filterRange(predicate, min, max)
+        } else {
+            base.filterRange(predicate, min, max)
+        }
+    }
+
+    override fun filterNotIn(predicate: QuadValue, excludedValues: Collection<QuadValue>): QuadSet {
+        return if (predicate in knownVectorPredicates) {
+            knn.filterNotIn(predicate, excludedValues)
+        } else {
+            base.filterNotIn(predicate, excludedValues)
+        }
+    }
 }

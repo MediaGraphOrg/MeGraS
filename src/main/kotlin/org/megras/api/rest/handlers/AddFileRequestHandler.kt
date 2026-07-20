@@ -11,9 +11,10 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.derived.DerivedRelationIngester
 import org.megras.util.FileUtil
 
-class AddFileRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) :
+class AddFileRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore, private val derivedIngester: DerivedRelationIngester? = null) :
     PostRequestHandler {
 
     @OpenApi(
@@ -24,7 +25,8 @@ class AddFileRequestHandler(private val quads: MutableQuadSet, private val objec
         methods = [HttpMethod.POST],
         requestBody = OpenApiRequestBody([OpenApiContent(type = "multipart/form-data")]),
         queryParams = [
-            OpenApiParam(name = "metaSkip", type = Boolean::class, description = "Skip metadata extraction from file", required = false)
+            OpenApiParam(name = "metaSkip", type = Boolean::class, description = "Skip metadata extraction from file", required = false),
+            OpenApiParam(name = "eagerDerive", type = Boolean::class, description = "Eagerly compute derived relations at ingest time", required = false)
         ],
         responses = [
             OpenApiResponse(status = "200", description = "Returns mapping of uploaded filenames to stored object IDs", content = [OpenApiContent(type = "application/json")]),
@@ -40,11 +42,18 @@ class AddFileRequestHandler(private val quads: MutableQuadSet, private val objec
         }
 
         val metaSkip = ctx.queryParam("metaSkip")?.toBoolean() ?: false
+        val eagerDerive = ctx.queryParam("eagerDerive")?.toBoolean() ?: false
 
         val mapper = jacksonObjectMapper()
 
         val ids = files.associate { uploadedFile ->
-            val mapEntry = uploadedFile.filename() to FileUtil.addFile(objectStore, quads, PseudoFile(uploadedFile), metaSkip)
+            val oid = FileUtil.addFile(objectStore, quads, PseudoFile(uploadedFile), metaSkip)
+            val mapEntry = uploadedFile.filename() to oid
+
+            // Eagerly derive relations if requested
+            if (eagerDerive && derivedIngester != null) {
+                derivedIngester.deriveAll(oid)
+            }
 
             //check for metadata
             val meta = ctx.formParam(uploadedFile.filename())

@@ -9,12 +9,13 @@ import org.megras.api.rest.handlers.*
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.model.Config
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.derived.DerivedRelationIngester
 
 object RestApi {
 
     private var javalin: Javalin? = null
 
-    fun init(config: Config, objectStore: FileSystemObjectStore, quadSet: MutableQuadSet, slQuadSet: MutableQuadSet) {
+    fun init(config: Config, objectStore: FileSystemObjectStore, quadSet: MutableQuadSet, slQuadSet: MutableQuadSet, derivedIngester: DerivedRelationIngester? = null) {
 
         if (javalin != null) {
             stop() //stop instance in case there already is one. should not happen, just in case
@@ -26,7 +27,7 @@ object RestApi {
         val canonicalSegmentRequestHandler = CanonicalSegmentRequestHandler(quadSet, objectStore)
         val aboutObjectRequestHandler = AboutObjectRequestHandler(slQuadSet, objectStore)
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
-        val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
+        val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore, derivedIngester)
         val addQuadRequestHandler = AddQuadRequestHandler(quadSet)
         val quadByIdRequestHandler = QuadByIdRequestHandler(quadSet)
         val basicQueryHandler = BasicQueryHandler(quadSet)

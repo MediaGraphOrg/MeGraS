@@ -18,6 +18,7 @@ import org.megras.graphstore.db.shard.SplitShardPolicy
 import org.megras.graphstore.db.shard.TrivialShardPolicy
 import org.megras.graphstore.derived.DerivedRelationMutableQuadSet
 import org.megras.graphstore.derived.DerivedRelationRegistrar
+import org.megras.graphstore.derived.DerivedRelationIngester
 import org.megras.graphstore.implicit.ImplicitRelationMutableQuadSet
 import org.megras.graphstore.implicit.ImplicitRelationRegistrar
 import org.megras.lang.sparql.FunctionRegistrar
@@ -178,11 +179,14 @@ object MeGraS {
             }
         }
 
-        RestApi.init(config, objectStore, quadSet, slQuadSet)
+        // Create the derived relation ingester for eager computation at ingest time
+        val derivedIngester = DerivedRelationIngester(derivedRelationRegistrar.getHandlers(), quadSet)
+
+        RestApi.init(config, objectStore, quadSet, slQuadSet, derivedIngester)
 
         FunctionRegistrar.register(quadSet)
 
-        Cli.init(quadSet, objectStore, slQuadSet)
+        Cli.init(quadSet, objectStore, slQuadSet, derivedIngester)
 
         Cli.loop()
 

@@ -8,16 +8,19 @@ import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.file.PseudoFile
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.PersistableQuadSet
+import org.megras.graphstore.derived.DerivedRelationIngester
 import org.megras.util.FileUtil
 import java.io.File
 
-class AddFileCommand(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : CliktCommand(name = "add", printHelpOnEmptyArgs = true, help = "Adds a media file as a graph node") {
+class AddFileCommand(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore, private val derivedIngester: DerivedRelationIngester? = null) : CliktCommand(name = "add", printHelpOnEmptyArgs = true, help = "Adds a media file as a graph node") {
 
     private val fileNames: List<String> by option("-f", "--File", help = "Path of file or folder to be added").multiple(required = true)
 
     private val recursive: Boolean by option("-r", "--recursive", help = "Scan provided folder recursively").flag(default = false)
 
     private val metaSkip: Boolean by option("-m", "--meta-skip", help = "Skip metadata extraction from file").flag(default = false)
+
+    private val eagerDerive: Boolean by option("-d", "--eager-derive", help = "Eagerly compute derived relations (embeddings, OCR, etc.) at ingest time").flag(default = false)
 
     override fun run() {
 
@@ -31,7 +34,12 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
             }
 
             if (file.isFile) {
-                val id = FileUtil.addFile(objectStore, quads, PseudoFile(file), metaSkip).uri
+                val oid = FileUtil.addFile(objectStore, quads, PseudoFile(file), metaSkip)
+                val id = oid.uri
+
+                if (eagerDerive && derivedIngester != null) {
+                    derivedIngester.deriveAll(oid)
+                }
 
                 println("Added file '${file.absolutePath}' with id '${id}'")
             } else if (file.isDirectory) {
@@ -44,7 +52,13 @@ class AddFileCommand(private val quads: MutableQuadSet, private val objectStore:
                 file.walkTopDown().forEach {
 
                     if (it.isFile && it.canRead()) {
-                        val id = FileUtil.addFile(objectStore, quads, PseudoFile(it), metaSkip).uri
+                        val oid = FileUtil.addFile(objectStore, quads, PseudoFile(it), metaSkip)
+                        val id = oid.uri
+
+                        if (eagerDerive && derivedIngester != null) {
+                            derivedIngester.deriveAll(oid)
+                        }
+
                         println("Added file '${it.absolutePath}' with id '${id}'")
                     }
                 }

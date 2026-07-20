@@ -15,6 +15,7 @@ import org.jline.reader.impl.completer.StringsCompleter
 import org.jline.terminal.TerminalBuilder
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.derived.DerivedRelationIngester
 import java.io.IOException
 import java.util.ArrayList
 import java.util.regex.Pattern
@@ -32,9 +33,9 @@ object Cli {
 
     private lateinit var clikt: CliktCommand
 
-    fun init(quads: MutableQuadSet, objectStore: FileSystemObjectStore, slQuadSet: MutableQuadSet) {
+    fun init(quads: MutableQuadSet, objectStore: FileSystemObjectStore, slQuadSet: MutableQuadSet, derivedIngester: DerivedRelationIngester? = null) {
         clikt = BaseCommand().subcommands(
-            AddFileCommand(quads, objectStore),
+            AddFileCommand(quads, objectStore, derivedIngester),
             ImportCommand(quads),
             DumpCommand(slQuadSet)
         )

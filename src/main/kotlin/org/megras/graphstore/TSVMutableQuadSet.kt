@@ -90,18 +90,17 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
             cache.addAllUnindexed(buffer)
         }
         linesProcessed = totalLines.toLong()
-        //val percentage = if (totalLines == 0) 100 else (linesProcessed * 100) / totalLines
-        //logger.info("Progress: $percentage% ($linesProcessed / $totalLines)")
 
         cache.rebuildIndex()
 
         val duration = (System.currentTimeMillis() - startTime) / 1000.0
         println("Load complete in $duration seconds: $totalLines")
         lastStoreTime = System.currentTimeMillis()
-
     }
 
-
+    override fun store() {
+        hintStore(true)
+    }
 
     @Synchronized
     private fun hintStore(force: Boolean = false) {
@@ -141,10 +140,6 @@ class TSVMutableQuadSet(private val tsvFileName : String, private val useCompres
         lastStoreTime = System.currentTimeMillis()
         println("done")
 
-    }
-
-    override fun store() {
-        hintStore(true)
     }
 
     override fun getId(id: SemanticId): Quad? = cache.getId(id)

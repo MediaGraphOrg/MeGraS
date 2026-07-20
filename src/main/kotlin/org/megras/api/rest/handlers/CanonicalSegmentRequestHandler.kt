@@ -7,10 +7,7 @@ import org.megras.api.rest.RestErrorStatus
 import org.megras.data.fs.FileSystemObjectStore
 import org.megras.data.fs.ObjectStoreResult
 import org.megras.data.fs.StoredObjectId
-import org.megras.data.graph.LocalQuadValue
-import org.megras.data.graph.Quad
-import org.megras.data.graph.QuadValue
-import org.megras.data.graph.StringValue
+import org.megras.data.graph.*
 import org.megras.data.model.MediaType
 import org.megras.data.schema.MeGraS
 import org.megras.data.schema.SchemaOrg
@@ -20,6 +17,8 @@ import org.megras.id.ObjectId
 import org.megras.segmentation.Bounds
 import org.megras.segmentation.SegmentationUtil
 import org.megras.segmentation.type.*
+import org.megras.segmentation.media.*
+import org.megras.util.HashUtil
 import org.slf4j.LoggerFactory
 
 class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private val objectStore: FileSystemObjectStore) : GetRequestHandler {
@@ -125,7 +124,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
 
                 // if the first segmentation contains the second one, directly apply the second one on the current document
                 if (segmentation.contains(normalizedNextSegmentation)) {
-                    ctx.redirect("/$documentId/${nextSegmentation.toURI()}" + (if (tail != null) "/$tail" else ""))
+                    ctx.redirect("/$documentId/${normalizedNextSegmentation.toURI()}" + (if (tail != null) "/$tail" else ""))
                     return
                 }
             }
@@ -163,19 +162,21 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
             return
         }
 
+        var previousOrthogonalSegmentation: Segmentation? = null
         if (segmentId != null) {
             // Avoid filterSubject here to prevent triggering derived relation computation
             val previousSegmentation = getSegmentationForCached(quads, LocalQuadValue(documentId))
             if (previousSegmentation != null) {
-                // if this segmentation is equivalent to previous, skip and redirect to it
-                if (!previousSegmentation.orthogonalTo(segmentation) &&
-                    previousSegmentation.equivalentTo(segmentation.translate(previousSegmentation.bounds, TranslateDirection.NEGATIVE))) {
+                if (previousSegmentation.orthogonalTo(segmentation)) {
+                    previousOrthogonalSegmentation = previousSegmentation
+                } else if (previousSegmentation.equivalentTo(segmentation.translate(previousSegmentation.bounds, TranslateDirection.NEGATIVE))) {
+                    // if this segmentation is equivalent to previous, skip and redirect to it
                     currentPaths.forEach { currentPath ->
                         quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, LocalQuadValue(documentId)))
                     }
-                    redirect(ctx, LocalQuadValue(documentId).uri, nextSegmentation)
-                    return
                 }
+                redirect(ctx, LocalQuadValue(documentId).uri, nextSegmentation)
+                return
             }
         }
 
@@ -184,6 +185,23 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
 
         currentPaths.forEach { currentPath ->
             quads.add(Quad(LocalQuadValue(currentPath), SchemaOrg.SAME_AS.uri, cacheObject))
+        }
+        if (previousOrthogonalSegmentation != null) {
+            // the previous segmentation is orthogonal to this one, we can therefore store the result also with flipped segmentations
+            val parentQuad = quads.filter(listOf(LocalQuadValue(documentId)), listOf(MeGraS.SEGMENT_OF.uri), null).firstOrNull()
+            if (parentQuad != null) {
+                val parent = parentQuad.`object` as LocalQuadValue // objectId of the parent resource
+                val parentCacheId = HashUtil.hashToBase64(parent.uri + segmentation.toURI(), HashUtil.HashType.MD5)
+                val parentCacheObject = ObjectId("$objectId/c/$parentCacheId") // should already exist
+                quads.addAll(
+                    listOf(
+                        Quad(cacheObject, MeGraS.SEGMENT_OF.uri, parentCacheObject),
+                        Quad(cacheObject, MeGraS.SEGMENT_TYPE.uri, StringValue(previousOrthogonalSegmentation.getType())),
+                        Quad(cacheObject, MeGraS.SEGMENT_DEFINITION.uri, StringValue(previousOrthogonalSegmentation.getDefinition())),
+                        Quad(cacheObject, MeGraS.SEGMENT_BOUNDS.uri, StringValue(previousOrthogonalSegmentation.bounds.toString()))
+                    )
+                )
+            }
         }
 
         redirect(ctx, cacheObject.uri, nextSegmentation)
@@ -234,7 +252,7 @@ class CanonicalSegmentRequestHandler(private val quads: MutableQuadSet, private 
                 ctx.redirect("/$documentId/${segmentation1.toURI()}/${segmentation2.toURI()}")
             }
         } else {
-            segmentation2 = segmentation2.translate(segmentation1.bounds)
+            segmentation2 = segmentation2.translate(segmentation1.bounds, TranslateDirection.NEGATIVE)
             ctx.redirect("/$documentId/${segmentation1.toURI()}/${segmentation2.toURI()}")
         }
     }

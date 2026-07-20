@@ -37,11 +37,11 @@ The configuration options look as follows:
     "filename": "quads.tsv",  //filename to be used to store graph information in
     "compression": false      //store graph information in compressed form
   },
-  "cottontailConnection": {   //options to be used for 'COTTONTAIL' backend
+  "cottontailConnection": {   //options to be used for 'COTTONTAIL' or 'HYBRID' backend
     "host": "localhost",
     "port": 1865
   },
-  "postgresConnection": {     //options to be used for the 'POSTGRES' backend
+  "postgresConnection": {     //options to be used for the 'POSTGRES' or 'HYBRID' backend
     "host": "localhost",
     "port": 5432,
     "database": "megras",
@@ -64,6 +64,8 @@ Suitable for medium-sized graphs of several 100k triples up to a few million tri
 - `POSTGRES`: Uses [PostgreSQL](https://www.postgresql.org/) to store the graph.
 It also supports vector types and related operations.
 Suitable for larger graphs up to several tens of millions of triples.
+- `HYBRID`: Uses both PostgreSQL and Cottontail DB.
+The latter is used for vector types and operations, the former for everything else.
 
 ## FILE Backend
 The `FILE` backend is the simplest backend available in MeGraS and requires no additional setup.
@@ -104,6 +106,19 @@ Add the result of the hostname query of the database container to the config.jso
 ````bash
 docker cp config.json megras:\
 ````
+
+
+## Using the CLI
+
+MeGraS has a built-in command line interface for simple data management tasks.
+It enables adding media files as graph nodes and bulk-importing graph triples.
+Type `help` to see the available commands and their parameters.
+
+## Using the REST API
+
+MeGraS offers a RESTful API for graph manipulation and querying.
+The OpenAPI specification of all available endpoints can be found in the docs directory or by accessing `http://<your_host_and_port>/openapi.json`.
+A Swagger UI is available via `http://<your_host_and_port>/swagger-ui`.
 
 
 # Getting Started

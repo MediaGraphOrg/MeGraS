@@ -14,7 +14,6 @@ interface ImplicitRelationHandler {
     fun findSubjects(`object`: URIValue): Set<URIValue>
 
     fun findAll(): QuadSet
-
 }
 
 interface RegexImplicitRelationHandler {

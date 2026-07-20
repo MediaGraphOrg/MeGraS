@@ -4,6 +4,7 @@ import org.megras.data.fs.FileSystemObjectStore
 import org.megras.graphstore.implicit.handlers.AboveSpatialHandler
 import org.megras.graphstore.implicit.handlers.SamePrefixHandler
 import org.megras.graphstore.implicit.handlers.ClipNearDuplicateHandler
+import org.megras.graphstore.implicit.handlers.NearDuplicateHandler
 import org.megras.graphstore.implicit.handlers.AfterObjectHandler
 import org.megras.graphstore.implicit.handlers.ContainsObjectHandler
 import org.megras.graphstore.implicit.handlers.EqualsObjectHandler
@@ -45,6 +46,7 @@ class ImplicitRelationRegistrar(private val objectStore: FileSystemObjectStore) 
     init {
 //        register(SamePrefixHandler())
         register(ClipNearDuplicateHandler())
+        register(NearDuplicateHandler())
         register(SegmentSiblingHandler())
 
         register(ClipKnnRegexHandler())

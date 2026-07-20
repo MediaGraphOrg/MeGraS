@@ -7,6 +7,21 @@ import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
 import org.megras.id.SemanticId
 
+/**
+ * Identifies which component of a quad (subject, predicate, or object) is used for ordering.
+ */
+enum class QuadComponent { SUBJECT, PREDICATE, OBJECT }
+
+/**
+ * Specifies an ordering key for [QuadSet.orderedFilter].
+ * @param component Which quad component to sort by.
+ * @param ascending true for ASC, false for DESC.
+ */
+data class OrderSpec(
+    val component: QuadComponent,
+    val ascending: Boolean
+)
+
 interface QuadSet : Set<Quad> {
 
     /**
@@ -93,6 +108,50 @@ interface QuadSet : Set<Quad> {
         val excludedSet = excludedValues.toSet()
         return filterPredicate(predicate).filter { it.`object` !in excludedSet }
             .toSet().let { BasicQuadSet(it) }
+    }
+
+    /**
+     * Filter, sort, and limit quads in a single operation.
+     * Backends like [org.megras.graphstore.db.PostgresStore] override this to push
+     * ORDER BY / LIMIT / OFFSET into SQL, avoiding full materialisation.
+     *
+     * The default implementation delegates to [filter] and sorts in memory.
+     *
+     * @param subjects  null = any subject, empty = no match.
+     * @param predicates null = any predicate, empty = no match.
+     * @param objects    null = any object, empty = no match.
+     * @param orderBy    sort keys applied left-to-right (first = most significant).
+     * @param limit      max results to return (use [Int.MAX_VALUE] for no limit).
+     * @param offset     number of leading results to skip.
+     */
+    fun orderedFilter(
+        subjects: Collection<QuadValue>?,
+        predicates: Collection<QuadValue>?,
+        objects: Collection<QuadValue>?,
+        orderBy: List<OrderSpec>,
+        limit: Int = Int.MAX_VALUE,
+        offset: Int = 0
+    ): QuadSet {
+        // Default: filter then sort in memory
+        var result = filter(subjects, predicates, objects).toList()
+
+        // Apply each sort key (most-significant first)
+        for (spec in orderBy) {
+            val keyExtractor: (Quad) -> Comparable<*> = { quad ->
+                when (spec.component) {
+                    QuadComponent.SUBJECT -> quad.subject.toString()
+                    QuadComponent.PREDICATE -> quad.predicate.toString()
+                    QuadComponent.OBJECT -> quad.`object`.toString()
+                }
+            }
+            result = if (spec.ascending) {
+                result.sortedWith(compareBy(keyExtractor))
+            } else {
+                result.sortedWith(compareByDescending(keyExtractor))
+            }
+        }
+
+        return BasicQuadSet(result.drop(offset).take(limit).toSet())
     }
 
 }

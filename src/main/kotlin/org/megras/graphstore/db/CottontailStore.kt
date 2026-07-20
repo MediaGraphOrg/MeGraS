@@ -1455,6 +1455,62 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
         return getIds(resultIds)
     }
 
+    /**
+     * Optimized implementation that uses database-level DISTINCT to get unique object values.
+     * This avoids fetching all rows and deduplicating in memory.
+     */
+    override fun distinctObjects(predicate: QuadValue): Set<QuadValue> {
+        val predicatePair = getQuadValueId(predicate)
+        if (predicatePair.first == null || predicatePair.second == null) return emptySet()
+
+        val predicateFilter = predicateFilterExpression(predicatePair.first!!, predicatePair.second!!)
+
+        val result = client.query(
+            Query("megras.quads")
+                .select("o_type", "o")
+                .distinct("o_type", "o")
+                .where(predicateFilter)
+        )
+
+        val valueIds = mutableSetOf<QuadValueId>()
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val oType = tuple.asInt("o_type") ?: continue
+            val o = tuple.asLong("o") ?: continue
+            valueIds.add(oType to o)
+        }
+
+        return getQuadValues(valueIds).values.toSet()
+    }
+
+    /**
+     * Optimized implementation that uses database-level DISTINCT to get unique subject values.
+     * This avoids fetching all rows and deduplicating in memory.
+     */
+    override fun distinctSubjects(predicate: QuadValue): Set<QuadValue> {
+        val predicatePair = getQuadValueId(predicate)
+        if (predicatePair.first == null || predicatePair.second == null) return emptySet()
+
+        val predicateFilter = predicateFilterExpression(predicatePair.first!!, predicatePair.second!!)
+
+        val result = client.query(
+            Query("megras.quads")
+                .select("s_type", "s")
+                .distinct("s_type", "s")
+                .where(predicateFilter)
+        )
+
+        val valueIds = mutableSetOf<QuadValueId>()
+        while (result.hasNext()) {
+            val tuple = result.next()
+            val sType = tuple.asInt("s_type") ?: continue
+            val s = tuple.asLong("s") ?: continue
+            valueIds.add(sType to s)
+        }
+
+        return getQuadValues(valueIds).values.toSet()
+    }
+
     override val size: Int
         get() = 0 //TODO
 

@@ -479,6 +479,50 @@ class ClusterQuadSet(
         return resolveValueSet(shardIds)
     }
 
+    override fun exists(subject: QuadValue, predicate: QuadValue): Boolean {
+        val sPair = resolveValueLookup(subject) ?: return false
+        val pPair = resolveValueLookup(predicate) ?: return false
+
+        // Broadcast across all shards (no object to narrow routing) and short-circuit
+        for (shard in policy.allShards()) {
+            if (shard.exists(sPair.first, sPair.second, pPair.first, pPair.second)) return true
+        }
+        return false
+    }
+
+    override fun filterRange(predicate: QuadValue, min: Double?, max: Double?): QuadSet {
+        val pPair = resolveValueLookup(predicate) ?: return BasicQuadSet()
+
+        val shardTuples = ArrayList<Pair<Shard, Set<Triple<QuadValueId, QuadValueId, QuadValueId>>>>()
+        for (shard in policy.allShards()) {
+            val rows = shard.filterRange(pPair.first, pPair.second, min, max)
+            if (rows.isNotEmpty()) {
+                val tuples = shard.quadTuples(rows).values.toSet()
+                if (tuples.isNotEmpty()) shardTuples.add(shard to tuples)
+            }
+        }
+        return resolveQuadSet(shardTuples)
+    }
+
+    override fun filterNotIn(predicate: QuadValue, excludedValues: Collection<QuadValue>): QuadSet {
+        val pPair = resolveValueLookup(predicate) ?: return BasicQuadSet()
+
+        val excludedIds = excludedValues.mapNotNull { resolveValueLookup(it) }.toSet()
+        if (excludedIds.isEmpty()) {
+            return filter(null, setOf(predicate), null)
+        }
+
+        val shardTuples = ArrayList<Pair<Shard, Set<Triple<QuadValueId, QuadValueId, QuadValueId>>>>()
+        for (shard in policy.allShards()) {
+            val rows = shard.filterNotIn(pPair.first, pPair.second, excludedIds)
+            if (rows.isNotEmpty()) {
+                val tuples = shard.quadTuples(rows).values.toSet()
+                if (tuples.isNotEmpty()) shardTuples.add(shard to tuples)
+            }
+        }
+        return resolveQuadSet(shardTuples)
+    }
+
     // ---- writes ------------------------------------------------------------
 
     override fun add(element: Quad): Boolean {

@@ -155,21 +155,37 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
     override fun remove(element: Quad): Boolean {
         if (quads.remove(element)) {
-            rebuildIndex() // TODO: more efficient way
+            sIndex.remove(element.subject, element)
+            pIndex.remove(element.predicate, element)
+            oIndex.remove(element.`object`, element)
             return true
         }
         return false
     }
 
     override fun removeAll(elements: Collection<Quad>): Boolean {
-        if (quads.removeAll(elements.toSet())) {
-            rebuildIndex()
-            return true
+        val toRemove = elements.toSet()
+        var changed = false
+        for (element in toRemove) {
+            if (quads.remove(element)) {
+                sIndex.remove(element.subject, element)
+                pIndex.remove(element.predicate, element)
+                oIndex.remove(element.`object`, element)
+                changed = true
+            }
         }
-        return false
+        return changed
     }
 
     override fun retainAll(elements: Collection<Quad>): Boolean {
-        TODO("Not yet implemented")
+        val retainSet = elements.toSet()
+        val toRemove = quads.filter { it !in retainSet }
+        for (element in toRemove) {
+            quads.remove(element)
+            sIndex.remove(element.subject, element)
+            pIndex.remove(element.predicate, element)
+            oIndex.remove(element.`object`, element)
+        }
+        return toRemove.isNotEmpty()
     }
 }

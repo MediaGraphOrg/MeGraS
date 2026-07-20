@@ -8,7 +8,7 @@ import org.megras.lang.sparql.SparqlUtil.toTriple
 
 class QuadSetIterator(private val quads: QuadSet) : NiceIterator<Triple>() {
 
-    private val iter = this.quads.toSet().iterator()
+    private val iter = this.quads.iterator()
 
     override fun hasNext(): Boolean = iter.hasNext()
 

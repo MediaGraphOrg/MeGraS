@@ -60,6 +60,10 @@ class PostgresShard(
     password: String = "megras"
 ) : Shard {
 
+    companion object {
+        private const val OR_CHAIN_THRESHOLD = 100
+    }
+
     private val shardDb: Database
 
     // Vector value<->id caches live HERE, on the owning shard, not in callers:
@@ -199,6 +203,13 @@ class PostgresShard(
             throw UnsupportedOperationException("full-scan filter (all operands null) is not supported at the shard level; ClusterQuadSet handles it best-effort")
         }
         if (s?.isEmpty() == true || p?.isEmpty() == true || o?.isEmpty() == true) return emptySet()
+
+        // Check if any operand exceeds the OR-chain threshold => use VALUES-clause path
+        val totalOperands = (s?.size ?: 0) + (p?.size ?: 0) + (o?.size ?: 0)
+        if (totalOperands > OR_CHAIN_THRESHOLD) {
+            return filterWithValuesClause(s, p, o)
+        }
+
         return transaction(shardDb) {
             var condition: Op<Boolean> = Op.TRUE
             if (s != null) {
@@ -213,10 +224,40 @@ class PostgresShard(
                 condition = condition and o.map { (QuadsTable.oType eq it.first) and (QuadsTable.o eq it.second) }
                     .reduce { acc, x -> acc or x }
             }
-            // TODO(substrate-perf): port the VALUES-clause path from PostgresStore
-            // for filter sets above the OR-chain threshold; large OR chains are
-            // slow in Postgres. Correctness holds without it; performance does not.
             QuadsTable.select(QuadsTable.id).where(condition).mapTo(mutableSetOf()) { it[QuadsTable.id] }
+        }
+    }
+
+    private fun filterWithValuesClause(
+        s: Collection<QuadValueId>?,
+        p: Collection<QuadValueId>?,
+        o: Collection<QuadValueId>?
+    ): Set<Long> {
+        val sqlBuilder = StringBuilder("SELECT q.id FROM quads q")
+        val joins = mutableListOf<String>()
+
+        if (s != null) {
+            val valuesClause = s.joinToString(",") { "(${it.first},${it.second})" }
+            joins.add(" INNER JOIN (VALUES $valuesClause) AS sf(s_type, s_id) ON q.s_type = sf.s_type AND q.s = sf.s_id")
+        }
+        if (p != null) {
+            val valuesClause = p.joinToString(",") { "(${it.first},${it.second})" }
+            joins.add(" INNER JOIN (VALUES $valuesClause) AS pf(p_type, p_id) ON q.p_type = pf.p_type AND q.p = pf.p_id")
+        }
+        if (o != null) {
+            val valuesClause = o.joinToString(",") { "(${it.first},${it.second})" }
+            joins.add(" INNER JOIN (VALUES $valuesClause) AS of(o_type, o_id) ON q.o_type = of.o_type AND q.o = of.o_id")
+        }
+
+        for (join in joins) sqlBuilder.append(join)
+        val sql = sqlBuilder.toString()
+
+        return transaction(shardDb) {
+            exec(sql) { rs ->
+                val ids = mutableSetOf<Long>()
+                while (rs.next()) { ids.add(rs.getLong(1)) }
+                ids
+            } ?: emptySet()
         }
     }
 
@@ -237,6 +278,71 @@ class PostgresShard(
                 .map { it[QuadsTable.sType] to it[QuadsTable.s] }
                 .toSet()
         }
+
+    override fun exists(sType: Int, s: Long, pType: Int, p: Long): Boolean {
+        val sql = "SELECT 1 FROM quads WHERE s_type = $sType AND s = $s AND p_type = $pType AND p = $p LIMIT 1"
+        return transaction(shardDb) {
+            exec(sql) { rs -> rs.next() } ?: false
+        }
+    }
+
+    override fun filterRange(pType: Int, p: Long, min: Double?, max: Double?): Set<Long> {
+        val conditions = mutableListOf("q.p_type = $pType", "q.p = $p")
+        if (min != null) { conditions.add("d.value >= $min") }
+        if (max != null) { conditions.add("d.value <= $max") }
+
+        val whereClause = conditions.joinToString(" AND ")
+        val sql = """
+            SELECT q.id FROM quads q 
+            INNER JOIN literal_double d ON q.o_type = d.id 
+            WHERE $whereClause
+        """.trimIndent()
+
+        return transaction(shardDb) {
+            exec(sql) { rs ->
+                val ids = mutableSetOf<Long>()
+                while (rs.next()) { ids.add(rs.getLong(1)) }
+                ids
+            } ?: emptySet()
+        }
+    }
+
+    override fun filterNotIn(pType: Int, p: Long, excludedIds: Set<Pair<Int, Long>>): Set<Long> {
+        if (excludedIds.isEmpty()) {
+            return filter(null, listOf(pType to p), null)
+        }
+
+        return if (excludedIds.size <= OR_CHAIN_THRESHOLD) {
+            val excludedConditions = excludedIds.joinToString(" OR ") { "(q.o_type = ${it.first} AND q.o = ${it.second})" }
+            val sql = "SELECT q.id FROM quads q WHERE q.p_type = $pType AND q.p = $p AND NOT ($excludedConditions)"
+
+            transaction(shardDb) {
+                exec(sql) { rs ->
+                    val ids = mutableSetOf<Long>()
+                    while (rs.next()) { ids.add(rs.getLong(1)) }
+                    ids
+                } ?: emptySet()
+            }
+        } else {
+            val valuesClause = excludedIds.joinToString(",") { "(${it.first},${it.second})" }
+            val sql = """
+                SELECT q.id FROM quads q 
+                WHERE q.p_type = $pType AND q.p = $p 
+                AND NOT EXISTS (
+                    SELECT 1 FROM (VALUES $valuesClause) AS ex(t, v) 
+                    WHERE q.o_type = ex.t AND q.o = ex.v
+                )
+            """.trimIndent()
+
+            transaction(shardDb) {
+                exec(sql) { rs ->
+                    val ids = mutableSetOf<Long>()
+                    while (rs.next()) { ids.add(rs.getLong(1)) }
+                    ids
+                } ?: emptySet()
+            }
+        }
+    }
 
     override fun textFilterJoin(predicate: QuadValueId, stringCandidateIds: Set<Long>): Set<Long> {
         if (stringCandidateIds.isEmpty()) return emptySet()

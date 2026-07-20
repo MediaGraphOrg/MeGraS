@@ -85,6 +85,15 @@ interface Shard {
         o: Collection<QuadValueId>?
     ): Set<Long>
 
+    /** Check if at least one quad row exists matching the given subject and predicate. */
+    fun exists(sType: Int, s: Long, pType: Int, p: Long): Boolean
+
+    /** Return row ids whose predicate matches and whose object is a numeric value within [min, max] (null = unbounded). */
+    fun filterRange(pType: Int, p: Long, min: Double?, max: Double?): Set<Long>
+
+    /** Return row ids whose predicate matches and whose object is NOT in [excludedIds]. */
+    fun filterNotIn(pType: Int, p: Long, excludedIds: Set<Pair<Int, Long>>): Set<Long>
+
     fun distinctObjectIds(predicate: QuadValueId): Set<QuadValueId>
     fun distinctSubjectIds(predicate: QuadValueId): Set<QuadValueId>
 

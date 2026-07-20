@@ -12,8 +12,8 @@ import org.megras.util.Constants
 
 abstract class AbstractImplicitTemporalHandler(
     override val predicate: URIValue,
-    private val getStart: (URIValue) -> TemporalValue?,
-    private val getEnd: (URIValue) -> TemporalValue?,
+    private val getStart: (URIValue, QuadSet) -> TemporalValue?,
+    private val getEnd: (URIValue, QuadSet) -> TemporalValue?,
     private val compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
 ) : ImplicitRelationHandler {
 
@@ -24,13 +24,13 @@ abstract class AbstractImplicitTemporalHandler(
     }
 
     private fun getTemporalCandidatesAndCaches(subject: URIValue): TemporalCandidatesResult {
-        val start = getStart(subject)
-        val end = getEnd(subject)
+        val start = getStart(subject, quadSet)
+        val end = getEnd(subject, quadSet)
         val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject }
             .map { it.subject as URIValue }
             .toSet()
-        val startCache = candidates.associateWith { getStart(it) }
-        val endCache = candidates.associateWith { getEnd(it) }
+        val startCache = candidates.associateWith { getStart(it, quadSet) }
+        val endCache = candidates.associateWith { getEnd(it, quadSet) }
         return TemporalCandidatesResult(start, end, candidates, startCache, endCache)
     }
 
@@ -60,8 +60,8 @@ abstract class AbstractImplicitTemporalHandler(
         val subjects = quadSet.filter { it.subject is URIValue }
             .map { it.subject as URIValue }
             .toSet()
-        val startCache = subjects.associateWith { getStart(it) }
-        val endCache = subjects.associateWith { getEnd(it) }
+        val startCache = subjects.associateWith { getStart(it, quadSet) }
+        val endCache = subjects.associateWith { getEnd(it, quadSet) }
         val pairs = mutableSetOf<Quad>()
         for (subject1 in subjects) {
             val start1 = startCache[subject1]
@@ -86,9 +86,8 @@ abstract class ImplicitTemporalObjectHandler(
     compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
 ) : AbstractImplicitTemporalHandler(
     predicate,
-    //TODO: Use correct accessor functions
-    getStart = { AccessorUtil.getStart(it) },
-    getEnd = { AccessorUtil.getEnd(it) },
+    getStart = { subject, quads -> AccessorUtil.getStart(subject, quads) },
+    getEnd = { subject, quads -> AccessorUtil.getEnd(subject, quads) },
     compare
 )
 
@@ -97,9 +96,8 @@ abstract class ImplicitTemporalSegmentHandler(
     compare: (start1: TemporalValue?, end1: TemporalValue?, start2: TemporalValue?, end2: TemporalValue?) -> Boolean
 ) : AbstractImplicitTemporalHandler(
     predicate,
-    //TODO: Use correct accessor functions
-    getStart = { AccessorUtil.getStart(it) },
-    getEnd = { AccessorUtil.getEnd(it) },
+    getStart = { subject, quads -> AccessorUtil.getStart(subject, quads) },
+    getEnd = { subject, quads -> AccessorUtil.getEnd(subject, quads) },
     compare
 )
 

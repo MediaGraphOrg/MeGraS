@@ -24,9 +24,13 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.BasicQuadSet
+import org.megras.graphstore.OrderSpec
+import org.megras.graphstore.QuadComponent
 import org.megras.graphstore.QuadSet
 import org.megras.lang.sparql.SparqlUtil.toQuadValue
 import org.megras.lang.sparql.SparqlUtil.toTriple
+import org.megras.segmentation.BoundsUtil
+import org.megras.util.Constants
 import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 
@@ -57,6 +61,19 @@ class BatchingOpExecutor(
 
         // Constant indicating no limit
         const val NO_LIMIT = -1L
+
+        // Spatial accessor function IRIs for prefetch detection
+        private val SPATIAL_FUNCTION_IRIS = setOf(
+            "${Constants.SPARQL_PREFIX}#BOUNDS_CENTER",
+            "${Constants.SPARQL_PREFIX}#SEGMENT_CENTER",
+            "${Constants.SPARQL_PREFIX}#BOUNDS_AREA",
+            "${Constants.SPARQL_PREFIX}#SEGMENT_AREA",
+            "${Constants.SPARQL_PREFIX}#WIDTH",
+            "${Constants.SPARQL_PREFIX}#HEIGHT",
+            "${Constants.SPARQL_PREFIX}#DEPTH",
+            "${Constants.SPARQL_PREFIX}#DURATION",
+            "${Constants.SPARQL_PREFIX}#XYZT"
+        )
     }
 
     /**
@@ -356,6 +373,30 @@ class BatchingOpExecutor(
             }
             // Other operators - no expressions to collect
             else -> {}
+        }
+    }
+
+    /**
+     * Check if an expression (or any sub-expression) contains a call to a spatial accessor function.
+     */
+    private fun containsSpatialFunction(expr: Expr): Boolean {
+        return when (expr) {
+            is E_Function -> expr.functionIRI in SPATIAL_FUNCTION_IRIS
+            is ExprFunction -> expr.args.any { containsSpatialFunction(it) }
+            else -> false
+        }
+    }
+
+    private fun containsSpatialFunction(exprs: Collection<Expr>): Boolean = exprs.any { containsSpatialFunction(it) }
+
+    private fun containsSpatialFunction(exprs: ExprList): Boolean = exprs.any { containsSpatialFunction(it) }
+
+    /**
+     * Collect all possible subject QuadValues from a list of bindings for prefetching.
+     */
+    private fun collectAllSubjects(bindings: List<Binding>): Set<QuadValue> {
+        return bindings.flatMapTo(mutableSetOf()) { binding ->
+            binding.vars().asSequence().mapNotNull { toQuadValue(binding.get(it)) }.toList()
         }
     }
 
@@ -1447,7 +1488,31 @@ class BatchingOpExecutor(
                 // Execute BGP with text filter pushdown
                 val subResults = executeBGPWithTextFilters(bgp, input, predicateTextFilters, filterRequiredVars)
 
-                // Apply remaining filters
+                // Check if remaining filters contain spatial functions
+                if (containsSpatialFunction(remainingExprs)) {
+                    val subBindings = materializeBindings(subResults)
+                    try {
+                        if (subBindings.isNotEmpty()) {
+                            val subjects = collectAllSubjects(subBindings)
+                            if (subjects.isNotEmpty()) {
+                                BoundsUtil.prefetchBounds(quadSet)
+                                BoundsUtil.prefetchSegmentBounds(quadSet)
+                            }
+                        }
+                        var filtered = subBindings
+                        for (expr in remainingExprs) {
+                            filtered = filtered.filter { binding ->
+                                try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                            }
+                        }
+                        val finalBindings = if (limit != NO_LIMIT) filtered.take(limit.toInt()) else filtered
+                        return bindingsToIterator(finalBindings)
+                    } finally {
+                        BoundsUtil.endPrefetch()
+                    }
+                }
+
+                // Apply remaining filters (no spatial functions)
                 var result = subResults
                 for (expr in remainingExprs) {
                     result = QueryIterFilterExpr(result, expr, execCxt)
@@ -1486,7 +1551,31 @@ class BatchingOpExecutor(
             // Execute BGP with equality filters pushed down as extra constant constraints
             val subResults = executeBGP(bgp.pattern, input, NO_LIMIT, filterRequiredVars, equalityFilters)
 
-            // Apply remaining filters that couldn't be pushed down
+            // Check if remaining filters contain spatial functions
+            if (containsSpatialFunction(trulyRemainingExprs)) {
+                val subBindings = materializeBindings(subResults)
+                try {
+                    if (subBindings.isNotEmpty()) {
+                        val subjects = collectAllSubjects(subBindings)
+                        if (subjects.isNotEmpty()) {
+                            BoundsUtil.prefetchBounds(quadSet)
+                            BoundsUtil.prefetchSegmentBounds(quadSet)
+                        }
+                    }
+                    var filtered = subBindings
+                    for (expr in trulyRemainingExprs) {
+                        filtered = filtered.filter { binding ->
+                            try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                        }
+                    }
+                    val finalBindings = if (limit != NO_LIMIT) filtered.take(limit.toInt()) else filtered
+                    return bindingsToIterator(finalBindings)
+                } finally {
+                    BoundsUtil.endPrefetch()
+                }
+            }
+
+            // Apply remaining filters that couldn't be pushed down (no spatial functions)
             var result = subResults
             for (expr in trulyRemainingExprs) {
                 result = QueryIterFilterExpr(result, expr, execCxt)
@@ -1504,7 +1593,31 @@ class BatchingOpExecutor(
         // No pushdown possible - use standard execution
         val subResults = execute(op.subOp, input, NO_LIMIT, filterRequiredVars)
 
-        // Apply each filter expression in sequence
+        // Check if filter expressions contain spatial functions
+        if (containsSpatialFunction(op.exprs)) {
+            val subBindings = materializeBindings(subResults)
+            try {
+                if (subBindings.isNotEmpty()) {
+                    val subjects = collectAllSubjects(subBindings)
+                    if (subjects.isNotEmpty()) {
+                        BoundsUtil.prefetchBounds(quadSet)
+                        BoundsUtil.prefetchSegmentBounds(quadSet)
+                    }
+                }
+                var filtered = subBindings
+                for (expr in op.exprs) {
+                    filtered = filtered.filter { binding ->
+                        try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                    }
+                }
+                val finalBindings = if (limit != NO_LIMIT) filtered.take(limit.toInt()) else filtered
+                return bindingsToIterator(finalBindings)
+            } finally {
+                BoundsUtil.endPrefetch()
+            }
+        }
+
+        // Apply each filter expression in sequence (no spatial functions)
         var result = subResults
         for (expr in op.exprs) {
             result = QueryIterFilterExpr(result, expr, execCxt)
@@ -1914,6 +2027,12 @@ class BatchingOpExecutor(
      * @param requiredVars Set of variables that are actually needed in the result (null means all)
      */
     private fun executeOrder(op: OpOrder, input: QueryIterator, limit: Long = NO_LIMIT, requiredVars: Set<Var>? = null): QueryIterator {
+        // Try to push ORDER BY + LIMIT into the QuadSet (e.g. SQL ORDER BY + LIMIT)
+        if (limit != NO_LIMIT) {
+            val pushed = tryPushOrderedFilter(op, input, limit, requiredVars)
+            if (pushed != null) return pushed
+        }
+
         // For ORDER BY, we need required vars plus any vars used in sort conditions
         val orderRequiredVars = if (requiredVars != null) {
             val sortVars = op.conditions.flatMap { it.expression.varsMentioned }.toSet()
@@ -1950,6 +2069,139 @@ class BatchingOpExecutor(
     }
 
     /**
+     * Attempt to push ORDER BY + LIMIT into [QuadSet.orderedFilter] for simple cases.
+     * Handles: single-pattern BGP where sort variables map directly to subject/object/predicate.
+     * Returns null when push-down is not possible (caller falls back to in-memory sort).
+     */
+    private fun tryPushOrderedFilter(op: OpOrder, input: QueryIterator, limit: Long, requiredVars: Set<Var>?): QueryIterator? {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        // Only push when there's a meaningful limit
+        if (limit <= 0 || limit > 100000) return null
+
+        // Input must be trivial (empty or single empty binding) — i.e., no outer variable bindings to join with
+        val inputBindings = materializeBindings(input)
+        if (inputBindings.size > 1) return null
+
+        // All sort conditions must be simple variable references (no expressions)
+        val sortKeys = mutableListOf<Pair<Var, Boolean>>()
+        for (condition in op.conditions) {
+            val expr = condition.expression
+            if (expr !is ExprVar) return null
+            sortKeys.add(expr.asVar() to (condition.getDirection() == Query.ORDER_ASCENDING))
+        }
+        if (sortKeys.isEmpty()) return null
+
+        // Sub-op must be a single BGP (no filters, joins, etc.)
+        val bgp = when (val subOp = op.subOp) {
+            is OpBGP -> subOp
+            else -> return null // e.g. OpFilter, OpJoin, etc.
+        }
+        val patterns: List<Triple> = bgp.pattern.getList()
+        if (patterns.isEmpty()) return null
+
+        // Map each sort variable to a unique QuadComponent within the BGP
+        val orderSpecs = mutableListOf<OrderSpec>()
+        for ((sortVar, ascending) in sortKeys) {
+            val v = Var.alloc(sortVar)
+            val component = findComponentInSinglePatternBGP(v, patterns) ?: return null
+            orderSpecs.add(OrderSpec(component, ascending))
+        }
+
+        // Extract constant (non-variable) filter values from the BGP patterns
+        var subjectFilter: MutableSet<QuadValue>? = null
+        var predicateFilter: MutableSet<QuadValue>? = null
+        var objectFilter: MutableSet<QuadValue>? = null
+
+        for (triple in patterns) {
+            if (!triple.subject.isVariable) {
+                val qv = toQuadValue(triple.subject) ?: return null
+                (subjectFilter ?: mutableSetOf<QuadValue>().also { subjectFilter = it }).add(qv)
+            }
+            if (!triple.predicate.isVariable) {
+                val qv = toQuadValue(triple.predicate) ?: return null
+                (predicateFilter ?: mutableSetOf<QuadValue>().also { predicateFilter = it }).add(qv)
+            }
+            if (!triple.`object`.isVariable) {
+                val qv = toQuadValue(triple.`object`) ?: return null
+                (objectFilter ?: mutableSetOf<QuadValue>().also { objectFilter = it }).add(qv)
+            }
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("ORDER BY push-down: limit=$limit, sort=$orderSpecs, subjects=$subjectFilter, predicates=$predicateFilter, objects=$objectFilter")
+        }
+
+        // Call orderedFilter
+        val result = quadSet.orderedFilter(
+            subjectFilter?.toList(),
+            predicateFilter?.toList(),
+            objectFilter?.toList(),
+            orderSpecs,
+            limit.toInt()
+        )
+
+        // Convert resulting quads back to Jena Bindings
+        val bindings = mutableListOf<Binding>()
+        val initialBinding = if (inputBindings.isNotEmpty()) inputBindings[0] else null
+
+        for (quad in result) {
+            val builder = if (initialBinding != null) BindingBuilder.create(initialBinding) else BindingBuilder.create()
+            for (triple in patterns) {
+                if (triple.subject.isVariable) {
+                    val v = Var.alloc(triple.subject)
+                    if (!builder.contains(v)) {
+                        builder.add(v, quadValueToNode(quad.subject))
+                    }
+                }
+                if (triple.predicate.isVariable) {
+                    val v = Var.alloc(triple.predicate)
+                    if (!builder.contains(v)) {
+                        builder.add(v, quadValueToNode(quad.predicate))
+                    }
+                }
+                if (triple.`object`.isVariable) {
+                    val v = Var.alloc(triple.`object`)
+                    if (!builder.contains(v)) {
+                        builder.add(v, quadValueToNode(quad.`object`))
+                    }
+                }
+            }
+            bindings.add(builder.build())
+        }
+
+        if (TIMING_ENABLED) {
+            logger.info("ORDER BY push-down complete: ${bindings.size} results in ${System.currentTimeMillis() - startTime}ms")
+        }
+
+        return bindingsToIterator(bindings)
+    }
+
+    /**
+     * For a single-pattern BGP or a multi-pattern BGP where the variable appears in only
+     * one position across all patterns, map [var_] to its [QuadComponent].
+     * Returns null if the variable is ambiguous (appears in different positions).
+     */
+    private fun findComponentInSinglePatternBGP(var_: Var, patterns: List<Triple>): QuadComponent? {
+        var component: QuadComponent? = null
+        for (triple in patterns) {
+            if (triple.subject.isVariable && Var.alloc(triple.subject) == var_) {
+                if (component != null && component != QuadComponent.SUBJECT) return null
+                component = QuadComponent.SUBJECT
+            }
+            if (triple.predicate.isVariable && Var.alloc(triple.predicate) == var_) {
+                if (component != null && component != QuadComponent.PREDICATE) return null
+                component = QuadComponent.PREDICATE
+            }
+            if (triple.`object`.isVariable && Var.alloc(triple.`object`) == var_) {
+                if (component != null && component != QuadComponent.OBJECT) return null
+                component = QuadComponent.OBJECT
+            }
+        }
+        return component
+    }
+
+    /**
      * Execute a group (GROUP BY) operation - delegate to default executor.
      */
     private fun executeGroup(op: OpGroup, input: QueryIterator): QueryIterator {
@@ -1970,6 +2222,31 @@ class BatchingOpExecutor(
             val exprVars = op.varExprList.exprs.values.flatMap { it.varsMentioned }.toSet()
             requiredVars + exprVars
         } else null
+
+        // Check if any BIND expressions contain spatial accessor functions
+        val hasSpatialExprs = op.varExprList.exprs.values.any { containsSpatialFunction(it) }
+
+        if (hasSpatialExprs) {
+            // Materialize input to prefetch bounds for all subjects at once
+            val allBindings = materializeBindings(input)
+            if (allBindings.isNotEmpty()) {
+                try {
+                    val subjects = collectAllSubjects(allBindings)
+                    if (subjects.isNotEmpty()) {
+                        BoundsUtil.prefetchBounds(quadSet)
+                        BoundsUtil.prefetchSegmentBounds(quadSet)
+                    }
+                    // Re-create iterator from materialized bindings for existing logic
+                    val subResults = execute(op.subOp, bindingsToIterator(allBindings), limit, extendRequiredVars)
+                    return QueryIterAssign(subResults, op.varExprList, execCxt, false)
+                } finally {
+                    BoundsUtil.endPrefetch()
+                }
+            }
+            // Empty input - just pass through
+            val subResults = execute(op.subOp, input, limit, extendRequiredVars)
+            return QueryIterAssign(subResults, op.varExprList, execCxt, false)
+        }
 
         // BIND preserves result count, so we can push the limit down
         val subResults = execute(op.subOp, input, limit, extendRequiredVars)

@@ -9,6 +9,7 @@ import org.megras.benchmark.performance.MegrasServerConfig
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.db.PostgresStore
+import org.megras.graphstore.db.dict.PostgresDictionary
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -532,6 +533,7 @@ class DynamicKnowledgeBenchmark {
      */
     private fun ingestTsv(tsvPath: String): Long {
         val store = PostgresStore(
+            PostgresDictionary(config.dbConnectionString, config.dbUser, config.dbPassword),
             host = config.dbConnectionString,
             user = config.dbUser,
             password = config.dbPassword

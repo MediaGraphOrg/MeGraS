@@ -3,6 +3,7 @@ package org.megras.benchmark.core
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.db.PostgresStore
+import org.megras.graphstore.db.dict.PostgresDictionary
 import java.io.File
 import java.sql.DriverManager
 
@@ -66,6 +67,7 @@ object DatabaseOperations {
      */
     fun createStore(config: DbConfig): PostgresStore {
         return PostgresStore(
+            PostgresDictionary(config.connectionString, config.user, config.password),
             host = config.connectionString,
             user = config.user,
             password = config.password

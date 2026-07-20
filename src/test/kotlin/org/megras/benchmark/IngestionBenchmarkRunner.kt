@@ -8,6 +8,7 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.db.PostgresStore
+import org.megras.graphstore.db.dict.PostgresDictionary
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -215,6 +216,7 @@ class IngestionBenchmarkRunner(private val config: IngestionBenchmarkConfig) {
 
     private fun createStore(): PostgresStore {
         return PostgresStore(
+            PostgresDictionary(config.dbConnectionString, config.dbUser, config.dbPassword),
             host = config.dbConnectionString,
             user = config.dbUser,
             password = config.dbPassword

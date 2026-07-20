@@ -185,3 +185,5 @@ config.json
 # Benchmark reports (all subdirectories)
 /benchmark_reports/
 
+
+.claude/settings.local.json.tmp.*

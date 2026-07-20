@@ -8,6 +8,7 @@ import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
+import org.megras.graphstore.db.dict.QuadValueDictionary
 import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 import java.io.Writer
@@ -37,8 +38,12 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 
-class PostgresStore(host: String = "localhost:5432/megras", user: String = "megras", password: String = "megras") :
-    AbstractDbStore() {
+class PostgresStore(
+    private val dictionary: QuadValueDictionary,
+    host: String = "localhost:5432/megras",
+    user: String = "megras",
+    password: String = "megras"
+) : AbstractDbStore() {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val TIMING_ENABLED get() = TimingConfig.enabled
@@ -68,34 +73,6 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
         val spIndex = index(false, sType, s, pType, p)
         val poIndex = index(false, pType, p, oType, o)
 
-    }
-
-    object StringLiteralTable : Table("literal_string") {
-        val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
-        val value: Column<String> = text("value")
-
-        override val primaryKey = PrimaryKey(id)
-    }
-
-    object DoubleLiteralTable : Table("literal_double") {
-        val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
-        val value: Column<Double> = double("value").uniqueIndex()
-
-        override val primaryKey = PrimaryKey(id)
-    }
-
-    object EntityPrefixTable : Table("entity_prefix") {
-        val id: Column<Int> = integer("id").autoIncrement().uniqueIndex()
-        val prefix: Column<String> = varchar("prefix", 255).uniqueIndex()
-
-        override val primaryKey = PrimaryKey(id)
-    }
-
-    object EntityTable : Table("entity") {
-        val id: Column<Long> = long("id").autoIncrement().uniqueIndex()
-        val value: Column<String> = text("value").uniqueIndex()
-
-        override val primaryKey = PrimaryKey(id)
     }
 
     object VectorTypesTable : Table("vector_types") {
@@ -142,70 +119,26 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
     }
 
     override fun setup() {
+        dictionary.setup()
         transaction {
-            SchemaUtils.create(QuadsTable, StringLiteralTable, DoubleLiteralTable, EntityPrefixTable, EntityTable, VectorTypesTable)
-            //TODO add this in a more idiomatic exposed way
-            exec("ALTER TABLE megras.literal_string ADD COLUMN IF NOT EXISTS ts tsvector GENERATED ALWAYS AS (to_tsvector('english', value)) STORED;")
-            exec("CREATE INDEX IF NOT EXISTS ts_idx ON megras.literal_string USING GIN (ts);")
+            SchemaUtils.create(QuadsTable, VectorTypesTable)
             exec("CREATE EXTENSION IF NOT EXISTS vector;")
         }
         // Ensure HNSW indexes exist on all vector tables for fast KNN queries
         ensureVectorIndexes()
     }
 
-    override fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
-        if (doubleValues.isEmpty()) return emptyMap()
-        val result = mutableMapOf<DoubleValue, QuadValueId>()
-        doubleValues.map { it.value }.chunked(10000).forEach { chunk ->
-            transaction {
-                DoubleLiteralTable.selectAll().where { DoubleLiteralTable.value inList chunk }
+    override fun lookUpDoubleValueIds(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> =
+        dictionary.lookUpDoubleValueIds(doubleValues)
 
-                    .forEach {
-                    result[DoubleValue(it[DoubleLiteralTable.value])] = (DOUBLE_LITERAL_TYPE to it[DoubleLiteralTable.id])
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> =
+        dictionary.lookUpStringValueIds(stringValues)
 
-    override fun lookUpStringValueIds(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> {
-        if (stringValues.isEmpty()) return emptyMap()
-        val result = mutableMapOf<StringValue, QuadValueId>()
-        stringValues.map { it.value }.chunked(10000).forEach { chunk ->
-            transaction {
-                StringLiteralTable.selectAll().where { StringLiteralTable.value inList chunk }.forEach {
-                    result[StringValue(it[StringLiteralTable.value])] = (STRING_LITERAL_TYPE to it[StringLiteralTable.id])
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpPrefixIds(prefixValues: Set<String>): Map<String, Int> =
+        dictionary.lookUpPrefixIds(prefixValues)
 
-    override fun lookUpPrefixIds(prefixValues: Set<String>): Map<String, Int> {
-        if (prefixValues.isEmpty()) return emptyMap()
-        val result = mutableMapOf<String, Int>()
-        prefixValues.chunked(10000).forEach { chunk ->
-            transaction {
-                EntityPrefixTable.selectAll().where { EntityPrefixTable.prefix inList chunk }.forEach {
-                    result[it[EntityPrefixTable.prefix]] = it[EntityPrefixTable.id]
-                }
-            }
-        }
-        return result
-    }
-
-    override fun lookUpSuffixIds(suffixValues: Set<String>): Map<String, Long> {
-        if (suffixValues.isEmpty()) return emptyMap()
-        val result = mutableMapOf<String, Long>()
-        suffixValues.chunked(10000).forEach { chunk ->
-            transaction {
-                EntityTable.selectAll().where { EntityTable.value inList chunk }.forEach {
-                    result[it[EntityTable.value]] = it[EntityTable.id]
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpSuffixIds(suffixValues: Set<String>): Map<String, Long> =
+        dictionary.lookUpSuffixIds(suffixValues)
 
     override fun lookUpVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
             if (vectorValues.isEmpty()) {
@@ -274,46 +207,17 @@ class PostgresStore(host: String = "localhost:5432/megras", user: String = "megr
             return returnMap
         }
 
-    override fun insertDoubleValues(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> {
-        val list = doubleValues.toList()
-        val results = transaction {
-            DoubleLiteralTable.batchInsert(list) {
-                this[DoubleLiteralTable.value] = it.value
-            }.map { DOUBLE_LITERAL_TYPE to it[DoubleLiteralTable.id] }
-        }
-        return list.zip(results).toMap()
-    }
+    override fun insertDoubleValues(doubleValues: Set<DoubleValue>): Map<DoubleValue, QuadValueId> =
+        dictionary.insertDoubleValues(doubleValues)
 
-    override fun insertStringValues(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> {
-        val list = stringValues.toList()
-        val results = transaction {
-            StringLiteralTable.batchInsert(list) {
-                this[StringLiteralTable.value] = it.value
-            }.map { STRING_LITERAL_TYPE to it[StringLiteralTable.id] }
+    override fun insertStringValues(stringValues: Set<StringValue>): Map<StringValue, QuadValueId> =
+        dictionary.insertStringValues(stringValues)
 
-        }
-        return list.zip(results).toMap()
-    }
+    override fun insertPrefixValues(prefixValues: Set<String>): Map<String, Int> =
+        dictionary.insertPrefixValues(prefixValues)
 
-    override fun insertPrefixValues(prefixValues: Set<String>): Map<String, Int> {
-        val list = prefixValues.toList()
-        val results = transaction {
-            EntityPrefixTable.batchInsert(list) {
-                this[EntityPrefixTable.prefix] = it
-            }.map { it[EntityPrefixTable.id] }
-        }
-        return list.zip(results).toMap()
-    }
-
-    override fun insertSuffixValues(suffixValues: Set<String>): Map<String, Long> {
-        val list = suffixValues.toList()
-        val results = transaction {
-            EntityTable.batchInsert(list) {
-                this[EntityTable.value] = it
-            }.map { it[EntityTable.id] }
-        }
-        return list.zip(results).toMap()
-    }
+    override fun insertSuffixValues(suffixValues: Set<String>): Map<String, Long> =
+        dictionary.insertSuffixValues(suffixValues)
 
 override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorValue, QuadValueId> {
     val maps = vectorValues.groupBy { it.type to it.length }.map { (properties, v) ->
@@ -349,7 +253,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                     }
                 }.single()[vectorTable.id]
 
-                val qvid = QuadValueId(vectorTable.typeId, id)
+                val qvid = QuadValueId(-vectorTable.typeId + VECTOR_ID_OFFSET, id)
 
                 vec to qvid
 
@@ -470,31 +374,11 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
     }
 
-    override fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue> {
-        if (ids.isEmpty()) return emptyMap()
-        val result = mutableMapOf<QuadValueId, DoubleValue>()
-        ids.chunked(10000).forEach { chunk ->
-            transaction {
-                DoubleLiteralTable.selectAll().where { DoubleLiteralTable.id inList chunk }.forEach {
-                    result[(DOUBLE_LITERAL_TYPE to it[DoubleLiteralTable.id])] = DoubleValue(it[DoubleLiteralTable.value])
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpDoubleValues(ids: Set<Long>): Map<QuadValueId, DoubleValue> =
+        dictionary.lookUpDoubleValues(ids)
 
-    override fun lookUpStringValues(ids: Set<Long>): Map<QuadValueId, StringValue> {
-        if (ids.isEmpty()) return emptyMap()
-        val result = mutableMapOf<QuadValueId, StringValue>()
-        ids.chunked(10000).forEach { chunk ->
-            transaction {
-                StringLiteralTable.selectAll().where { StringLiteralTable.id inList chunk }.forEach {
-                    result[(STRING_LITERAL_TYPE to it[StringLiteralTable.id])] = StringValue(it[StringLiteralTable.value])
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpStringValues(ids: Set<Long>): Map<QuadValueId, StringValue> =
+        dictionary.lookUpStringValues(ids)
 
     override fun lookUpVectorValues(ids: Set<QuadValueId>): Map<QuadValueId, VectorValue> {
         if (ids.isEmpty()) {
@@ -570,31 +454,11 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
     }
 
-    override fun lookUpPrefixes(ids: Set<Int>): Map<Int, String> {
-        if (ids.isEmpty()) return emptyMap()
-        val result = mutableMapOf<Int, String>()
-        ids.chunked(10000).forEach { chunk ->
-            transaction {
-                EntityPrefixTable.selectAll().where { EntityPrefixTable.id inList chunk }.forEach {
-                    result[it[EntityPrefixTable.id]] = it[EntityPrefixTable.prefix]
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpPrefixes(ids: Set<Int>): Map<Int, String> =
+        dictionary.lookUpPrefixes(ids)
 
-    override fun lookUpSuffixes(ids: Set<Long>): Map<Long, String> {
-        if (ids.isEmpty()) return emptyMap()
-        val result = mutableMapOf<Long, String>()
-        ids.chunked(10000).forEach { chunk ->
-            transaction {
-                EntityTable.selectAll().where { EntityTable.id inList chunk }.forEach {
-                    result[it[EntityTable.id]] = it[EntityTable.value]
-                }
-            }
-        }
-        return result
-    }
+    override fun lookUpSuffixes(ids: Set<Long>): Map<Long, String> =
+        dictionary.lookUpSuffixes(ids)
 
     override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long {
         return transaction {
@@ -1232,16 +1096,6 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     }
 
 
-    private class FullTextSearch(
-        private val q: String,
-    ) : Op<Boolean>() {
-        override fun toQueryBuilder(queryBuilder: QueryBuilder): Unit = queryBuilder.run {
-            append("ts @@ phraseto_tsquery('english', ")
-            append(stringLiteral(q))
-            append(")")
-        }
-    }
-
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet {
         val predicatePair = getQuadValueId(predicate)
 
@@ -1249,9 +1103,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             return BasicQuadSet()
         }
 
-       val textIds = transaction {
-           StringLiteralTable.select(StringLiteralTable.id).where(FullTextSearch(objectFilterText)).map { it[StringLiteralTable.id] }
-       }
+       val textIds = dictionary.lookUpStringValueIdsByText(objectFilterText)
 
         val quadIds = mutableListOf<Long>()
         textIds.chunked(10000).forEach { chunk ->

@@ -97,16 +97,16 @@ class ClusterParityTest {
     private val queryVec = QuadValue.of(floatArrayOf(0.9f, 0.1f, 0f)) as VectorValue
 
     private val corpus: List<Quad> = listOf(
-        Quad(null, s1, p1, ou1),
-        Quad(null, s1, p2, ou2),
-        Quad(null, s2, p1, ou3),
-        Quad(null, s2, p2, org.megras.data.graph.DoubleValue(1.5)),
-        Quad(null, sl, p1, org.megras.data.graph.StringValue("str-x")),
-        Quad(null, s1, ps, org.megras.data.graph.StringValue("alpha bravo")),
-        Quad(null, s2, ps, org.megras.data.graph.StringValue("bravo charlie")),
-        Quad(null, s1, pv, vec1),
-        Quad(null, s2, pv, vec1),
-        Quad(null, s1, pv, vec2),
+        Quad( s1, p1, ou1),
+        Quad( s1, p2, ou2),
+        Quad( s2, p1, ou3),
+        Quad( s2, p2, org.megras.data.graph.DoubleValue(1.5)),
+        Quad( sl, p1, org.megras.data.graph.StringValue("str-x")),
+        Quad( s1, ps, org.megras.data.graph.StringValue("alpha bravo")),
+        Quad( s2, ps, org.megras.data.graph.StringValue("bravo charlie")),
+        Quad( s1, pv, vec1),
+        Quad( s2, pv, vec1),
+        Quad( s1, pv, vec2),
     )
 
     private fun norm(qs: org.megras.graphstore.QuadSet): Set<Triple<QuadValue, QuadValue, QuadValue>> =

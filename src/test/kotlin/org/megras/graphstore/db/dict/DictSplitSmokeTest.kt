@@ -40,8 +40,8 @@ class DictSplitSmokeTest {
         val strPred = org.megras.data.graph.QuadValue.of("http://ex/strp")
         val obj = org.megras.data.graph.QuadValue.of("http://ex/o1")
 
-        s.add(Quad(null, subj, pred, obj))
-        s.add(Quad(null, subj, strPred, StringValue("alpha bravo charlie")))
+        s.add(Quad( subj, pred, obj))
+        s.add(Quad( subj, strPred, StringValue("alpha bravo charlie")))
 
         // filterSubject path resolves scalar IDs through the dict
         val got = s.filterSubject(subj).toList()

@@ -28,6 +28,7 @@ object RestApi {
         val objectPreviewRequestHandler = ObjectPreviewRequestHandler(quadSet, objectStore)
         val addFileRequestHandler = AddFileRequestHandler(quadSet, objectStore)
         val addQuadRequestHandler = AddQuadRequestHandler(quadSet)
+        val quadByIdRequestHandler = QuadByIdRequestHandler(quadSet)
         val basicQueryHandler = BasicQueryHandler(quadSet)
         val textQueryHandler = TextQueryHandler(quadSet)
         val subjectQueryHandler = SubjectQueryHandler(quadSet)
@@ -65,6 +66,7 @@ object RestApi {
 
             it.router.apiBuilder {
                 get("/", rootPageHandler::get)
+                get("/quad/{id}", quadByIdRequestHandler::get)
                 get("/raw/{objectId}", rawObjectRequestHandler::get)
                 get("/<objectId>/about", aboutObjectRequestHandler::get)
                 get("/<objectId>/preview", objectPreviewRequestHandler::get)

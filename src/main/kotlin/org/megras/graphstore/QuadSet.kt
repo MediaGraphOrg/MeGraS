@@ -5,20 +5,19 @@ import org.megras.data.graph.LongValue
 import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.SemanticId
 
 interface QuadSet : Set<Quad> {
 
     /**
-     * returns the [Quad] with the specified id in case it is contained within the [QuadSet]
-     *
-     * TODO(quad-semantic-id-redesign): this takes an internal storage pointer
-     * (per-store autoincrement Long), which is meaningless across shards and
-     * not a stable semantic identifier. The planned rework replaces it with
-     * retrieval by a content-hash semantic id (requiring a reverse index), or
-     * removes it in favour of value-level filtering. Distributed backends may
-     * mark this unsupported until then.
+     * Returns the [Quad] whose semantic id (content hash of (s,p,o), accessed
+     * via [org.megras.id.id]) equals [id], or null if no such quad is in this
+     * set. The id is storage-independent; backends satisfy this from a
+     * reverse index keyed on the semantic id. Distributed backends broadcast
+     * (the id is content-based, so at most one distinct quad matches across
+     * shards).
      */
-    fun getId(id: Long): Quad?
+    fun getId(id: SemanticId): Quad?
 
     /**
      * returns a [QuadSet] only containing the [Quad]s with a specified subject

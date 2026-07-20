@@ -3,6 +3,7 @@ package org.megras.graphstore.db.shard
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -12,6 +13,7 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.id
 import org.megras.graphstore.Distance
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.db.ClusterQuadSet
@@ -133,16 +135,16 @@ class SplitRoutingParityTest {
     private val queryVec = QuadValue.of(floatArrayOf(0.9f, 0.1f, 0f)) as VectorValue
 
     private val corpus: List<Quad> = listOf(
-        Quad(null, s1, p1, ou1),
-        Quad(null, s1, p2, ou2),
-        Quad(null, s2, p1, ou3),
-        Quad(null, s2, p2, doub),
-        Quad(null, sl, p1, strx),
-        Quad(null, s1, ps, stra),
-        Quad(null, s2, ps, strb),
-        Quad(null, s1, pv, vec1),
-        Quad(null, s2, pv, vec1),
-        Quad(null, s1, pv, vec2),
+        Quad( s1, p1, ou1),
+        Quad( s1, p2, ou2),
+        Quad( s2, p1, ou3),
+        Quad( s2, p2, doub),
+        Quad( sl, p1, strx),
+        Quad( s1, ps, stra),
+        Quad( s2, ps, strb),
+        Quad( s1, pv, vec1),
+        Quad( s2, pv, vec1),
+        Quad( s1, pv, vec2),
     )
 
     // ---- ground-truth oracle ----------------------------------------------
@@ -303,5 +305,26 @@ class SplitRoutingParityTest {
         // boundary falls BETWEEN tied rows, so which subject survives is
         // tie-break-dependent and has no deterministic oracle -- the same
         // limitation ClusterParityTest documents. Boundary-safe k only.
+    }
+
+    @Test
+    fun getIdRecoversStoredQuadsAcrossBroadcast() {
+        val store = clusterStore()
+        corpus.forEach { store.add(it) }
+        // Each stored quad's semantic id must resolve back to that quad.
+        // getId broadcasts across all shards and reverse-resolves through the
+        // central dict (scalars) / owning shard (vectors); a content id carries
+        // no placement hint, so this exercises the broadcast path irrespective
+        // of which shard a quad's terms landed on (incl. vector-quads routed to
+        // the corpus owner, which live on a shard distinct from the subject's
+        // hash shard).
+        for (q in corpus) {
+            val recovered = store.getId(q.id)
+            assertEquals(q, recovered, "getId did not recover $q by its semantic id")
+        }
+        // An id synthesized from terms never stored together must miss: the
+        // broadcast visits every shard and finds nothing.
+        val absent = Quad(s2, p2, QuadValue.of(floatArrayOf(0.5f, 0.5f, 0f)))
+        assertNull(store.getId(absent.id), "getId must return null for an unstored quad's id")
     }
 }

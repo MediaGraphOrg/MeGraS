@@ -5,6 +5,7 @@ import org.megras.data.graph.Quad
 import org.megras.data.graph.QuadValue
 import org.megras.data.graph.URIValue
 import org.megras.data.graph.VectorValue
+import org.megras.id.SemanticId
 import java.io.Serializable
 import kotlin.math.min
 
@@ -19,7 +20,8 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
 
 
 
-    override fun getId(id: Long): Quad? = quads.getId(id)
+
+    override fun getId(id: SemanticId): Quad? = quads.getId(id)
 
     override fun filterSubject(subject: QuadValue): QuadSet = BasicMutableQuadSet(sIndex[subject] ?: emptyList())
 

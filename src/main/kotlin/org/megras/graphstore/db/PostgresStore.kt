@@ -9,6 +9,7 @@ import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.db.dict.QuadValueDictionary
+import org.megras.id.SemanticId
 import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
 import java.io.Writer
@@ -63,6 +64,7 @@ class PostgresStore(
         val oType: Column<Int> = integer("o_type").index()
         val o: Column<Long> = long("o").index()
         val hash: Column<String> = varchar("hash", 48).uniqueIndex()
+        val semid: Column<String> = varchar("semid", 64).uniqueIndex()
 
         override val primaryKey = PrimaryKey(id)
 
@@ -460,7 +462,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     override fun lookUpSuffixes(ids: Set<Long>): Map<Long, String> =
         dictionary.lookUpSuffixes(ids)
 
-    override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId): Long {
+    override fun insert(s: QuadValueId, p: QuadValueId, o: QuadValueId, semidStr: String): Long {
         return transaction {
             QuadsTable.insert {
                 it[sType] = s.first
@@ -470,7 +472,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                 it[oType] = o.first
                 it[this.o] = o.second
                 it[hash] = quadHash(s.first, s.second, p.first, p.second, o.first, o.second)
-
+                it[semid] = semidStr
             }[QuadsTable.id]
         }
     }
@@ -483,24 +485,21 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         }
     }
 
-    override fun getId(id: Long): Quad? {
-        val quadIds = transaction {
-            QuadsTable.selectAll().where { QuadsTable.id eq id }.firstOrNull()?.let {
-                listOf(
-                    it[QuadsTable.sType] to it[QuadsTable.s],
-                    it[QuadsTable.pType] to it[QuadsTable.p],
-                    it[QuadsTable.oType] to it[QuadsTable.o]
-                )
-            }
+    override fun getId(id: SemanticId): Quad? {
+        val semidStr = id.toString()
+        val tup = transaction {
+            QuadsTable.select(QuadsTable.sType, QuadsTable.s, QuadsTable.pType, QuadsTable.p, QuadsTable.oType, QuadsTable.o)
+                .where { QuadsTable.semid eq semidStr }
+                .firstOrNull()
         } ?: return null
-
-        val values = getQuadValues(quadIds)
-
-        val s = values[quadIds[0]] ?: return null
-        val p = values[quadIds[1]] ?: return null
-        val o = values[quadIds[2]] ?: return null
-
-        return Quad(id, s, p, o)
+        val sv = tup[QuadsTable.sType] to tup[QuadsTable.s]
+        val pv = tup[QuadsTable.pType] to tup[QuadsTable.p]
+        val ov = tup[QuadsTable.oType] to tup[QuadsTable.o]
+        val values = getQuadValues(listOf(sv, pv, ov))
+        val s = values[sv] ?: return null
+        val p = values[pv] ?: return null
+        val o = values[ov] ?: return null
+        return Quad(s, p, o)
     }
 
     private val idCache = CacheBuilder.newBuilder().maximumSize(cacheSize).build<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>()
@@ -560,7 +559,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                 val o = quadValues[it.second.third]
 
                 if (s != null && p != null && o != null) {
-                    Quad(it.first, s, p, o)
+                    Quad(s, p, o)
                 } else {
                     null
                 }

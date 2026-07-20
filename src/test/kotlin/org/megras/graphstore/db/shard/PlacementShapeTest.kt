@@ -126,11 +126,11 @@ class PlacementShapeTest {
     private val uniformMinFraction = 0.40
 
     private fun uniformCorpus(n: Int): List<Quad> =
-        (0 until n).map { Quad(null, QuadValue.of("http://ex/$it"), pred, obj) }
+        (0 until n).map { Quad( QuadValue.of("http://ex/$it"), pred, obj) }
 
     private fun prefixCorpus(m: Int): List<Quad> =
         (0 until prefixCount).flatMap { p ->
-            (0 until m).map { s -> Quad(null, QuadValue.of("http://host$p/x$s"), pred, obj) }
+            (0 until m).map { s -> Quad( QuadValue.of("http://host$p/x$s"), pred, obj) }
         }
 
     @BeforeEach

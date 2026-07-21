@@ -71,5 +71,6 @@ class SemanticId(private val multihash: ByteArray) : Serializable {
 
     override fun hashCode(): Int = multihash.contentHashCode()
 
-    override fun toString(): String = multihash.toBase64()
+    private val _str: String = multihash.toBase64()
+    override fun toString(): String = _str
 }

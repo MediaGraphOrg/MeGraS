@@ -21,14 +21,14 @@ import org.apache.jena.sparql.path.P_Link
 import org.apache.jena.sparql.path.P_Seq
 import org.apache.jena.sparql.path.Path
 import org.megras.data.graph.Quad
-import org.megras.data.graph.StringValue
 import org.megras.data.graph.QuadValue
+import org.megras.data.graph.StringValue
 import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.OrderSpec
 import org.megras.graphstore.QuadComponent
 import org.megras.graphstore.QuadSet
+import org.megras.lang.sparql.SparqlUtil.toNode
 import org.megras.lang.sparql.SparqlUtil.toQuadValue
-import org.megras.lang.sparql.SparqlUtil.toTriple
 import org.megras.segmentation.BoundsUtil
 import org.megras.util.Constants
 import org.megras.util.TimingConfig
@@ -984,12 +984,12 @@ class BatchingOpExecutor(
     }
 
     /**
-     * Convert a QuadValue to a Jena Node.
+     * Convert a QuadValue to a Jena Node directly, avoiding intermediate Quad/Triple allocation.
+     * Delegates to SparqlUtil.toNode() which correctly handles all QuadValue subtypes
+     * including typed literals (Double, Long, Temporal, Vector).
      */
-    private fun quadValueToNode(value: QuadValue): Node {
-        // Create a dummy quad to use the existing toTriple conversion
-        val dummyQuad = Quad(value, value, value)
-        return toTriple(dummyQuad).subject
+    private fun quadValueToNode(quadValue: QuadValue): Node {
+        return toNode(quadValue)
     }
 
     /**
@@ -2790,9 +2790,7 @@ class BatchingOpExecutor(
         if (bindings.isEmpty()) {
             return QueryIterNullIterator.create(execCxt)
         }
-        // Use a copy of the list to ensure the iterator can be traversed multiple times if needed
-        val bindingsList = ArrayList(bindings)
-        return QueryIterPlainWrapper.create(bindingsList.iterator(), execCxt)
+        return QueryIterPlainWrapper.create(bindings.iterator(), execCxt)
     }
 }
 

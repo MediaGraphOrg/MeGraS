@@ -1305,13 +1305,14 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
     }
 
     override val size: Int
-        get() {
-            return transaction {
-                QuadsTable.selectAll().count().toInt()
-            }
+        get() = transaction {
+            exec("SELECT COUNT(*)::int FROM quads") { rs ->
+                rs.next()
+                rs.getInt(1)
+            } ?: 0
         }
 
-    override fun isEmpty(): Boolean = this.size > 0
+    override fun isEmpty(): Boolean = this.size == 0
 
     override fun iterator(): MutableIterator<Quad> {
         //FIXME this is not efficient, but improving is a a lot of work

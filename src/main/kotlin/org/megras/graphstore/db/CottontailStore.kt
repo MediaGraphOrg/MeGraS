@@ -1512,7 +1512,14 @@ class CottontailStore(host: String = "localhost", port: Int = 1865) : AbstractDb
     }
 
     override val size: Int
-        get() = 0 //TODO
+        get() {
+            val result = client.query(Query("megras.quads").count())
+            return if (result.hasNext()) {
+                result.next().asLong(0)?.toInt() ?: 0
+            } else {
+                0
+            }
+        }
 
 
     override fun isEmpty(): Boolean = this.size == 0

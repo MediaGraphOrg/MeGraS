@@ -9,6 +9,7 @@ import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.SemanticId
+import java.util.concurrent.ConcurrentHashMap
 
 class ImplicitRelationMutableQuadSet(
     private val base: MutableQuadSet,
@@ -18,7 +19,7 @@ class ImplicitRelationMutableQuadSet(
 
     private val handlers = handlerList.associateBy { it.predicate }
     private val regexHandlers = regexHandlerList.toList()
-    private val dynamicHandlerCache = mutableMapOf<String, ImplicitRelationHandler>()
+    private val dynamicHandlerCache = ConcurrentHashMap<String, ImplicitRelationHandler>()
 
     init {
         handlers.values.forEach { it.init(this) }

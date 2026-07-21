@@ -207,7 +207,7 @@ object SparqlUtil {
     )
 
 
-    private fun toNode(value: QuadValue, property: Boolean = false): Node = when (value) {
+    internal fun toNode(value: QuadValue, property: Boolean = false): Node = when (value) {
         is LocalQuadValue -> if (property) {
             model.createProperty(value.value)
         } else model.createResource(value.value)

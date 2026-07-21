@@ -16,11 +16,10 @@ open class LocalQuadValue(public override val uri: String, infix: String = "") :
             }
         }
 
-        private val config: Config
-            get() = Config()
-
-        val defaultPrefix: String
-            get() = "http://${config.hostName}:${config.httpPort}/"
+        val defaultPrefix: String = run {
+            val config = Config()
+            "http://${config.hostName}:${config.httpPort}/"
+        }
     }
 
 

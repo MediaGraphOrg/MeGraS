@@ -166,20 +166,18 @@ open class URIValue(private val prefix: String?, protected open val uri: String)
     private constructor(pair: Pair<String, String>) : this(pair.first, pair.second)
     constructor(uri: String) : this(estimatePrefix(uri))
 
-    val value: String
-        get() = "${prefix}${uri}"
+    val value: String by lazy { "${prefix}${uri}" }
 
-    override fun toString() = "<$value>"
+    private val _toString: String by lazy { "<$value>" }
+    override fun toString(): String = _toString
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as URIValue
-
-        return other.toString() == toString()
+        if (other !is URIValue) return false
+        return prefix == other.prefix && uri == other.uri
     }
 
-    override fun hashCode(): Int = toString().hashCode()
+    override fun hashCode(): Int = 31 * prefix.hashCode() + uri.hashCode()
 
     open fun prefix(): String = prefix ?: ""
     open fun suffix(): String = uri

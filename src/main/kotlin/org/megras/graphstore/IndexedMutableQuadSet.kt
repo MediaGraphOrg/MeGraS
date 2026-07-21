@@ -127,7 +127,6 @@ class IndexedMutableQuadSet : MutableQuadSet, Serializable {
             elements.groupBy { it.subject }.forEach { (qv, q) -> if(qv is URIValue) sIndex.putAll(qv, q) }
             elements.groupBy { it.predicate }.forEach { (qv, q) -> if(qv is URIValue) pIndex.putAll(qv, q) }
             elements.groupBy { it.`object` }.forEach { (qv, q) -> oIndex.putAll(qv, q) }
-            System.gc()
             return true
         }
         return false

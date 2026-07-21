@@ -35,10 +35,15 @@ open class BasicQuadSet(private val quads: Set<Quad>) : QuadSet, Set<Quad> by qu
             return BasicQuadSet(setOf())
         }
 
+        // Convert to HashSet for O(1) contains() lookups instead of O(N) Collection.contains()
+        val subjectSet = subjects?.toHashSet()
+        val predicateSet = predicates?.toHashSet()
+        val objectSet = objects?.toHashSet()
+
         return BasicQuadSet(quads.filter {
-            subjects?.contains(it.subject) != false &&
-                    predicates?.contains(it.predicate) != false &&
-                    objects?.contains(it.`object`) != false
+            subjectSet?.contains(it.subject) != false &&
+                    predicateSet?.contains(it.predicate) != false &&
+                    objectSet?.contains(it.`object`) != false
 
         }.toSet())
     }

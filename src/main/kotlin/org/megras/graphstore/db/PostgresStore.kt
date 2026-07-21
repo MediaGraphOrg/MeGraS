@@ -7,6 +7,8 @@ import org.megras.data.graph.*
 import org.megras.graphstore.BasicQuadSet
 import org.megras.graphstore.Distance
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.OrderSpec
+import org.megras.graphstore.QuadComponent
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.db.dict.QuadValueDictionary
 import org.megras.id.SemanticId
@@ -1091,6 +1093,119 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
 
         val result = getIds(finalSeptuples)
         if (TIMING_ENABLED) logger.info("PostgresStore.filterNotIn: Returning ${result.size} quads in ${System.currentTimeMillis() - startTime}ms")
+        return result
+    }
+
+    override fun orderedFilter(
+        subjects: Collection<QuadValue>?,
+        predicates: Collection<QuadValue>?,
+        objects: Collection<QuadValue>?,
+        orderBy: List<OrderSpec>,
+        limit: Int,
+        offset: Int
+    ): QuadSet {
+        // Trivial: no sort keys — delegate to filter() which already has SQL push-down
+        if (orderBy.isEmpty() || limit <= 0) return BasicQuadSet()
+
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        // 1. Resolve filter values to (typeId, longId) pairs
+        val allFilterValues = (subjects?.toSet() ?: emptySet()) +
+                (predicates?.toSet() ?: emptySet()) +
+                (objects?.toSet() ?: emptySet())
+        val filterIds = getOrAddQuadValueIds(allFilterValues, false)
+
+        val subjectFilterIds = subjects?.mapNotNull { filterIds[it] }
+        val predicateFilterIds = predicates?.mapNotNull { filterIds[it] }
+        val objectFilterIds = objects?.mapNotNull { filterIds[it] }
+
+        if ((subjects != null && subjectFilterIds!!.isEmpty()) ||
+            (predicates != null && predicateFilterIds!!.isEmpty()) ||
+            (objects != null && objectFilterIds!!.isEmpty())
+        ) {
+            if (TIMING_ENABLED) logger.info("PostgresStore.orderedFilter: Empty filter, returning empty in ${System.currentTimeMillis() - startTime}ms")
+            return BasicQuadSet()
+        }
+
+        // 2. Build SQL with LEFT JOINs for sort-by-object
+        val sqlBuilder = StringBuilder()
+        sqlBuilder.append("SELECT q.id, q.s_type, q.s, q.p_type, q.p, q.o_type, q.o FROM quads q")
+
+        val needsObjectSort = orderBy.any { it.component == QuadComponent.OBJECT }
+        if (needsObjectSort) {
+            sqlBuilder.append(" LEFT JOIN literal_double ld ON q.o = ld.id AND q.o_type = $DOUBLE_LITERAL_TYPE")
+            sqlBuilder.append(" LEFT JOIN literal_string ls ON q.o = ls.id AND q.o_type = $STRING_LITERAL_TYPE")
+        }
+
+        // 3. Build WHERE clause using same logic as filter()
+        val conditions = mutableListOf<String>()
+        if (subjectFilterIds != null) {
+            val orChain = subjectFilterIds.joinToString(" OR ") { "(q.s_type = ${it.first} AND q.s = ${it.second})" }
+            conditions.add("($orChain)")
+        }
+        if (predicateFilterIds != null) {
+            val orChain = predicateFilterIds.joinToString(" OR ") { "(q.p_type = ${it.first} AND q.p = ${it.second})" }
+            conditions.add("($orChain)")
+        }
+        if (objectFilterIds != null) {
+            val orChain = objectFilterIds.joinToString(" OR ") { "(q.o_type = ${it.first} AND q.o = ${it.second})" }
+            conditions.add("($orChain)")
+        }
+        if (conditions.isNotEmpty()) {
+            sqlBuilder.append(" WHERE ")
+            sqlBuilder.append(conditions.joinToString(" AND "))
+        }
+
+        // 4. Build ORDER BY
+        val orderClauses = orderBy.map { spec ->
+            val sortExpr = when (spec.component) {
+                QuadComponent.SUBJECT -> "(q.s_type, q.s)"
+                QuadComponent.PREDICATE -> "(q.p_type, q.p)"
+                QuadComponent.OBJECT ->
+                    "COALESCE(ld.value::TEXT, ls.value, q.o::TEXT)"
+            }
+            val direction = if (spec.ascending) "ASC" else "DESC"
+            "$sortExpr $direction"
+        }
+        sqlBuilder.append(" ORDER BY ${orderClauses.joinToString(", ")}")
+
+        // 5. LIMIT + OFFSET
+        if (limit < Int.MAX_VALUE) {
+            sqlBuilder.append(" LIMIT $limit")
+        }
+        if (offset > 0) {
+            sqlBuilder.append(" OFFSET $offset")
+        }
+
+        val sql = sqlBuilder.toString()
+
+        // 6. Execute and collect results
+        val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+
+        transaction {
+            exec(sql) { rs ->
+                while (rs.next()) {
+                    val id = rs.getLong("id")
+                    val sType = rs.getInt("s_type")
+                    val s = rs.getLong("s")
+                    val pType = rs.getInt("p_type")
+                    val p = rs.getLong("p")
+                    val oType = rs.getInt("o_type")
+                    val o = rs.getLong("o")
+
+                    finalSeptuples.add(
+                        id to Triple(
+                            (sType to s),
+                            (pType to p),
+                            (oType to o)
+                        )
+                    )
+                }
+            }
+        }
+
+        val result = getIds(finalSeptuples)
+        if (TIMING_ENABLED) logger.info("PostgresStore.orderedFilter: Returning ${result.size} quads in ${System.currentTimeMillis() - startTime}ms")
         return result
     }
 

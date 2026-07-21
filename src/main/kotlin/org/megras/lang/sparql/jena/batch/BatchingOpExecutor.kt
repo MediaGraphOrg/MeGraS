@@ -1297,6 +1297,136 @@ class BatchingOpExecutor(
     }
 
     /**
+     * Detected numeric range filter on a single variable, extracted from
+     * `FILTER(?x > 5)`, `FILTER(?x >= 3 && ?x < 10)`, etc.
+     *
+     * [minValue]/[maxValue] may each be null for an unbounded side.
+     * [minInclusive]/[maxInclusive] indicate whether the boundary is `>=`/`<=`
+     * vs `>` / `<`.  `filterRange` uses inclusive bounds, so callers adjust
+     * exclusive boundaries by adding/subtracting an epsilon.
+     */
+    private data class RangeFilterInfo(
+        val variable: Var,
+        val minValue: Double?,
+        val maxValue: Double?,
+        val minInclusive: Boolean,
+        val maxInclusive: Boolean,
+        val originalExprs: List<Expr>
+    )
+
+    /**
+     * Try to extract a numeric range constraint from a single comparison expression.
+     * Handles: `?x > v`, `?x >= v`, `?x < v`, `?x <= v` (and reversed operand order).
+     */
+    private fun tryExtractSingleRange(expr: Expr): RangeFilterInfo? {
+        val (comparator, arg1, arg2) = when (expr) {
+            is E_GreaterThan -> Triple(">", expr.arg1, expr.arg2)
+            is E_GreaterThanOrEqual -> Triple(">=", expr.arg1, expr.arg2)
+            is E_LessThan -> Triple("<", expr.arg1, expr.arg2)
+            is E_LessThanOrEqual -> Triple("<=", expr.arg1, expr.arg2)
+            else -> return null
+        }
+
+        // Determine which side is the variable and which is the constant
+        val varExpr: ExprVar
+        val constExpr: Expr
+        if (arg1 is ExprVar && arg2 is NodeValue) {
+            varExpr = arg1
+            constExpr = arg2
+        } else if (arg2 is ExprVar && arg1 is NodeValue) {
+            varExpr = arg2
+            constExpr = arg1
+        } else {
+            return null
+        }
+
+        val variable = varExpr.asVar()
+        val value = try {
+            (constExpr as NodeValue).getDouble()
+        } catch (_: Exception) {
+            return null
+        }
+
+        val inclusive = comparator.contains('=')
+
+        return when (comparator) {
+            ">", ">=" -> RangeFilterInfo(variable, value, null, inclusive, true, listOf(expr))
+            "<", "<=" -> RangeFilterInfo(variable, null, value, true, inclusive, listOf(expr))
+            else -> null
+        }
+    }
+
+    /**
+     * Try to extract a numeric range constraint from a set of filter expressions.
+     * Handles both single comparisons and `E_LogicalAnd` chains on the same variable,
+     * e.g. `FILTER(?x >= 3 && ?x < 10)`.
+     */
+    private fun tryExtractRangeFilterFromExprs(exprs: List<Expr>): RangeFilterInfo? {
+        // First try to find a logical AND of range expressions
+        for (expr in exprs) {
+            if (expr is E_LogicalAnd) {
+                val left = tryExtractSingleRange(expr.arg1)
+                val right = tryExtractSingleRange(expr.arg2)
+                if (left != null && right != null && left.variable == right.variable) {
+                    // Merge the two ranges
+                    val minVal = mergeMinValue(left.minValue, left.minInclusive, right.minValue, right.minInclusive)
+                    val maxVal = mergeMaxValue(left.maxValue, left.maxInclusive, right.maxValue, right.maxInclusive)
+                    return RangeFilterInfo(
+                        variable = left.variable,
+                        minValue = minVal.first,
+                        maxValue = maxVal.first,
+                        minInclusive = minVal.second,
+                        maxInclusive = maxVal.second,
+                        originalExprs = listOf(expr)
+                    )
+                }
+            }
+        }
+
+        // Try single range expressions
+        for (expr in exprs) {
+            val range = tryExtractSingleRange(expr)
+            if (range != null) return range
+        }
+
+        return null
+    }
+
+    /**
+     * Merge two min bounds: pick the larger (more restrictive) one.
+     * Returns (value, inclusive).
+     */
+    private fun mergeMinValue(
+        a: Double?, aInc: Boolean,
+        b: Double?, bInc: Boolean
+    ): Pair<Double?, Boolean> {
+        if (a == null) return b to bInc
+        if (b == null) return a to aInc
+        return when {
+            a > b -> a to aInc
+            a < b -> b to bInc
+            else -> a to (aInc && bInc)
+        }
+    }
+
+    /**
+     * Merge two max bounds: pick the smaller (more restrictive) one.
+     * Returns (value, inclusive).
+     */
+    private fun mergeMaxValue(
+        a: Double?, aInc: Boolean,
+        b: Double?, bInc: Boolean
+    ): Pair<Double?, Boolean> {
+        if (a == null) return b to bInc
+        if (b == null) return a to aInc
+        return when {
+            a < b -> a to aInc
+            a > b -> b to bInc
+            else -> a to (aInc && bInc)
+        }
+    }
+
+    /**
      * Try to extract a pushable text filter from a CONTAINS expression.
      * Supports patterns like:
      * - CONTAINS(?var, "text")
@@ -1588,6 +1718,164 @@ class BatchingOpExecutor(
             }
 
             return result
+        }
+
+        // No equality filter pushdown - try range filter pushdown
+        if (trulyRemainingExprs.isNotEmpty() && op.subOp is OpBGP) {
+            val rangeInfo = tryExtractRangeFilterFromExprs(trulyRemainingExprs)
+            if (rangeInfo != null) {
+                val bgp = op.subOp as OpBGP
+                val predicate = findPredicateForObjectVariable(bgp, rangeInfo.variable)
+                if (predicate != null) {
+                    // Adjust exclusive boundaries: filterRange uses inclusive bounds,
+                    // so nudge exclusive boundaries by a tiny epsilon
+                    val adjustedMin = if (!rangeInfo.minInclusive && rangeInfo.minValue != null) {
+                        rangeInfo.minValue + 1e-10
+                    } else {
+                        rangeInfo.minValue
+                    }
+                    val adjustedMax = if (!rangeInfo.maxInclusive && rangeInfo.maxValue != null) {
+                        rangeInfo.maxValue - 1e-10
+                    } else {
+                        rangeInfo.maxValue
+                    }
+
+                    if (TIMING_ENABLED) {
+                        logger.info("Range filter pushdown: ${rangeInfo.variable} in [$adjustedMin, $adjustedMax] on predicate $predicate")
+                    }
+
+                    // Remove range expression(s) from trulyRemainingExprs for further processing
+                    val rangeExprSet = rangeInfo.originalExprs.toSet()
+                    val remainingAfterRange = trulyRemainingExprs.filter { it !in rangeExprSet }
+
+                    // Fast path: single-pattern BGP — use filterRange directly (avoids full BGP scan)
+                    val patterns = bgp.pattern.getList()
+                    if (patterns.size == 1 && remainingAfterRange.isEmpty()) {
+                        val rangeResult = quadSet.filterRange(predicate, adjustedMin, adjustedMax)
+                        val triple = patterns[0]
+                        val bindings = mutableListOf<Binding>()
+                        val initialBinding = if (input is QueryIterNullIterator) null else {
+                            val inputBindings = materializeBindings(input)
+                            if (inputBindings.isNotEmpty()) inputBindings[0] else null
+                        }
+                        for (quad in rangeResult) {
+                            val builder = if (initialBinding != null) BindingBuilder.create(initialBinding) else BindingBuilder.create()
+                            if (triple.subject.isVariable) builder.add(Var.alloc(triple.subject), quadValueToNode(quad.subject))
+                            if (triple.predicate.isVariable) builder.add(Var.alloc(triple.predicate), quadValueToNode(quad.predicate))
+                            if (triple.`object`.isVariable) builder.add(Var.alloc(triple.`object`), quadValueToNode(quad.`object`))
+                            bindings.add(builder.build())
+                        }
+                        val finalBindings = if (limit != NO_LIMIT) bindings.take(limit.toInt()) else bindings
+                        return bindingsToIterator(finalBindings)
+                    }
+
+                    // Complex BGP or remaining filters: execute BGP then filter by range
+                    val subResults = executeBGP(bgp.pattern, input, NO_LIMIT, filterRequiredVars)
+                    val subBindings = materializeBindings(subResults)
+
+                    if (subBindings.isNotEmpty()) {
+                        // Push filterRange to quadSet
+                        val rangeResult = quadSet.filterRange(predicate, adjustedMin, adjustedMax)
+
+                        // Build a set of matching object QuadValues from the range result
+                        val rangeObjects = rangeResult.map { it.`object` }.toSet()
+
+                        // Filter sub-bindings: keep only those whose bound object value is in the range result
+                        val rangeVar = rangeInfo.variable
+                        var filtered = subBindings.filter { binding ->
+                            val qv = toQuadValue(binding.get(rangeVar))
+                            qv != null && qv in rangeObjects
+                        }
+
+                        // Apply remaining filters (spatial-aware)
+                        if (containsSpatialFunction(remainingAfterRange) && filtered.isNotEmpty()) {
+                            try {
+                                val subjects = collectAllSubjects(filtered)
+                                if (subjects.isNotEmpty()) {
+                                    BoundsUtil.prefetchBounds(quadSet)
+                                    BoundsUtil.prefetchSegmentBounds(quadSet)
+                                }
+                                for (expr in remainingAfterRange) {
+                                    filtered = filtered.filter { binding ->
+                                        try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                                    }
+                                }
+                            } finally {
+                                BoundsUtil.endPrefetch()
+                            }
+                        } else {
+                            for (expr in remainingAfterRange) {
+                                filtered = filtered.filter { binding ->
+                                    try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                                }
+                            }
+                        }
+
+                        val finalBindings = if (limit != NO_LIMIT) filtered.take(limit.toInt()) else filtered
+                        return bindingsToIterator(finalBindings)
+                    }
+                }
+            }
+        }
+
+        // Try EXISTS / NOT EXISTS pushdown (E_Exists / E_NotExists are expressions inside OpFilter)
+        val existsExprs = remainingExprs.filterIsInstance<E_Exists>()
+        val notExistsExprs = remainingExprs.filterIsInstance<E_NotExists>()
+        if (existsExprs.isNotEmpty() || notExistsExprs.isNotEmpty()) {
+            val subResults = execute(op.subOp, input, NO_LIMIT, filterRequiredVars)
+            var filteredBindings = materializeBindings(subResults)
+
+            // Apply EXISTS checks
+            for (existsExpr in existsExprs) {
+                val innerOp = existsExpr.getGraphPattern()
+                if (innerOp != null && filteredBindings.isNotEmpty()) {
+                    if (TIMING_ENABLED) {
+                        logger.info("EXISTS pushdown: inner op ${innerOp.javaClass.simpleName}, input bindings: ${filteredBindings.size}")
+                    }
+                    filteredBindings = executeExistsPushdown(innerOp, filteredBindings, limit, exists = true)
+                }
+            }
+
+            // Apply NOT EXISTS checks
+            for (notExistsExpr in notExistsExprs) {
+                val innerOp = notExistsExpr.getGraphPattern()
+                if (innerOp != null && filteredBindings.isNotEmpty()) {
+                    if (TIMING_ENABLED) {
+                        logger.info("NOT EXISTS pushdown: inner op ${innerOp.javaClass.simpleName}, input bindings: ${filteredBindings.size}")
+                    }
+                    filteredBindings = executeExistsPushdown(innerOp, filteredBindings, limit, exists = false)
+                }
+            }
+
+            // Apply remaining (non-exists) filters
+            val nonExistsRemaining = trulyRemainingExprs.filter { it !is E_Exists && it !is E_NotExists }
+            if (nonExistsRemaining.isNotEmpty()) {
+                if (containsSpatialFunction(nonExistsRemaining) && filteredBindings.isNotEmpty()) {
+                    try {
+                        val subjects = collectAllSubjects(filteredBindings)
+                        if (subjects.isNotEmpty()) {
+                            BoundsUtil.prefetchBounds(quadSet)
+                            BoundsUtil.prefetchSegmentBounds(quadSet)
+                        }
+                        for (expr in nonExistsRemaining) {
+                            filteredBindings = filteredBindings.filter { binding ->
+                                try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                            }
+                        }
+                    } finally {
+                        BoundsUtil.endPrefetch()
+                    }
+                } else {
+                    for (expr in nonExistsRemaining) {
+                        filteredBindings = filteredBindings.filter { binding ->
+                            try { expr.eval(binding, execCxt).boolean } catch (_: Exception) { false }
+                        }
+                    }
+                }
+            }
+
+            val finalBindings = if (limit != NO_LIMIT) filteredBindings.take(limit.toInt()) else filteredBindings
+            return bindingsToIterator(finalBindings)
         }
 
         // No pushdown possible - use standard execution
@@ -2406,6 +2694,81 @@ class BatchingOpExecutor(
             current = execute(elements[i], current, stepLimit, requiredVars)
         }
         return current
+    }
+
+    /**
+     * Execute an EXISTS / NOT EXISTS sub-expression pushdown.
+     *
+     * For each input binding, checks whether the inner sub-operation produces at
+     * least one result.  When the inner op is a BGP with a single triple whose
+     * subject and predicate are both constant (or bound from the input binding),
+     * we push the check to [QuadSet.exists] which generates `SELECT 1 … LIMIT 1`
+     * in PostgresStore — avoiding a full result-set materialisation.
+     *
+     * Called from [executeFilter] when an [E_Exists] or [E_NotExists] expression
+     * is detected in the filter expression list.
+     *
+     * @param exists true for EXISTS, false for NOT EXISTS
+     */
+    private fun executeExistsPushdown(
+        innerOp: Op,
+        inputBindings: List<Binding>,
+        limit: Long,
+        exists: Boolean
+    ): List<Binding> {
+        if (inputBindings.isEmpty()) return emptyList()
+
+        val results = mutableListOf<Binding>()
+
+        // Fast path: inner op is a single-triple BGP — try quadSet.exists()
+        if (innerOp is OpBGP && innerOp.pattern.size() == 1) {
+            val triple = innerOp.pattern.list[0]
+            for (binding in inputBindings) {
+                val sNode = resolveNodeForBinding(triple.subject, binding)
+                val pNode = resolveNodeForBinding(triple.predicate, binding)
+                val sQV = if (sNode != null) toQuadValue(sNode) else null
+                val pQV = if (pNode != null) toQuadValue(pNode) else null
+
+                val found = if (sQV != null && pQV != null) {
+                    quadSet.exists(sQV, pQV)
+                } else {
+                    // Fallback: execute the inner op with a single binding
+                    val innerResult = execute(innerOp, bindingsToIterator(listOf(binding)), NO_LIMIT, null)
+                    val hasResult = innerResult.hasNext()
+                    innerResult.close()
+                    hasResult
+                }
+
+                if (found == exists) {
+                    results.add(binding)
+                }
+            }
+        } else {
+            // General fallback: execute inner op for each input binding
+            for (binding in inputBindings) {
+                val innerResult = execute(innerOp, bindingsToIterator(listOf(binding)), NO_LIMIT, null)
+                val hasResult = innerResult.hasNext()
+                innerResult.close()
+                if (hasResult == exists) {
+                    results.add(binding)
+                }
+            }
+        }
+
+        return if (limit != NO_LIMIT) results.take(limit.toInt()) else results
+    }
+
+    /**
+     * Resolve a Jena Node to a concrete value, substituting variables from the binding.
+     * Returns the node as-is if it's already a constant.
+     */
+    private fun resolveNodeForBinding(node: Node, binding: Binding): Node? {
+        if (node.isURI || node.isLiteral || node.isBlank) return node
+        if (node.isVariable) {
+            val v = Var.alloc(node)
+            return binding.get(v) ?: return null
+        }
+        return null
     }
 
     /**

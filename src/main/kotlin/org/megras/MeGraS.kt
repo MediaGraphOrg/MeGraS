@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import kotlin.concurrent.thread
 import org.megras.graphstore.derived.QuadSetAware
+import org.megras.graphstore.deferred.DeferredQuadSet
 
 object MeGraS {
 
@@ -171,6 +172,10 @@ object MeGraS {
         quadSet = DerivedRelationMutableQuadSet(quadSet, derivedRelationRegistrar.getHandlers())
         val implicitRelationRegistrar = ImplicitRelationRegistrar(objectStore)
         quadSet = ImplicitRelationMutableQuadSet(quadSet, implicitRelationRegistrar.getHandlers(), implicitRelationRegistrar.getRegexHandlers())
+
+        // Wrap with DeferredQuadSet: composes filter operations into a single materialized query
+        // (transparent when no overlay handlers match — filters compose all the way to the backend)
+        quadSet = DeferredQuadSet.from(quadSet)
 
         // Inject the final (derived + implicit) QuadSet into handlers that need to query derived relations internally
         derivedRelationRegistrar.getHandlers().forEach { handler ->

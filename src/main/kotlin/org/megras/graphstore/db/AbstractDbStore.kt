@@ -3,6 +3,8 @@ package org.megras.graphstore.db
 import com.google.common.cache.CacheBuilder
 import org.megras.data.graph.*
 import org.megras.graphstore.MutableQuadSet
+import org.megras.graphstore.QuadSet
+import org.megras.graphstore.deferred.FilterDescriptor
 import org.megras.id.id
 import org.megras.util.extensions.toBase64
 import java.io.Writer
@@ -761,6 +763,46 @@ abstract class AbstractDbStore : MutableQuadSet {
         insert(s, p, o, element.id.toString())
 
         return true
+    }
+
+    /**
+     * Materialize a composed FilterDescriptor into a single result.
+     * Subclasses override to generate optimized SQL.
+     * Default replays filter calls sequentially (same as current behavior).
+     */
+    open fun materializeFilter(descriptor: FilterDescriptor): QuadSet {
+        var result: QuadSet = this as QuadSet
+
+        if (descriptor.subjects != null || descriptor.predicates != null || descriptor.objects != null) {
+            result = result.filter(
+                descriptor.subjects?.toList(),
+                descriptor.predicates?.toList(),
+                descriptor.objects?.toList()
+            )
+        }
+
+        for (range in descriptor.rangeFilters) {
+            result = result.filterRange(range.predicate, range.min, range.max)
+        }
+
+        for (tf in descriptor.textFilters) {
+            result = result.textFilter(tf.predicate, tf.searchText)
+        }
+
+        for (ef in descriptor.exclusionFilters) {
+            result = result.filterNotIn(ef.predicate, ef.excludedValues)
+        }
+
+        if (descriptor.orderBy.isNotEmpty() || descriptor.limit < Int.MAX_VALUE || descriptor.offset > 0) {
+            result = result.orderedFilter(
+                null, null, null,
+                descriptor.orderBy,
+                descriptor.limit,
+                descriptor.offset
+            )
+        }
+
+        return result
     }
 
     open fun dump(writer: Writer, chunkSize: Int) {

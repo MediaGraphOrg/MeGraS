@@ -11,6 +11,7 @@ import org.megras.graphstore.OrderSpec
 import org.megras.graphstore.QuadComponent
 import org.megras.graphstore.QuadSet
 import org.megras.graphstore.db.dict.QuadValueDictionary
+import org.megras.graphstore.deferred.FilterDescriptor
 import org.megras.id.SemanticId
 import org.megras.util.TimingConfig
 import org.slf4j.LoggerFactory
@@ -1212,6 +1213,196 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         return result
     }
 
+
+    override fun materializeFilter(descriptor: FilterDescriptor): QuadSet {
+        val startTime = if (TIMING_ENABLED) System.currentTimeMillis() else 0L
+
+        if (descriptor.isImpossible) return BasicQuadSet()
+        if (descriptor.isTrivial) return this as QuadSet
+
+        // 1. Collect all filter QuadValues
+        val allFilterValues = mutableSetOf<QuadValue>()
+        descriptor.subjects?.let { allFilterValues.addAll(it) }
+        descriptor.predicates?.let { allFilterValues.addAll(it) }
+        descriptor.objects?.let { allFilterValues.addAll(it) }
+        descriptor.rangeFilters.forEach { allFilterValues.add(it.predicate) }
+        descriptor.textFilters.forEach { allFilterValues.add(it.predicate) }
+        descriptor.exclusionFilters.forEach {
+            allFilterValues.add(it.predicate)
+            allFilterValues.addAll(it.excludedValues)
+        }
+
+        // 2. Resolve all filter values to (typeId, longId) pairs in one batch
+        val filterIds = getOrAddQuadValueIds(allFilterValues, false)
+
+        // 3. Build single SQL statement
+        val sql = buildMaterializedSql(descriptor, filterIds)
+
+        // 4. Execute and convert to QuadSet using existing getIds pipeline
+        val finalSeptuples = mutableSetOf<Pair<Long, Triple<QuadValueId, QuadValueId, QuadValueId>>>()
+
+        transaction {
+            exec(sql) { rs ->
+                while (rs.next()) {
+                    val id = rs.getLong("id")
+                    val sType = rs.getInt("s_type")
+                    val s = rs.getLong("s")
+                    val pType = rs.getInt("p_type")
+                    val p = rs.getLong("p")
+                    val oType = rs.getInt("o_type")
+                    val o = rs.getLong("o")
+
+                    finalSeptuples.add(
+                        id to Triple(
+                            (sType to s),
+                            (pType to p),
+                            (oType to o)
+                        )
+                    )
+                }
+            }
+        }
+
+        val result = getIds(finalSeptuples)
+        if (TIMING_ENABLED) logger.info("PostgresStore.materializeFilter: Returning ${result.size} quads in ${System.currentTimeMillis() - startTime}ms")
+        return result
+    }
+
+    private fun buildMaterializedSql(
+        descriptor: FilterDescriptor,
+        filterIds: Map<QuadValue, QuadValueId>
+    ): String {
+        val sb = StringBuilder()
+        sb.append("SELECT q.id, q.s_type, q.s, q.p_type, q.p, q.o_type, q.o FROM quads q")
+
+        // JOIN for range filters
+        val needsRangeJoin = descriptor.rangeFilters.isNotEmpty()
+        if (needsRangeJoin) {
+            sb.append(" INNER JOIN literal_double d ON q.o = d.id AND q.o_type = $DOUBLE_LITERAL_TYPE")
+        }
+
+        // LEFT JOINs for ORDER BY on objects (only if no range JOIN already provides d)
+        val needsObjectSort = descriptor.orderBy.any { it.component == QuadComponent.OBJECT }
+        if (needsObjectSort && !needsRangeJoin) {
+            sb.append(" LEFT JOIN literal_double ld ON q.o = ld.id AND q.o_type = $DOUBLE_LITERAL_TYPE")
+            sb.append(" LEFT JOIN literal_string ls ON q.o = ls.id AND q.o_type = $STRING_LITERAL_TYPE")
+        }
+
+        val conditions = mutableListOf<String>()
+
+        // Core set filters
+        descriptor.subjects?.let { subjects ->
+            val ids = subjects.mapNotNull { filterIds[it] }
+            if (ids.isNotEmpty()) {
+                conditions.add(buildOrChainForFilter("q.s_type", "q.s", ids))
+            } else {
+                conditions.add("FALSE")
+            }
+        }
+
+        descriptor.predicates?.let { predicates ->
+            val ids = predicates.mapNotNull { filterIds[it] }
+            if (ids.isNotEmpty()) {
+                conditions.add(buildOrChainForFilter("q.p_type", "q.p", ids))
+            } else {
+                conditions.add("FALSE")
+            }
+        }
+
+        descriptor.objects?.let { objects ->
+            val ids = objects.mapNotNull { filterIds[it] }
+            if (ids.isNotEmpty()) {
+                conditions.add(buildOrChainForFilter("q.o_type", "q.o", ids))
+            } else {
+                conditions.add("FALSE")
+            }
+        }
+
+        // Range filters (predicate + value range)
+        for (range in descriptor.rangeFilters) {
+            val pId = filterIds[range.predicate] ?: continue
+            conditions.add("(q.p_type = ${pId.first} AND q.p = ${pId.second})")
+            conditions.add("q.o_type = $DOUBLE_LITERAL_TYPE")
+            if (range.min != null) conditions.add("d.value >= ${range.min}")
+            if (range.max != null) conditions.add("d.value <= ${range.max}")
+        }
+
+        // Text filters via dictionary text lookup
+        for (tf in descriptor.textFilters) {
+            val pId = filterIds[tf.predicate] ?: continue
+            conditions.add("(q.p_type = ${pId.first} AND q.p = ${pId.second})")
+            conditions.add("q.o_type = $STRING_LITERAL_TYPE")
+            val textIds = dictionary.lookUpStringValueIdsByText(tf.searchText)
+            if (textIds.isNotEmpty()) {
+                conditions.add("q.o IN (${textIds.joinToString(",")})")
+            } else {
+                conditions.add("FALSE")
+            }
+        }
+
+        // Exclusion filters — scoped to the predicate so only quads matching
+        // both predicate AND excluded object values are removed.
+        for (ef in descriptor.exclusionFilters) {
+            val pId = filterIds[ef.predicate]
+            val excludedIds = ef.excludedValues.mapNotNull { filterIds[it] }
+            if (excludedIds.isNotEmpty() && pId != null) {
+                if (excludedIds.size <= OR_CHAIN_THRESHOLD) {
+                    val notConditions = excludedIds.joinToString(" OR ") {
+                        "(q.p_type = ${pId.first} AND q.p = ${pId.second} AND q.o_type = ${it.first} AND q.o = ${it.second})"
+                    }
+                    conditions.add("NOT ($notConditions)")
+                } else {
+                    val valuesClause = excludedIds.joinToString(",") { "(${it.first},${it.second})" }
+                    conditions.add("NOT EXISTS (SELECT 1 FROM (VALUES $valuesClause) AS ex(o_type, o_id) WHERE q.p_type = ${pId.first} AND q.p = ${pId.second} AND q.o_type = ex.o_type AND q.o = ex.o_id)")
+                }
+            }
+        }
+
+        if (conditions.isNotEmpty()) {
+            sb.append(" WHERE ")
+            sb.append(conditions.joinToString(" AND "))
+        }
+
+        // ORDER BY
+        if (descriptor.orderBy.isNotEmpty()) {
+            val orderClauses = descriptor.orderBy.map { spec ->
+                val sortExpr = when (spec.component) {
+                    QuadComponent.SUBJECT -> "(q.s_type, q.s)"
+                    QuadComponent.PREDICATE -> "(q.p_type, q.p)"
+                    QuadComponent.OBJECT -> {
+                        if (needsRangeJoin) "d.value"
+                        else "COALESCE(ld.value::TEXT, ls.value, q.o::TEXT)"
+                    }
+                }
+                val direction = if (spec.ascending) "ASC" else "DESC"
+                "$sortExpr $direction"
+            }
+            sb.append(" ORDER BY ${orderClauses.joinToString(", ")}")
+        }
+
+        if (descriptor.limit < Int.MAX_VALUE) {
+            sb.append(" LIMIT ${descriptor.limit}")
+        }
+        if (descriptor.offset > 0) {
+            sb.append(" OFFSET ${descriptor.offset}")
+        }
+
+        return sb.toString()
+    }
+
+    private fun buildOrChainForFilter(
+        typeCol: String,
+        idCol: String,
+        ids: List<QuadValueId>
+    ): String {
+        if (ids.isEmpty()) return "FALSE"
+        if (ids.size > OR_CHAIN_THRESHOLD) {
+            val values = ids.joinToString(",") { "(${it.first},${it.second})" }
+            return "(($typeCol, $idCol) IN (VALUES $values))"
+        }
+        val orChain = ids.joinToString(" OR ") { "($typeCol = ${it.first} AND $idCol = ${it.second})" }
+        return "($orChain)"
+    }
 
     override fun textFilter(predicate: QuadValue, objectFilterText: String): QuadSet {
         val predicatePair = getQuadValueId(predicate)

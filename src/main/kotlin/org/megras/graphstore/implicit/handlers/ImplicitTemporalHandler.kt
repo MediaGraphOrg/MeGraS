@@ -19,58 +19,60 @@ abstract class AbstractImplicitTemporalHandler(
 
     protected lateinit var quadSet: ImplicitRelationMutableQuadSet
 
+    private var cachedSubjects: Set<URIValue>? = null
+    private val cachedStartCache: MutableMap<URIValue, TemporalValue?> = mutableMapOf()
+    private val cachedEndCache: MutableMap<URIValue, TemporalValue?> = mutableMapOf()
+
     override fun init(quadSet: ImplicitRelationMutableQuadSet) {
         this.quadSet = quadSet
     }
 
-    private fun getTemporalCandidatesAndCaches(subject: URIValue): TemporalCandidatesResult {
-        val start = getStart(subject, quadSet)
-        val end = getEnd(subject, quadSet)
-        val candidates = quadSet.filter { it.subject is URIValue && it.subject != subject }
-            .map { it.subject as URIValue }
-            .toSet()
-        val startCache = candidates.associateWith { getStart(it, quadSet) }
-        val endCache = candidates.associateWith { getEnd(it, quadSet) }
-        return TemporalCandidatesResult(start, end, candidates, startCache, endCache)
+    private fun getAllSubjects(): Set<URIValue> {
+        cachedSubjects?.let { return it }
+        val subjects = mutableSetOf<URIValue>()
+        for (quad in quadSet) {
+            if (quad.subject is URIValue) {
+                subjects.add(quad.subject)
+            }
+        }
+        cachedSubjects = subjects
+        return subjects
     }
 
-    private data class TemporalCandidatesResult(
-        val start: TemporalValue?,
-        val end: TemporalValue?,
-        val candidates: Set<URIValue>,
-        val startCache: Map<URIValue, TemporalValue?>,
-        val endCache: Map<URIValue, TemporalValue?>
-    )
+    private fun getStartTime(subject: URIValue): TemporalValue? {
+        return cachedStartCache.getOrPut(subject) { getStart(subject, quadSet) }
+    }
+
+    private fun getEndTime(subject: URIValue): TemporalValue? {
+        return cachedEndCache.getOrPut(subject) { getEnd(subject, quadSet) }
+    }
 
     override fun findObjects(subject: URIValue): Set<URIValue> {
-        val (start, end, candidates, startCache, endCache) = getTemporalCandidatesAndCaches(subject)
-        return candidates.filter {
-            compare(start, end, startCache[it], endCache[it])
-        }.toSet()
+        val start = getStartTime(subject)
+        val end = getEndTime(subject)
+        return getAllSubjects().filter { it != subject && compare(start, end, getStartTime(it), getEndTime(it)) }.toSet()
     }
 
     override fun findSubjects(`object`: URIValue): Set<URIValue> {
-        val (start, end, candidates, startCache, endCache) = getTemporalCandidatesAndCaches(`object`)
-        return candidates.filter {
-            compare(startCache[it], endCache[it], start, end)
-        }.toSet()
+        val start = getStartTime(`object`)
+        val end = getEndTime(`object`)
+        return getAllSubjects().filter { it != `object` && compare(getStartTime(it), getEndTime(it), start, end) }.toSet()
     }
 
     override fun findAll(): QuadSet {
-        val subjects = quadSet.filter { it.subject is URIValue }
-            .map { it.subject as URIValue }
-            .toSet()
-        val startCache = subjects.associateWith { getStart(it, quadSet) }
-        val endCache = subjects.associateWith { getEnd(it, quadSet) }
+        val subjects = getAllSubjects().toList()
+        // Pre-warm caches
+        for (s in subjects) {
+            getStartTime(s)
+            getEndTime(s)
+        }
         val pairs = mutableSetOf<Quad>()
         for (subject1 in subjects) {
-            val start1 = startCache[subject1]
-            val end1 = endCache[subject1]
+            val start1 = cachedStartCache[subject1]
+            val end1 = cachedEndCache[subject1]
             for (subject2 in subjects) {
                 if (subject1 != subject2) {
-                    val start2 = startCache[subject2]
-                    val end2 = endCache[subject2]
-                    if (compare(start1, end1, start2, end2)) {
+                    if (compare(start1, end1, cachedStartCache[subject2], cachedEndCache[subject2])) {
                         pairs.add(Quad(subject1, predicate, subject2))
                     }
                 }

@@ -165,6 +165,30 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
         }
 
         val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(objectId)).map { it.subject as URIValue }.toSet()
+
+        // Batch-fetch segment type/definition for all children in one call (avoids N+1 in getSegmentation)
+        val allSegmentDefinitions = if (children.isNotEmpty()) {
+            quads.filter(children.toList(), setOf(MeGraS.SEGMENT_TYPE.uri, MeGraS.SEGMENT_DEFINITION.uri), null)
+        } else emptyList()
+
+        val segmentationData = mutableMapOf<URIValue, Pair<String?, String?>>()
+        for (quad in allSegmentDefinitions) {
+            val child = quad.subject as URIValue
+            val existing = segmentationData.getOrPut(child) { null to null }
+            val objStr = quad.`object`.toString().removeSuffix("^^String")
+            if (quad.predicate == MeGraS.SEGMENT_TYPE.uri) {
+                segmentationData[child] = objStr to existing.second
+            } else if (quad.predicate == MeGraS.SEGMENT_DEFINITION.uri) {
+                segmentationData[child] = existing.first to objStr
+            }
+        }
+
+        fun parseSegmentationFromData(child: URIValue): Segmentation? {
+            val (type, definition) = segmentationData[child] ?: return null
+            if (type == null || definition == null) return null
+            return SegmentationUtil.parseSegmentation(type, definition)
+        }
+
         val itemBounds = Bounds(
             quads.filter(setOf(objectId), setOf(MeGraS.BOUNDS.uri), null)
                 .firstOrNull()?.`object`.toString().removeSuffix("^^String")
@@ -187,7 +211,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
 
                     // Sort children by area and store segmentation
                     val sortedChildrenWithSegmentation = children.mapNotNull { child ->
-                        val segmentation = getSegmentation(child)
+                        val segmentation = parseSegmentationFromData(child)
                         segmentation?.bounds?.let { bounds ->
                             val area = (bounds.getMaxX() - bounds.getMinX()) * (bounds.getMaxY() - bounds.getMinY())
                             Triple(child, segmentation, area)
@@ -320,7 +344,7 @@ class AboutObjectRequestHandler(private val quads: QuadSet, private val objectSt
                 val charLinks: MutableList<Triple<Int, Int, String?>> = mutableListOf()
                 if (children.isNotEmpty()) {
                     children.forEach { child ->
-                        val seg = getSegmentation(child)
+                        val seg = parseSegmentationFromData(child)
                         when (seg) {
                             is org.megras.segmentation.type.Character -> {
                                 val absSeg = if (seg.isRelative) {

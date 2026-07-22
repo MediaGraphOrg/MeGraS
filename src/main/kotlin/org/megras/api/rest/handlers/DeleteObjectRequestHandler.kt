@@ -9,6 +9,7 @@ import org.megras.data.graph.QuadValue
 import org.megras.data.graph.StringValue
 import org.megras.data.schema.MeGraS
 import org.megras.data.schema.SchemaOrg
+import org.megras.graphstore.BasicMutableQuadSet
 import org.megras.graphstore.MutableQuadSet
 import org.megras.graphstore.QuadSet
 import org.megras.id.ObjectId
@@ -55,17 +56,29 @@ class DeleteObjectRequestHandler(private val quads: MutableQuadSet, private val 
     }
 
     /**
-     * Recursively finds all segments of the starting object id
+     * Iterative BFS that finds all segments of the starting object id.
+     * Batches child lookups per level to avoid N+1 quad queries.
      */
-    private fun recursiveSearch(id: QuadValue): QuadSet {
+    private fun recursiveSearch(startId: QuadValue): QuadSet {
+        val allRelevant = BasicMutableQuadSet()
+        val visited = mutableSetOf<QuadValue>()
+        var currentLevel = listOf(startId)
 
-        var relevant = quads.filter(setOf(id), null,null)
-        val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), setOf(id)).map { it.subject }
+        while (currentLevel.isNotEmpty()) {
+            for (id in currentLevel) {
+                allRelevant.addAll(quads.filter(setOf(id), null, null))
+            }
+            visited.addAll(currentLevel)
 
-        children.forEach { child ->
-            relevant += recursiveSearch(child)
+            // Batch: fetch children of all nodes at this level in one query
+            val children = quads.filter(null, setOf(MeGraS.SEGMENT_OF.uri), currentLevel)
+                .map { it.subject }
+                .filter { it !in visited }
+                .distinct()
+
+            currentLevel = children
         }
 
-        return relevant
+        return allRelevant
     }
 }

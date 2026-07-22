@@ -122,11 +122,15 @@ class DerivedRelationMutableQuadSet(private val base: MutableQuadSet, handlers: 
         // Collect unique subjects instead of building full Map<QuadValue, Collection<Quad>>
         val subjects = collectDistinctSubjects()
 
+        // Batch: build a HashSet of subjects that already have this predicate,
+        // avoiding N+1 base.exists() calls (each a separate DB query)
+        val existingSubjectSet = existing.map { it.subject }.toHashSet()
+
         val derived = subjects.flatMap { subject ->
             if (!handler.canDerive(subject)) {
                 return@flatMap emptyList()
             }
-            if (base.exists(subject, predicate)) { //already exists - uses short-circuit check
+            if (subject in existingSubjectSet) { //already exists - O(1) HashSet check
                 return@flatMap emptyList()
             }
             handler.derive(subject).map { obj -> Quad(subject, handler.predicate, obj) }

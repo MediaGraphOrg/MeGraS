@@ -55,6 +55,9 @@ class PostgresStore(
         // Threshold for switching from OR-chain to VALUES clause approach
         // OR chains with more than this many conditions become very slow in PostgreSQL
         private const val OR_CHAIN_THRESHOLD = 100
+
+        // Chunk size for cursor-based iteration and dump
+        private const val CURSOR_CHUNK_SIZE = 10_000
     }
 
     object QuadsTable : Table("quads") {
@@ -1314,13 +1317,59 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
 
     override fun isEmpty(): Boolean = this.size == 0
 
-    override fun iterator(): MutableIterator<Quad> {
-        //FIXME this is not efficient, but improving is a a lot of work
-        val allIds = transaction {
-            QuadsTable.select(QuadsTable.id).map { it[QuadsTable.id] }
+    /**
+     * Lazy cursor-based iterator that fetches quads from PostgreSQL in chunks
+     * using keyset pagination (WHERE id > lastSeenId). Memory usage is bounded
+     * to one chunk regardless of total table size, and the chunked resolution
+     * naturally warms the idCache and value caches for subsequent queries.
+     */
+    override fun iterator(): MutableIterator<Quad> = PostgresCursorIterator()
+
+    private inner class PostgresCursorIterator : MutableIterator<Quad> {
+
+
+        private var lastSeenId = 0L
+        private var currentChunk: List<Quad> = emptyList()
+        private var chunkIndex = 0
+        private var exhausted = false
+
+        private fun fetchNextChunk() {
+            if (exhausted) return
+
+            val chunkIds = transaction {
+                exec("SELECT id FROM quads WHERE id > $lastSeenId ORDER BY id LIMIT $CURSOR_CHUNK_SIZE") { rs ->
+                    val ids = mutableListOf<Long>()
+                    while (rs.next()) {
+                        ids.add(rs.getLong(1))
+                    }
+                    ids
+                } ?: emptyList()
+            }
+
+            if (chunkIds.isEmpty()) {
+                exhausted = true
+                return
+            }
+
+            lastSeenId = chunkIds.last()
+            currentChunk = getIds(chunkIds).toList()
+            chunkIndex = 0
         }
-        val quadSet = getIds(allIds)
-        return quadSet.toMutableSet().iterator()
+
+        override fun hasNext(): Boolean {
+            if (chunkIndex < currentChunk.size) return true
+            fetchNextChunk()
+            return chunkIndex < currentChunk.size
+        }
+
+        override fun next(): Quad {
+            if (!hasNext()) throw NoSuchElementException()
+            return currentChunk[chunkIndex++]
+        }
+
+        override fun remove() {
+            throw UnsupportedOperationException("Remove not supported on PostgresStore cursor iterator")
+        }
     }
 
     override fun addAll(elements: Collection<Quad>): Boolean {
@@ -1399,8 +1448,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
         // Write header
         writer.write("subject\tpredicate\tobject\n")
 
-        val allIds = transaction { QuadsTable.selectAll().map { it[QuadsTable.id] } }
-        val totalQuads = allIds.size.toLong()
+        val totalQuads = size.toLong()
         var quadsProcessed = 0L
 
         if (totalQuads == 0L) {
@@ -1408,8 +1456,23 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
             return
         }
 
-        allIds.chunked(chunkSize).forEach { chunk ->
-            val quads = getIds(chunk).toSet()
+        // Use cursor-based pagination instead of loading all IDs into memory
+        var lastSeenId = 0L
+        while (true) {
+            val chunkIds = transaction {
+                exec("SELECT id FROM quads WHERE id > $lastSeenId ORDER BY id LIMIT $chunkSize") { rs ->
+                    val ids = mutableListOf<Long>()
+                    while (rs.next()) {
+                        ids.add(rs.getLong(1))
+                    }
+                    ids
+                } ?: emptyList()
+            }
+
+            if (chunkIds.isEmpty()) break
+
+            lastSeenId = chunkIds.last()
+            val quads = getIds(chunkIds).toList()
             for (quad in quads) {
                 val formattedSubject = quad.subject.toString()
                 // Skip localhost subjects if they are not LocalQuadValue
@@ -1421,7 +1484,7 @@ override fun insertVectorValueIds(vectorValues: Set<VectorValue>): Map<VectorVal
                 writer.write("$formattedSubject\t$formattedPredicate\t$formattedObject\n")
             }
             writer.flush()
-            quadsProcessed += chunk.size
+            quadsProcessed += chunkIds.size
             val percentage = (quadsProcessed * 100) / totalQuads
             logger.info("Progress: $percentage% ($quadsProcessed / $totalQuads)")
         }

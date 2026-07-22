@@ -1625,8 +1625,8 @@ class BatchingOpExecutor(
                         if (subBindings.isNotEmpty()) {
                             val subjects = collectAllSubjects(subBindings)
                             if (subjects.isNotEmpty()) {
-                                BoundsUtil.prefetchBounds(quadSet)
-                                BoundsUtil.prefetchSegmentBounds(quadSet)
+                                BoundsUtil.prefetchBounds(quadSet, subjects)
+                                BoundsUtil.prefetchSegmentBounds(quadSet, subjects)
                             }
                         }
                         var filtered = subBindings
@@ -1688,8 +1688,8 @@ class BatchingOpExecutor(
                     if (subBindings.isNotEmpty()) {
                         val subjects = collectAllSubjects(subBindings)
                         if (subjects.isNotEmpty()) {
-                            BoundsUtil.prefetchBounds(quadSet)
-                            BoundsUtil.prefetchSegmentBounds(quadSet)
+                            BoundsUtil.prefetchBounds(quadSet, subjects)
+                            BoundsUtil.prefetchSegmentBounds(quadSet, subjects)
                         }
                     }
                     var filtered = subBindings
@@ -1792,8 +1792,8 @@ class BatchingOpExecutor(
                             try {
                                 val subjects = collectAllSubjects(filtered)
                                 if (subjects.isNotEmpty()) {
-                                    BoundsUtil.prefetchBounds(quadSet)
-                                    BoundsUtil.prefetchSegmentBounds(quadSet)
+                                    BoundsUtil.prefetchBounds(quadSet, subjects)
+                                    BoundsUtil.prefetchSegmentBounds(quadSet, subjects)
                                 }
                                 for (expr in remainingAfterRange) {
                                     filtered = filtered.filter { binding ->
@@ -1854,8 +1854,8 @@ class BatchingOpExecutor(
                     try {
                         val subjects = collectAllSubjects(filteredBindings)
                         if (subjects.isNotEmpty()) {
-                            BoundsUtil.prefetchBounds(quadSet)
-                            BoundsUtil.prefetchSegmentBounds(quadSet)
+                            BoundsUtil.prefetchBounds(quadSet, subjects)
+                            BoundsUtil.prefetchSegmentBounds(quadSet, subjects)
                         }
                         for (expr in nonExistsRemaining) {
                             filteredBindings = filteredBindings.filter { binding ->
@@ -1888,8 +1888,8 @@ class BatchingOpExecutor(
                 if (subBindings.isNotEmpty()) {
                     val subjects = collectAllSubjects(subBindings)
                     if (subjects.isNotEmpty()) {
-                        BoundsUtil.prefetchBounds(quadSet)
-                        BoundsUtil.prefetchSegmentBounds(quadSet)
+                        BoundsUtil.prefetchBounds(quadSet, subjects)
+                        BoundsUtil.prefetchSegmentBounds(quadSet, subjects)
                     }
                 }
                 var filtered = subBindings
@@ -2217,10 +2217,7 @@ class BatchingOpExecutor(
         if (TIMING_ENABLED) {
             logger.info("Distinct operation - materialized ${bindings.size} bindings from sub-results")
         }
-        val distinctBindings = bindings.distinctBy { binding ->
-            // Create a key based on all variable values
-            binding.vars().asSequence().map { v -> Pair(v, binding.get(v)) }.toSet()
-        }
+        val distinctBindings = bindings.distinct()
 
         // Apply limit after deduplication
         val finalBindings = if (limit != NO_LIMIT) {
@@ -2247,9 +2244,7 @@ class BatchingOpExecutor(
         val subResults = execute(op.subOp, input, NO_LIMIT, requiredVars)
         // REDUCED is a weaker form of DISTINCT - same implementation for correctness
         val bindings = materializeBindings(subResults)
-        val distinctBindings = bindings.distinctBy { binding ->
-            binding.vars().asSequence().map { v -> Pair(v, binding.get(v)) }.toSet()
-        }
+        val distinctBindings = bindings.distinct()
 
         // Apply limit after deduplication
         val finalBindings = if (limit != NO_LIMIT) {
@@ -2521,8 +2516,8 @@ class BatchingOpExecutor(
                 try {
                     val subjects = collectAllSubjects(allBindings)
                     if (subjects.isNotEmpty()) {
-                        BoundsUtil.prefetchBounds(quadSet)
-                        BoundsUtil.prefetchSegmentBounds(quadSet)
+                        BoundsUtil.prefetchBounds(quadSet, subjects)
+                        BoundsUtil.prefetchSegmentBounds(quadSet, subjects)
                     }
                     // Re-create iterator from materialized bindings for existing logic
                     val subResults = execute(op.subOp, bindingsToIterator(allBindings), limit, extendRequiredVars)

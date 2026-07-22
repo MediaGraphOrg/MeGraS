@@ -15,9 +15,13 @@ object BoundsUtil {
      * Prefetch all bounds for the BOUNDS predicate in bulk.
      * Call this before a batch of getBounds() calls, then endPrefetch() in a finally block.
      */
-    fun prefetchBounds(quads: QuadSet) {
+    fun prefetchBounds(quads: QuadSet, subjects: Collection<QuadValue>? = null) {
         val cache = HashMap<QuadValue, Bounds>()
-        val boundsQuads = quads.filter(null, setOf(MeGraS.BOUNDS.uri), null)
+        val boundsQuads = if (subjects != null && subjects.isNotEmpty()) {
+            quads.filter(subjects, setOf(MeGraS.BOUNDS.uri), null)
+        } else {
+            quads.filter(null, setOf(MeGraS.BOUNDS.uri), null)
+        }
         for (quad in boundsQuads) {
             try {
                 cache[quad.subject] = Bounds(quad.`object`.toString().replace("^^String", ""))
@@ -29,9 +33,13 @@ object BoundsUtil {
     /**
      * Prefetch all bounds for the SEGMENT_BOUNDS predicate in bulk.
      */
-    fun prefetchSegmentBounds(quads: QuadSet) {
+    fun prefetchSegmentBounds(quads: QuadSet, subjects: Collection<QuadValue>? = null) {
         val cache = HashMap<QuadValue, Bounds>()
-        val boundsQuads = quads.filter(null, setOf(MeGraS.SEGMENT_BOUNDS.uri), null)
+        val boundsQuads = if (subjects != null && subjects.isNotEmpty()) {
+            quads.filter(subjects, setOf(MeGraS.SEGMENT_BOUNDS.uri), null)
+        } else {
+            quads.filter(null, setOf(MeGraS.SEGMENT_BOUNDS.uri), null)
+        }
         for (quad in boundsQuads) {
             try {
                 cache[quad.subject] = Bounds(quad.`object`.toString().replace("^^String", ""))

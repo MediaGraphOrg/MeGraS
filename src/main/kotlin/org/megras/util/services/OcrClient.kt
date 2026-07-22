@@ -10,13 +10,25 @@ import org.megras.util.services.OcrServiceOuterClass.RecognizeTextResponse
 
 import java.io.Closeable
 import java.io.File
-import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 /**
  * gRPC client for the OCRService, allowing communication with the Python OCR server.
  */
 class OcrClient(private val channel: ManagedChannel) : Closeable {
+
+    companion object {
+        private val channelCache = java.util.concurrent.ConcurrentHashMap<String, ManagedChannel>()
+
+        fun getChannel(host: String, port: Int): ManagedChannel {
+            return channelCache.computeIfAbsent("$host:$port") {
+                ManagedChannelBuilder.forAddress(host, port)
+                    .usePlaintext()
+                    .executor(Dispatchers.Default.asExecutor())
+                    .build()
+            }
+        }
+    }
 
     // Create a coroutine stub for the OCR service
     private val stub: OcrServiceCoroutineStub = OcrServiceCoroutineStub(channel)
@@ -26,12 +38,7 @@ class OcrClient(private val channel: ManagedChannel) : Closeable {
      * @param host The hostname or IP address of the gRPC server.
      * @param port The port the gRPC server is listening on.
      */
-    constructor(host: String, port: Int) : this(
-        ManagedChannelBuilder.forAddress(host, port)
-            .usePlaintext() // Use plaintext for local development. For production, use TLS.
-            .executor(Dispatchers.Default.asExecutor()) // Use a Coroutine Dispatcher for the gRPC executor
-            .build()
-    )
+    constructor(host: String, port: Int) : this(getChannel(host, port))
 
     /**
      * Recognizes text from an image file using the gRPC server.
@@ -65,6 +72,6 @@ class OcrClient(private val channel: ManagedChannel) : Closeable {
      * Closes the gRPC channel gracefully.
      */
     override fun close() {
-        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        // Shared channel — do not shut down per-client
     }
 }

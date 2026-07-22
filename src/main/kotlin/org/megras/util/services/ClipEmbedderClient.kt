@@ -11,12 +11,24 @@ import org.megras.util.services.ClipServiceOuterClass.EmbeddingResponse
 
 import java.io.Closeable
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 /**
  * gRPC client for the ClipService, allowing communication with the Python CLIP embedding server.
  */
 class ClipEmbedderClient(private val channel: ManagedChannel) : Closeable {
+
+    companion object {
+        private val channelCache = java.util.concurrent.ConcurrentHashMap<String, ManagedChannel>()
+
+        fun getChannel(host: String, port: Int): ManagedChannel {
+            return channelCache.computeIfAbsent("$host:$port") {
+                ManagedChannelBuilder.forAddress(host, port)
+                    .usePlaintext()
+                    .executor(Dispatchers.Default.asExecutor())
+                    .build()
+            }
+        }
+    }
 
     private val stub: ClipServiceCoroutineStub = ClipServiceCoroutineStub(channel)
 
@@ -25,12 +37,7 @@ class ClipEmbedderClient(private val channel: ManagedChannel) : Closeable {
      * @param host The hostname or IP address of the gRPC server.
      * @param port The port the gRPC server is listening on.
      */
-    constructor(host: String, port: Int) : this(
-        ManagedChannelBuilder.forAddress(host, port)
-            .usePlaintext() // Use plaintext for local development. For production, use TLS.
-            .executor(Dispatchers.Default.asExecutor()) // Use a Coroutine Dispatcher for the gRPC executor
-            .build()
-    )
+    constructor(host: String, port: Int) : this(getChannel(host, port))
 
     /**
      * Gets text embeddings from the gRPC server.
@@ -81,6 +88,6 @@ class ClipEmbedderClient(private val channel: ManagedChannel) : Closeable {
      * Closes the gRPC channel gracefully.
      */
     override fun close() {
-        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        // Shared channel — do not shut down per-client
     }
 }

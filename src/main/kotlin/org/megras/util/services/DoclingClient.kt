@@ -9,12 +9,24 @@ import org.megras.util.services.DoclingServiceOuterClass.PdfRequest
 
 import java.io.Closeable
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 /**
  * gRPC client for the DoclingService, allowing communication with the Python Docling server.
  */
 class DoclingClient(private val channel: ManagedChannel) : Closeable {
+
+    companion object {
+        private val channelCache = java.util.concurrent.ConcurrentHashMap<String, ManagedChannel>()
+
+        fun getChannel(host: String, port: Int): ManagedChannel {
+            return channelCache.computeIfAbsent("$host:$port") {
+                ManagedChannelBuilder.forAddress(host, port)
+                    .usePlaintext()
+                    .executor(Dispatchers.Default.asExecutor())
+                    .build()
+            }
+        }
+    }
 
     private val stub: DoclingServiceCoroutineStub = DoclingServiceCoroutineStub(channel)
 
@@ -23,12 +35,7 @@ class DoclingClient(private val channel: ManagedChannel) : Closeable {
      * @param host The hostname or IP address of the gRPC server.
      * @param port The port the gRPC server is listening on.
      */
-    constructor(host: String, port: Int) : this(
-        ManagedChannelBuilder.forAddress(host, port)
-            .usePlaintext() // For local development; use TLS in production
-            .executor(Dispatchers.Default.asExecutor())
-            .build()
-    )
+    constructor(host: String, port: Int) : this(getChannel(host, port))
 
     /**
      * Extracts plain text from a PDF file using the Docling service.
@@ -76,6 +83,6 @@ class DoclingClient(private val channel: ManagedChannel) : Closeable {
      * Closes the gRPC channel gracefully.
      */
     override fun close() {
-        channel.shutdown().awaitTermination(5, TimeUnit.SECONDS)
+        // Shared channel — do not shut down per-client
     }
 }

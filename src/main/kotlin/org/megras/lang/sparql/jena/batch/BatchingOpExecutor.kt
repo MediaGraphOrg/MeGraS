@@ -1197,6 +1197,90 @@ class BatchingOpExecutor(
         val resultBindings = mutableListOf<Binding>()
         val effectiveLimit = if (limit == NO_LIMIT) Int.MAX_VALUE else limit.toInt()
 
+        // Batched path: when right side is a simple BGP, execute once for all left bindings
+        if (leftResults.size in 1..MAX_BATCH_SIZE && op.right is OpBGP) {
+            if (TIMING_ENABLED) {
+                logger.info("LeftJoin batched: ${leftResults.size} left bindings, right is BGP")
+            }
+
+            // Execute right BGP once with all left bindings as input
+            val rightInput = bindingsToIterator(leftResults)
+            val rightResults = materializeBindings(execute(op.right, rightInput, NO_LIMIT, leftJoinRequiredVars))
+
+            // Group right results by join variable values for efficient matching
+            val rightVars = OpVars.visibleVars(op.right)
+            val leftVars = OpVars.visibleVars(op.left)
+            val joinVars = leftVars.intersect(rightVars.toSet()).toSet()
+
+            if (joinVars.isNotEmpty()) {
+                // Build a map from join-variable-value-tuple -> list of right bindings
+                val rightByJoinValues = mutableMapOf<List<Pair<Var, Node>>, MutableList<Binding>>()
+                for (rightBinding in rightResults) {
+                    val key = joinVars.map { it to rightBinding.get(it) }
+                    rightByJoinValues.getOrPut(key) { mutableListOf() }.add(rightBinding)
+                }
+
+                // Match each left binding against right results
+                for (leftBinding in leftResults) {
+                    if (resultBindings.size >= effectiveLimit) break
+
+                    val joinKey = joinVars.map { it to leftBinding.get(it) }
+                    val matchingRights = rightByJoinValues[joinKey]
+
+                    if (matchingRights != null && matchingRights.isNotEmpty()) {
+                        // Apply optional filter
+                        val filtered = if (op.exprs != null && !op.exprs.isEmpty) {
+                            matchingRights.filter { evaluateExprs(op.exprs, it) }
+                        } else {
+                            matchingRights
+                        }
+
+                        if (filtered.isNotEmpty()) {
+                            for (result in filtered) {
+                                if (resultBindings.size >= effectiveLimit) break
+                                resultBindings.add(result)
+                            }
+                        } else {
+                            // Filter eliminated all matches — preserve left binding (unmatched)
+                            resultBindings.add(leftBinding)
+                        }
+                    } else {
+                        // No right match — LEFT JOIN preserves left binding
+                        resultBindings.add(leftBinding)
+                    }
+                }
+            } else {
+                // No join variables (cross-product scenario) — fall back to per-binding
+                for (leftBinding in leftResults) {
+                    if (resultBindings.size >= effectiveLimit) break
+
+                    val perRightInput = bindingsToIterator(listOf(leftBinding))
+                    val perRightResults = materializeBindings(execute(op.right, perRightInput, NO_LIMIT, leftJoinRequiredVars))
+
+                    if (perRightResults.isNotEmpty()) {
+                        val filtered = if (op.exprs != null && !op.exprs.isEmpty) {
+                            perRightResults.filter { evaluateExprs(op.exprs, it) }
+                        } else {
+                            perRightResults
+                        }
+                        if (filtered.isNotEmpty()) {
+                            for (result in filtered) {
+                                if (resultBindings.size >= effectiveLimit) break
+                                resultBindings.add(result)
+                            }
+                        } else {
+                            resultBindings.add(leftBinding)
+                        }
+                    } else {
+                        resultBindings.add(leftBinding)
+                    }
+                }
+            }
+
+            return bindingsToIterator(resultBindings)
+        }
+
+        // Fallback: per-binding execution for complex right sides
         for (binding in leftResults) {
             if (resultBindings.size >= effectiveLimit) {
                 if (TIMING_ENABLED) {
@@ -1209,7 +1293,6 @@ class BatchingOpExecutor(
             val rightResults = materializeBindings(execute(op.right, rightInput, NO_LIMIT, leftJoinRequiredVars))
 
             if (rightResults.isNotEmpty()) {
-                // Apply filter if present
                 val filtered = if (op.exprs != null && !op.exprs.isEmpty) {
                     rightResults.filter { evaluateExprs(op.exprs, it) }
                 } else {
@@ -1217,7 +1300,6 @@ class BatchingOpExecutor(
                 }
 
                 if (filtered.isNotEmpty()) {
-                    // Add results up to the limit
                     for (result in filtered) {
                         if (resultBindings.size >= effectiveLimit) break
                         resultBindings.add(result)
